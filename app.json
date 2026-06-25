@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "rice-flow",
+    "slug": "rice-flow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.riceflow.app"
+    },
+    "android": {
+      "package": "com.riceflow.app",
+      "softwareKeyboardLayoutMode": "pan",
+      "navigationBar": {
+        "backgroundColor": "#FFFFFF",
+        "barStyle": "dark-content"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": []
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Kailangan ng RiceFlow ang inyong lokasyon para matukoy ang inyong bukid sa mapa."
+        }
+      ]
+    ],
+    "experiments": {
+      "tsconfigPaths": true
+    }
+  }
+}
