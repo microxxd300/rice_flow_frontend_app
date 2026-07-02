@@ -4,6 +4,18 @@ import { STORAGE_KEYS } from '@/constants/api';
 import { authLogin, authRegister, apiFarms } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
 
+/**
+ * Restore the user's last-selected farm after the farms list loads.
+ * Reads the persisted id; if it's missing or no longer exists, defaults to the
+ * first farm. Keeps the "current farm" stable across app restarts.
+ */
+async function restoreSelectedFarm(farms: any[]): Promise<void> {
+  let savedId: number | null = null;
+  try { savedId = await storage.getItem<number>(STORAGE_KEYS.SELECTED_FARM); } catch {}
+  const valid = savedId != null && farms.some(f => f.id === savedId);
+  useAppStore.getState().hydrateSelectedFarm(valid ? savedId : (farms[0]?.id ?? null));
+}
+
 interface User {
   id: string;
   email: string;
@@ -127,6 +139,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       try {
         const farmsRes = await apiFarms.list();
         useAppStore.getState().setFarms(farmsRes.data);
+        await restoreSelectedFarm(farmsRes.data);
         farmCount = farmsRes.data.length;
       } catch {}
       await establishSetupFlag(farmCount);
@@ -201,7 +214,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         // Load farms in background, decide setup state, then mark loaded —
         // RootNavigator waits for farmsLoaded, so the setup flag is ready by then
         apiFarms.list()
-          .then(res => { useAppStore.getState().setFarms(res.data); return res.data.length; })
+          .then(async res => {
+            useAppStore.getState().setFarms(res.data);
+            await restoreSelectedFarm(res.data);
+            return res.data.length;
+          })
           .catch(() => 0)
           .then(count => establishSetupFlag(count))
           .finally(() => useAppStore.getState().setFarmsLoaded(true));

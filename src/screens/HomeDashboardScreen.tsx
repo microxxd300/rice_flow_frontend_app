@@ -22,6 +22,8 @@ import { Skeleton } from '@/components/Skeleton';
 import { dedupeName } from '@/utils/formatting';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useLanguageStore } from '@/store/languageStore';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
+import { FarmSwitcher } from '@/components/FarmSwitcher';
 
 type Nav = StackNavigationProp<any>;
 
@@ -80,9 +82,10 @@ export const HomeDashboardScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, [tr]);
 
-  // Use real farms if available, otherwise fall back to mock
+  // Use the currently SELECTED farm (falls back to first farm, then mock)
+  const selectedFarm = useSelectedFarm();
   const hasFarms = realFarms.length > 0;
-  const farm     = hasFarms ? realFarms[0] as any : mockFarms[0];
+  const farm     = (selectedFarm as any) ?? (hasFarms ? realFarms[0] as any : mockFarms[0]);
   const farm2    = hasFarms && realFarms.length > 1 ? realFarms[1] as any : mockFarms[1];
 
   const scan       = mockEnvironmentalScans[0];
@@ -262,6 +265,9 @@ export const HomeDashboardScreen: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Farm switcher — only shows when the user has 2+ farms */}
+        <FarmSwitcher />
 
         {/* â”€â”€ 1. Weather / Environmental Card â”€â”€ */}
         <View style={s.wxCard}>

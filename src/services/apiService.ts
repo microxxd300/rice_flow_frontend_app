@@ -189,7 +189,8 @@ export const apiGuides = {
                                           apiClient.post<any>(API_ROUTES.guides.generate(recId), data),
   appendStep: (recId: number, data: { category: string; last_day: number; existing_count: number; season?: string; language?: string; logs?: any[] }) =>
                                           apiClient.post<{ step: any }>(API_ROUTES.guides.appendStep(recId), data),
-  complete:   (stepId: number)         => apiClient.patch<any>(API_ROUTES.guides.stepComplete(stepId), {}),
+  complete:   (stepId: number, done: boolean = true) =>
+                                          apiClient.patch<any>(API_ROUTES.guides.stepComplete(stepId), { is_completed: done }),
 };
 
 // ── Predictions ────────────────────────────────────────────────────────────

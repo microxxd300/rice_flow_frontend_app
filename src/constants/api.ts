@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   NOTIF_ENABLED:         '@rice_flow/notifications_enabled',
   WEATHER_ALERTS:        '@rice_flow/weather_alerts_enabled',
   PROFILE_OVERRIDES:     '@rice_flow/profile_overrides',
+  SELECTED_FARM:         '@rice_flow/selected_farm',
 } as const;
 
 export const QUERY_KEYS = {

@@ -4,12 +4,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { mockPlantingGuides, mockFarms, mockEnvironmentalScans, mockClimateCalendar } from '../data/mockData';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { mockPlantingGuides } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiGuides, apiRecommendations } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Skeleton } from '@/components/Skeleton';
 
@@ -111,13 +114,16 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   const completed     = useMemo(() => new Set(completedIds), [completedIds]);
   const [expanded,  setExpanded]  = useState<string | null>(null);
 
-  // Use the Gemini-generated guide if available, else the default content
-  const latestGuide = useAppStore(s => s.latestGuide);
-  const guide = (latestGuide && Array.isArray(latestGuide.steps) && latestGuide.steps.length > 0)
-    ? latestGuide
-    : mockPlantingGuides[0];
-  const farm  = mockFarms[0];
-  const scan  = mockEnvironmentalScans[0];
+  const navigation = useNavigation<StackNavigationProp<any>>();
+
+  // Only a Gemini-generated (or backend-template) guide counts as real.
+  // When there is none, the screen shows a loading/empty state instead of the
+  // step list — never mock demo content, which would read as advice for a farm
+  // that was never scanned. The mock below only keeps the derived computations
+  // shape-safe until the early return kicks in.
+  const latestGuide  = useAppStore(s => s.latestGuide);
+  const hasRealGuide = !!(latestGuide && Array.isArray(latestGuide.steps) && latestGuide.steps.length > 0);
+  const guide        = hasRealGuide ? latestGuide : mockPlantingGuides[0];
   // Map backend → frontend shape and infer category from keywords when missing.
   const inferCategory = (title: string, desc: string): string => {
     const t = `${title} ${desc}`.toLowerCase();
@@ -198,9 +204,10 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
     const wasDone = completed.has(id);
     useAppStore.getState().toggleGuideStepDone(id);
     onMarkComplete?.(id);
-    // Sync to backend only when marking complete (not un-complete)
-    if (!wasDone && !isNaN(numericId)) {
-      try { await apiGuides.complete(numericId); } catch {}
+    // Steps are persisted backend rows now — sync BOTH directions so the
+    // server stays the durable source of truth (reinstall/other device).
+    if (!isNaN(numericId)) {
+      try { await apiGuides.complete(numericId, !wasDone); } catch {}
     }
 
     // Marking complete (and not bumping into the per-cycle cap) → ask Gemini for
@@ -251,13 +258,20 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   // Self-heal: if there's no recommendation in the store (e.g. fresh app reload
   // after an old session), fetch the latest one for the user's farm.
   const setLatestRecommendation = useAppStore(s => s.setLatestRecommendation);
-  const farmsList               = useAppStore(s => s.farms);
+  const selectedFarm            = useSelectedFarm();
+  const selectedFarmId          = selectedFarm?.id;
   const latestRec               = useAppStore(s => s.latestRecommendation);
+  // recChecked = the history fetch for the CURRENT farm has finished (with or
+  // without a result). Distinguishes "still checking" from "farm truly has no
+  // recommendation" so the empty state never flashes during the fetch.
+  const [recChecked, setRecChecked] = useState(false);
   useEffect(() => {
-    if (latestRec) return;
-    const farmId = farmsList[0]?.id;
+    if (latestRec) { setRecChecked(true); return; }
+    setRecChecked(false);
+    const farmId = selectedFarmId;
     if (!farmId) {
       console.log('[GUIDE] No farmId — cannot fetch recommendation history');
+      setRecChecked(true);
       return;
     }
     console.log('[GUIDE] Fetching recommendation history for farm', farmId);
@@ -270,8 +284,9 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
           setLatestRecommendation(latest);
         }
       })
-      .catch(err => console.error('[GUIDE] recommendation fetch failed:', err?.message || err));
-  }, [latestRec, farmsList, setLatestRecommendation]);
+      .catch(err => console.error('[GUIDE] recommendation fetch failed:', err?.message || err))
+      .finally(() => setRecChecked(true));
+  }, [latestRec, selectedFarmId, setLatestRecommendation]);
 
   // Auto-generate the guide ONCE per mount when we have a recommendation.
   // Critical: we DO NOT depend on `latestGuide` here — otherwise calling
@@ -281,17 +296,23 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   const recId          = latestRec?.id;
   const setLatestGuide = useAppStore(s => s.setLatestGuide);
   const storeLogs      = useAppStore(s => s.progressLogs);
-  const hasFetchedRef  = useRef(false);
+  // Track which recommendation we've generated a guide for. Regenerates when
+  // the recId changes (e.g. after switching to a different farm), but never
+  // loops on the same recId.
+  const fetchedRecIdRef = useRef<number | null>(null);
+  const [genError,  setGenError]  = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   useEffect(() => {
     if (!recId) {
       console.log('[GUIDE] No recId — cannot generate guide.');
       return;
     }
-    if (hasFetchedRef.current) {
-      // Already fetched in this mount — don't hammer the endpoint
+    if (fetchedRecIdRef.current === recId) {
+      // Already generated for this recommendation — don't hammer the endpoint
       return;
     }
-    hasFetchedRef.current = true;
+    fetchedRecIdRef.current = recId;
+    setGenError(false);
     console.log('[GUIDE] Calling apiGuides.generate(recId=' + recId + ', logs=' + storeLogs.length + ')...');
     apiGuides.generate(recId, {
       season:   (latestGuide as any)?.season ?? 'Wet Season',
@@ -301,14 +322,88 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
       .then(res => {
         console.log('[GUIDE] Generate response — source:', (res.data as any)?.source, 'steps:', res.data?.steps?.length ?? 0);
         setLatestGuide(res.data);
+        // Restore check-offs from the server rows (survives reinstall / other
+        // devices). Union with local so an offline check made just before this
+        // response isn't lost.
+        const serverDone = ((res.data?.steps ?? []) as any[])
+          .filter(st => st.is_completed)
+          .map(st => String(st.id));
+        if (serverDone.length > 0) {
+          const local = useAppStore.getState().completedGuideSteps;
+          const union = Array.from(new Set([...local, ...serverDone]));
+          useAppStore.getState().hydrateGuideSteps(union);
+        }
       })
       .catch(err => {
         console.error('[GUIDE] Generate failed:', err?.message || err, err?.response?.data);
-        // Allow a retry on next mount if it failed
-        hasFetchedRef.current = false;
+        // Allow a retry (button or next mount) if it failed
+        fetchedRecIdRef.current = null;
+        setGenError(true);
       });
-  }, [recId]);
+  }, [recId, retryTick]);
 
+  // ── No real guide yet: loading / generating / empty — NEVER mock steps ──────
+  // A farm that was never scanned has no recommendation, so no guide exists.
+  // Showing demo steps here would read as real advice for the wrong farm.
+  if (!hasRealGuide) {
+    const isGenerating = !!recId && !genError;   // Gemini call in flight
+    const isChecking   = !recId && !recChecked;  // recommendation lookup in flight
+    return (
+      <SafeAreaView style={s.root}>
+        <View style={s.header}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <View style={s.titleIcon}>
+              <Ionicons name="leaf-outline" size={16} color="#FFFFFF" />
+            </View>
+            <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.guideScreenTitle}</Text>
+          </View>
+          <NotificationBell color="#059669" size={22} />
+        </View>
+
+        <View style={s.emptyWrap}>
+          {(isGenerating || isChecking) ? (
+            <>
+              <ActivityIndicator size="small" color="#059669" />
+              <Text style={s.emptyBody}>
+                {isGenerating ? tr.guideGenerating : tr.switchFarmLoading}
+              </Text>
+            </>
+          ) : genError ? (
+            <>
+              <View style={s.emptyIcon}>
+                <Ionicons name="cloud-offline-outline" size={28} color="#D97706" />
+              </View>
+              <Text style={s.emptyTitle}>{tr.guideGenFailed}</Text>
+              <TouchableOpacity
+                style={s.emptyCta}
+                onPress={() => setRetryTick(t => t + 1)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
+                <Text style={s.emptyCtaText}>{tr.commonRetry}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={s.emptyIcon}>
+                <Ionicons name="leaf-outline" size={28} color="#059669" />
+              </View>
+              <Text style={s.emptyTitle}>{tr.guideNoRecTitle}</Text>
+              <Text style={s.emptyBody}>{tr.guideNoRecBody}</Text>
+              <TouchableOpacity
+                style={s.emptyCta}
+                onPress={() => navigation.navigate('HomeTab', { screen: 'EnvironmentalScanner' })}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="scan-outline" size={16} color="#FFFFFF" />
+                <Text style={s.emptyCtaText}>{tr.guideRunScan}</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.root}>
@@ -754,4 +849,31 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 8,
   },
   noteText: { fontSize: 11, color: '#6B7280', lineHeight: 17, flex: 1 },
+
+  /* No-guide-yet states (loading / generating / empty / error) */
+  emptyWrap: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 36, paddingBottom: 120, gap: 12,
+  },
+  emptyIcon: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#D1FAE5',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16, fontWeight: '700', color: '#111827',
+    textAlign: 'center',
+  },
+  emptyBody: {
+    fontSize: 13, color: '#6B7280', lineHeight: 19,
+    textAlign: 'center',
+  },
+  emptyCta: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, height: 48, borderRadius: 12, paddingHorizontal: 22,
+    backgroundColor: '#059669', marginTop: 8,
+    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
 });

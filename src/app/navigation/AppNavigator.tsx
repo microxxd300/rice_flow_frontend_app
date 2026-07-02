@@ -28,8 +28,9 @@ import {
   PlantingGuideHandoffScreen,
 } from '@/screens';
 
-const Stack = createStackNavigator();
-const Tab   = createBottomTabNavigator();
+const Stack     = createStackNavigator();
+const Tab       = createBottomTabNavigator();
+const RootStack = createStackNavigator();
 
 /* ── Stacks ────────────────────────────────────────── */
 
@@ -40,15 +41,6 @@ const HomeStack: React.FC = () => (
     <Stack.Screen name="EnvironmentalScanner" component={EnvironmentalScannerScreen} />
     <Stack.Screen name="RecommendationResults" component={RecommendationResultsScreen} />
     <Stack.Screen name="VarietyDetail"        component={VarietyDetailScreen} />
-    {/* Add-farm flow — reuses the same screens as the initial setup. After the
-        flow ends (PlantingGuideHandoff), the stack pops back to DashboardHome
-        since onEnterApp/onGoToGuide aren't passed here. */}
-    <Stack.Screen name="FarmDetailsForm"        component={FarmDetailsFormScreen} />
-    <Stack.Screen name="LocationPermission"     component={LocationPermissionScreen} />
-    <Stack.Screen name="FarmMapTagging"         component={FarmMapTaggingScreen} />
-    <Stack.Screen name="AnalysisLoading"        component={AnalysisLoadingScreen} />
-    <Stack.Screen name="SuitabilityResults"     component={SuitabilityResultsScreen} />
-    <Stack.Screen name="PlantingGuideHandoff"   component={PlantingGuideHandoffScreen} />
   </Stack.Navigator>
 );
 
@@ -153,9 +145,9 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   );
 };
 
-/* ── App Navigator ─────────────────────────────────── */
+/* ── Main tabs (the 5-tab floating bar) ────────────── */
 
-export const AppNavigator: React.FC<{ initialTab?: string }> = ({ initialTab }) => (
+const MainTabs: React.FC<{ initialTab?: string }> = ({ initialTab }) => (
   <Tab.Navigator
     tabBar={(props) => <CustomTabBar {...props} />}
     screenOptions={{ headerShown: false }}
@@ -167,6 +159,31 @@ export const AppNavigator: React.FC<{ initialTab?: string }> = ({ initialTab }) 
     <Tab.Screen name="PlantingTab" component={PlantingStack} />
     <Tab.Screen name="ProfileTab"  component={ProfileStack} />
   </Tab.Navigator>
+);
+
+/* ── App Navigator ─────────────────────────────────── */
+// Wraps MainTabs in an outer stack so full-screen flows (like Add Farm) can be
+// pushed ABOVE the tab bar — otherwise the floating tab bar would render on top
+// of and block every screen in that flow, since it persists across all screens
+// nested inside a tab's own stack.
+
+export const AppNavigator: React.FC<{ initialTab?: string }> = ({ initialTab }) => (
+  <RootStack.Navigator screenOptions={{ headerShown: false }}>
+    <RootStack.Screen name="MainTabs">
+      {() => <MainTabs initialTab={initialTab} />}
+    </RootStack.Screen>
+
+    {/* Add-farm flow — reuses the same screens as the initial setup. Pushed
+        above the tabs so the floating tab bar is hidden during the flow.
+        After it ends (PlantingGuideHandoff), the screen pops back to
+        MainTabs since onEnterApp/onGoToGuide aren't passed here. */}
+    <RootStack.Screen name="FarmDetailsForm"      component={FarmDetailsFormScreen} />
+    <RootStack.Screen name="LocationPermission"   component={LocationPermissionScreen} />
+    <RootStack.Screen name="FarmMapTagging"       component={FarmMapTaggingScreen} />
+    <RootStack.Screen name="AnalysisLoading"      component={AnalysisLoadingScreen} />
+    <RootStack.Screen name="SuitabilityResults"   component={SuitabilityResultsScreen} />
+    <RootStack.Screen name="PlantingGuideHandoff" component={PlantingGuideHandoffScreen} />
+  </RootStack.Navigator>
 );
 
 /* ── Tab bar styles ────────────────────────────────── */

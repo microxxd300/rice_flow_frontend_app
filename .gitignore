@@ -39,3 +39,7 @@ coverage/
 # Log files
 logs/
 *.log
+
+# Python cache (skill scripts)
+__pycache__/
+*.pyc

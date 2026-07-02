@@ -18,6 +18,7 @@ import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiGuides, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
 
 interface ProgressDashboardScreenProps {
@@ -221,13 +222,15 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const hasIssue = logIssue && logIssue !== 'None';
 
   const { activeCycle, farms } = useAppStore();
+  const selectedFarm = useSelectedFarm();
+  const selectedFarmId = selectedFarm?.id;
   const [cycleLoading, setCycleLoading] = useState(true);
 
-  // Load real cycles and logs on mount
+  // Load real cycles and logs on mount AND whenever the selected farm changes
   useEffect(() => {
     const load = async () => {
       try {
-        const farmId = farms[0]?.id;
+        const farmId = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles = cyclesRes.data;
         if (cycles.length > 0) {
@@ -259,8 +262,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       } catch {}
       finally { setCycleLoading(false); }
     };
+    setCycleLoading(true);
     load();
-  }, []);
+  }, [selectedFarmId]);
 
   // Shimmer sweep — gradient highlight moves left→right across all skeletons
   const shimmerX = useRef(new Animated.Value(0)).current;
@@ -395,7 +399,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   // Expected yield — call the trained linear-regression model on the backend.
   // Falls back to variety_avg × area only if the model call fails (no scan/network).
-  const farmArea       = (farms[0] as any)?.area_hectares ?? 2.5;
+  const farmArea       = (selectedFarm as any)?.area_hectares ?? 2.5;
   const yieldPerHa     = variety?.avg_yield_t_ha ?? 6.5;
   const [predictedYield, setPredictedYield] = useState<number | null>(null);
   const [predModel,      setPredModel]      = useState<string | null>(null);
@@ -405,7 +409,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const expectedYield  = predictedYield ?? +(yieldPerHa * farmArea).toFixed(1);
 
   useEffect(() => {
-    const farmId = farms[0]?.id;
+    const farmId = selectedFarmId;
     if (!farmId) return;
     (async () => {
       try {
@@ -415,7 +419,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           const scanRes = await apiScan.history(farmId);
           scan = (scanRes.data ?? [])[0] ?? null;
         } catch {}
-        const farmRow: any = farms[0];
+        const farmRow: any = selectedFarm;
         const res = await apiPredictions.predict({
           area_ha:           farmArea,
           soil_ph:           scan?.soil_ph,
@@ -435,7 +439,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         setPredR2(res.data.r2_score);
       } catch {}
     })();
-  }, [farms, variety, farmArea]);
+  }, [selectedFarmId, variety, farmArea]);
 
   // Use Gemini-generated guide steps if we have them, else fall back to mock
   const guideSteps = (Array.isArray((latestGuide as any)?.steps) && (latestGuide as any).steps.length > 0)
@@ -444,8 +448,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   // Live temperature for the metric tile (from Open-Meteo via Django)
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
-  const farmLat = (farms[0] as any)?.latitude;
-  const farmLng = (farms[0] as any)?.longitude;
+  const farmLat = (selectedFarm as any)?.latitude;
+  const farmLng = (selectedFarm as any)?.longitude;
   useEffect(() => {
     if (farmLat == null || farmLng == null) return;
     apiWeather.current(farmLat, farmLng)
@@ -458,7 +462,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   useEffect(() => {
     const load = async () => {
       try {
-        const farmId    = farms[0]?.id;
+        const farmId    = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles    = cyclesRes.data ?? [];
         const out: { season: string; yieldTons: number }[] = [];
@@ -471,11 +475,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             }
           } catch {}
         }
-        if (out.length > 0) setRealYields(out);
+        setRealYields(out);
       } catch {}
     };
     load();
-  }, [farms]);
+  }, [selectedFarmId]);
 
   const CAT_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
     planting:        { label: 'Pagtatanim', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },

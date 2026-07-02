@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { apiProgress } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { Skeleton } from '@/components/Skeleton';
 import { useTranslation } from '@/i18n/useTranslation';
 
@@ -31,6 +32,8 @@ export const ReportsScreen: React.FC = () => {
   const tr = useTranslation();
 
   const { farms, activeCycle, latestRecommendation } = useAppStore();
+  const selectedFarm = useSelectedFarm();
+  const selectedFarmId = selectedFarm?.id;
   const [harvestHistory, setHarvestHistory] = useState<HarvestRow[]>([]);
   const [totalYield,     setTotalYield]     = useState<string>('—');
   const [cyclesCount,    setCyclesCount]    = useState(0);
@@ -44,7 +47,7 @@ export const ReportsScreen: React.FC = () => {
   ];
 
   const farmsCount = farms.length;
-  const headerFarm = (farms[0] as any)?.name ?? '—';
+  const headerFarm = (selectedFarm as any)?.name ?? '—';
   const headerSub  = activeCycle
     ? `${headerFarm} · ${activeCycle.season ?? ''} ${activeCycle.year ?? ''}`.trim()
     : `${headerFarm} · ${tr.reportsNoCycle}`;
@@ -52,7 +55,7 @@ export const ReportsScreen: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const farmId    = farms[0]?.id;
+        const farmId    = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles    = (cyclesRes.data as any[]) ?? [];
         setCyclesCount(cycles.length);
@@ -91,8 +94,9 @@ export const ReportsScreen: React.FC = () => {
         setLoadingHistory(false);
       }
     };
+    setLoadingHistory(true);
     load();
-  }, []);
+  }, [selectedFarmId]);
 
   // Real RSI from the latest recommendation top result; honest dash when absent
   const realRsi = (latestRecommendation as any)?.results?.[0]?.rsi_score;

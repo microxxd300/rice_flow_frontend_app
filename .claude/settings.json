@@ -1,7 +1,8 @@
 {
   "permissions": {
     "additionalDirectories": [
-      "C:\\Users\\kurtl\\Downloads\\rice_flow_backend\\apps\\ai"
+      "C:\\Users\\kurtl\\Downloads\\rice_flow_backend\\apps\\ai",
+      "C:\\Users\\kurtl\\Downloads\\rice_flow_backend\\apps\\guides"
     ]
   }
 }

@@ -18,6 +18,7 @@ interface AppState {
   user: UserProfile | null;
   farms: Farm[];
   farmsLoaded: boolean;
+  selectedFarmId: number | null;   // the farm the app is currently showing
   setupComplete: boolean;
   setupStep: string | null;   // current setup screen, persisted for resume-on-reopen
   setupData: any;             // accumulated farmData for the current setup step
@@ -38,6 +39,8 @@ interface AppState {
   setSetupProgress:         (step: string, data: any) => void;
   addFarm:                  (farm: Farm) => void;
   removeFarm:               (id: number) => void;
+  selectFarm:               (id: number) => void;   // switch farm: clears per-farm data so it reloads
+  hydrateSelectedFarm:      (id: number | null) => void;
   setLatestRecommendation:  (rec: Recommendation | null) => void;
   setLatestGuide:           (guide: any | null) => void;
   addGuideStep:             (step: any) => void;
@@ -62,6 +65,7 @@ export const useAppStore = create<AppState>((set) => ({
   user:                 null,
   farms:                [],
   farmsLoaded:          false,
+  selectedFarmId:       null,
   setupComplete:        false,
   setupStep:            null,
   setupData:            {},
@@ -92,8 +96,42 @@ export const useAppStore = create<AppState>((set) => ({
     set({ setupStep: step, setupData: data });
     storage.setItem(STORAGE_KEYS.SETUP_PROGRESS, { step, data }).catch(() => {});
   },
-  addFarm:                 farm    => set(s => ({ farms: [...s.farms, farm] })),
-  removeFarm:              id      => set(s => ({ farms: s.farms.filter(f => f.id !== id) })),
+  addFarm:                 farm    => {
+    // Auto-select a newly added farm so the app immediately shows it.
+    set(s => ({ farms: [...s.farms, farm], selectedFarmId: farm.id }));
+    storage.setItem(STORAGE_KEYS.SELECTED_FARM, farm.id).catch(() => {});
+  },
+  removeFarm:              id      => {
+    set(s => {
+      const farms = s.farms.filter(f => f.id !== id);
+      // If the removed farm was selected, fall back to the first remaining farm.
+      const selectedFarmId = s.selectedFarmId === id
+        ? (farms[0]?.id ?? null)
+        : s.selectedFarmId;
+      return { farms, selectedFarmId };
+    });
+    storage.setItem(STORAGE_KEYS.SELECTED_FARM, useAppStore.getState().selectedFarmId).catch(() => {});
+  },
+  selectFarm: (id) => {
+    const state = useAppStore.getState();
+    if (state.selectedFarmId === id) return;   // no-op if already selected
+    // Switch farm: clear the previous farm's per-farm data so screens reload
+    // fresh for the newly selected farm (and don't briefly show stale data).
+    set({
+      selectedFarmId:       id,
+      latestRecommendation: null,
+      latestGuide:          null,
+      activeCycle:          null,
+      progressLogs:         [],
+      completedGuideSteps:  [],
+    });
+    storage.setItem(STORAGE_KEYS.SELECTED_FARM, id).catch(() => {});
+    storage.removeItem(STORAGE_KEYS.LATEST_REC).catch(() => {});
+    storage.removeItem(STORAGE_KEYS.LATEST_GUIDE).catch(() => {});
+    storage.removeItem(STORAGE_KEYS.PROGRESS_LOGS).catch(() => {});
+    storage.removeItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS).catch(() => {});
+  },
+  hydrateSelectedFarm: (id) => set({ selectedFarmId: id }),
   setLatestRecommendation: (rec) => {
     set({ latestRecommendation: rec });
     storage.setItem(STORAGE_KEYS.LATEST_REC, rec).catch(() => {});
@@ -173,7 +211,10 @@ export const useAppStore = create<AppState>((set) => ({
     set({ completedGuideSteps: next });
     storage.setItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS, next).catch(() => {});
   },
-  hydrateGuideSteps: (stepIds) => set({ completedGuideSteps: stepIds }),
+  hydrateGuideSteps: (stepIds) => {
+    set({ completedGuideSteps: stepIds });
+    storage.setItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS, stepIds).catch(() => {});
+  },
 
   setNotificationsEnabled: (on) => {
     set({ notificationsEnabled: on });
@@ -189,7 +230,7 @@ export const useAppStore = create<AppState>((set) => ({
   }),
 
   reset: () => set({
-    user: null, farms: [], farmsLoaded: false, setupComplete: false,
+    user: null, farms: [], farmsLoaded: false, selectedFarmId: null, setupComplete: false,
     setupStep: null, setupData: {},
     latestRecommendation: null, latestGuide: null,
     notifications: [], pendingGuideCategory: null,

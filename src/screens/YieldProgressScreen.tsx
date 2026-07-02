@@ -12,6 +12,7 @@ import { mockSeasonalYields } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiProgress } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -36,13 +37,15 @@ export const YieldProgressScreen: React.FC = () => {
   const T = isLargeText;
   const chartW = Dimensions.get('window').width - 80;
   const { farms } = useAppStore();
+  const selectedFarm = useSelectedFarm();
+  const selectedFarmId = selectedFarm?.id;
 
   const [yields, setYields] = useState(mockSeasonalYields);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const farmId = farms[0]?.id;
+        const farmId = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles = cyclesRes.data as any[];
         const realYields: typeof mockSeasonalYields = [];
@@ -64,7 +67,7 @@ export const YieldProgressScreen: React.FC = () => {
       } catch {}
     };
     load();
-  }, []);
+  }, [selectedFarmId]);
 
   const AVG_YIELD = useMemo(
     () => parseFloat((yields.reduce((s, y) => s + y.yieldTons, 0) / yields.length).toFixed(1)),

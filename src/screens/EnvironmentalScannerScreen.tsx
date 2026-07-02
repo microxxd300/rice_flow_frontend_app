@@ -1,13 +1,18 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { mockEnvironmentalScans, mockFarms } from '../data/mockData';
 import { useTranslation } from '@/i18n/useTranslation';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
+import { useAppStore } from '@/store/appStore';
+import {
+  apiScan, apiRecommendations,
+  type EnvironmentalScan, type Recommendation,
+} from '@/services/apiService';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -15,6 +20,12 @@ type FetchState = 'idle' | 'locating' | 'fetching' | 'done';
 
 const FLOOD_COLOR: Record<string, string> = { high: '#EF4444', moderate: '#D97706', low: '#065F46' };
 const FLOOD_BG:    Record<string, string> = { high: '#FEF2F2', moderate: '#FFF7ED', low: '#ECFDF5' };
+
+const num = (v: any): number | null => {
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export const EnvironmentalScannerScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
@@ -33,35 +44,102 @@ export const EnvironmentalScannerScreen: React.FC = () => {
 
   const FLOOD_LABEL: Record<string, string> = { high: tr.valHigh, moderate: tr.valModerate, low: tr.valLow };
 
-  const farm = mockFarms[0];
-  const scan = mockEnvironmentalScans[0];
+  // Real farm + real scan data. The scan runs the actual backend pipeline
+  // (SoilGrids + Open-Meteo), then generates a real recommendation so the
+  // Planting Guide can produce a guide for this farm.
+  const farm = useSelectedFarm() as any;
+  const setLatestRecommendation = useAppStore(s => s.setLatestRecommendation);
+  const storeRec = useAppStore(s => s.latestRecommendation);
+  const [scan, setScan]     = useState<EnvironmentalScan | null>(null);
+  const [newRec, setNewRec] = useState<Recommendation | null>(null);
+  // Just-generated rec wins; otherwise the store's (loaded per selected farm).
+  const rec = newRec ?? storeRec;
+  const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleFetch = () => {
+  // On open (and on farm switch): show the farm's latest existing scan if any.
+  const stopStepTimer = () => {
+    if (stepTimer.current) { clearInterval(stepTimer.current); stepTimer.current = null; }
+  };
+  useEffect(() => stopStepTimer, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    stopStepTimer();
+    setScan(null);
+    setNewRec(null);
+    setState('idle');
+    setDoneSteps([]);
+    if (!farm?.id) return;
+    apiScan.history(farm.id)
+      .then(res => {
+        if (cancelled) return;
+        const latest = (res.data ?? [])[0] ?? null;
+        if (latest) { setScan(latest); setState('done'); }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [farm?.id]);
+
+  const handleFetch = async () => {
+    if (!farm?.id) return;
     setState('locating');
     setStepIndex(0);
     setDoneSteps([]);
-    FETCH_STEPS.forEach((step, i) => {
-      setTimeout(() => {
+
+    // Step animation is visual feedback while the real API call runs. It walks
+    // through the first steps and parks on the last one until the call returns.
+    let i = 0;
+    stopStepTimer();
+    stepTimer.current = setInterval(() => {
+      if (i < FETCH_STEPS.length - 1) {
+        setDoneSteps(prev => [...prev, FETCH_STEPS[i].key]);
+        i += 1;
         setStepIndex(i);
-        if (i === FETCH_STEPS.length - 1) {
-          setTimeout(() => {
-            setState('done');
-            setDoneSteps(FETCH_STEPS.map(s => s.key));
-          }, 700);
-        } else {
-          setDoneSteps(prev => [...prev, step.key]);
-        }
-      }, i * 800);
-    });
+      }
+    }, 900);
+
+    try {
+      // 1. Real environmental scan (SoilGrids + Open-Meteo, saved to backend)
+      const scanRes = await apiScan.run(farm.id);
+      const newScan = scanRes.data;
+      setScan(newScan);
+
+      // 2. Real recommendation from that scan (RSI over all varieties). This is
+      //    what the Planting Guide needs to generate a guide for this farm.
+      const recRes = await apiRecommendations.generate(newScan.id);
+      setNewRec(recRes.data);
+      setLatestRecommendation(recRes.data);
+
+      stopStepTimer();
+      setDoneSteps(FETCH_STEPS.map(st => st.key));
+      setState('done');
+    } catch (err: any) {
+      stopStepTimer();
+      setState('idle');
+      setDoneSteps([]);
+      const msg = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : err?.message || 'Network error';
+      Alert.alert(tr.envScreenTitle, msg);
+    }
   };
 
   const handleRetry = () => {
+    stopStepTimer();
     setState('idle');
     setStepIndex(0);
     setDoneSteps([]);
   };
 
   const isFetching = state === 'locating' || state === 'fetching';
+
+  const floodKey  = (scan?.flood_risk ?? 'low').toLowerCase();
+  const rainMm    = num((scan as any)?.annual_rainfall_mm) ?? num((scan as any)?.seasonal_rainfall_mm);
+  const elevM     = num(scan?.elevation_m);
+  const soilPh    = num(scan?.soil_ph);
+  const scannedAt = (scan as any)?.scanned_at
+    ? String((scan as any).scanned_at).slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
 
   return (
     <SafeAreaView style={s.root}>
@@ -90,8 +168,8 @@ export const EnvironmentalScannerScreen: React.FC = () => {
               <Ionicons name="navigate" size={18} color="#6B7280" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.cardTitle}>GPS Location</Text>
-              <Text style={s.cardSub}>{farm.barangay}, {farm.municipality}, {farm.province}</Text>
+              <Text style={s.cardTitle}>{farm?.name ?? 'GPS Location'}</Text>
+              <Text style={s.cardSub}>{farm?.barangay || '—'}</Text>
             </View>
             <View style={[s.statusPill, state === 'done' ? s.pillActive : s.pillIdle]}>
               <View style={[s.dot, { backgroundColor: state === 'done' ? '#22C55E' : '#9CA3AF' }]} />
@@ -100,14 +178,20 @@ export const EnvironmentalScannerScreen: React.FC = () => {
               </Text>
             </View>
           </View>
-          {state === 'done' && (
-            <View style={s.coordRow}>
-              <Ionicons name="location-outline" size={13} color="#D1D5DB" />
-              <Text style={s.coordText}>
-                {farm.latitude}Â°N, {farm.longitude}Â°E Â· {farm.areaHectares} ha
-              </Text>
-            </View>
-          )}
+          {(() => {
+            const lat = num(farm?.latitude);
+            const lng = num(farm?.longitude);
+            if (lat == null || lng == null) return null;
+            return (
+              <View style={s.coordRow}>
+                <Ionicons name="location-outline" size={13} color="#D1D5DB" />
+                <Text style={s.coordText}>
+                  {lat.toFixed(4)}°N, {lng.toFixed(4)}°E
+                  {farm?.area_hectares != null ? ` · ${farm.area_hectares} ha` : ''}
+                </Text>
+              </View>
+            );
+          })()}
         </View>
 
         {/* Idle state */}
@@ -175,13 +259,13 @@ export const EnvironmentalScannerScreen: React.FC = () => {
           </View>
         )}
 
-        {/* Done state */}
-        {state === 'done' && (
+        {/* Done state — real scan values from the backend */}
+        {state === 'done' && scan && (
           <>
             {[
-              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soilType,                         sub: `${tr.envSoilColor}: ${scan.soilColor ?? 'Brown'}`, source: 'BSWM' },
-              { icon: 'rainy-outline'       as IoniconsName, label: tr.envRainPerYear, value: `${scan.rainfallMm.toLocaleString()} mm`, sub: tr.envAnnualAvg,                                source: 'PAGASA' },
-              { icon: 'trending-up-outline' as IoniconsName, label: tr.envElevation,   value: `${scan.elevationM} m`,                sub: tr.envLowland,                                  source: 'NAMRIA' },
+              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilPh != null ? `pH ${soilPh}` : '—',   source: 'SoilGrids' },
+              { icon: 'rainy-outline'       as IoniconsName, label: tr.envRainPerYear, value: rainMm != null ? `${Math.round(rainMm).toLocaleString()} mm` : '—', sub: tr.envAnnualAvg,        source: 'Open-Meteo' },
+              { icon: 'trending-up-outline' as IoniconsName, label: tr.envElevation,   value: elevM != null ? `${Math.round(elevM)} m` : '—',        sub: tr.envLowland,                            source: 'Open-Meteo' },
             ].map(item => (
               <View key={item.label} style={s.dataCard}>
                 <View style={s.dataCardLeft}>
@@ -203,7 +287,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
             ))}
 
             {/* Flood risk card */}
-            <View style={[s.dataCard, { backgroundColor: FLOOD_BG[scan.floodRisk], borderColor: '#E5E7EB' }]}>
+            <View style={[s.dataCard, { backgroundColor: FLOOD_BG[floodKey] ?? '#FFFFFF', borderColor: '#E5E7EB' }]}>
               <View style={s.dataCardLeft}>
                 <View style={s.dataIconBox}>
                   <Ionicons name="water-outline" size={16} color="#6B7280" />
@@ -214,8 +298,8 @@ export const EnvironmentalScannerScreen: React.FC = () => {
                 </View>
               </View>
               <View style={s.dataRight}>
-                <Text style={[s.dataValue, { color: FLOOD_COLOR[scan.floodRisk] }]}>
-                  {FLOOD_LABEL[scan.floodRisk]}
+                <Text style={[s.dataValue, { color: FLOOD_COLOR[floodKey] ?? '#111827' }]}>
+                  {FLOOD_LABEL[floodKey] ?? scan.flood_risk ?? '—'}
                 </Text>
                 <View style={s.dataSource}>
                   <Text style={s.dataSourceText}>MGB</Text>
@@ -225,21 +309,35 @@ export const EnvironmentalScannerScreen: React.FC = () => {
 
             <View style={s.metaCard}>
               <Ionicons name="time-outline" size={13} color="#D1D5DB" />
-              <Text style={s.metaText}>{tr.envScannedOn.replace('{date}', String(scan.scanDate)).replace('{src}', String(scan.dataSource))}</Text>
+              <Text style={s.metaText}>{tr.envScannedOn.replace('{date}', scannedAt).replace('{src}', 'SoilGrids · Open-Meteo')}</Text>
             </View>
 
-            <TouchableOpacity
-              style={s.ctaBtn}
-              onPress={() => navigation.navigate('RecommendationResults')}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="ribbon-outline" size={18} color="#FFFFFF" />
-              <View style={{ flex: 1 }}>
-                <Text style={s.ctaTitle}>{tr.envViewRecs}</Text>
-                <Text style={s.ctaSub}>{tr.envViewRecsSub}</Text>
-              </View>
-              <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
-            </TouchableOpacity>
+            {/* CTA — only once a real recommendation exists for this scan */}
+            {rec && (
+              <TouchableOpacity
+                style={s.ctaBtn}
+                onPress={() => navigation.navigate('SuitabilityResults', {
+                  farmData: {
+                    farmName:  farm?.name,
+                    barangay:  farm?.barangay,
+                    area:      farm?.area_hectares,
+                    ecosystem: farm?.ecosystem,
+                    latitude:  num(farm?.latitude),
+                    longitude: num(farm?.longitude),
+                  },
+                  recommendationData: rec,
+                  scanData: scan,
+                })}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="ribbon-outline" size={18} color="#FFFFFF" />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.ctaTitle}>{tr.envViewRecs}</Text>
+                  <Text style={s.ctaSub}>{tr.envViewRecsSub}</Text>
+                </View>
+                <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
           </>
         )}
 
