@@ -253,6 +253,11 @@ const t = {
     aiHistory:          'Kasaysayan',
     aiNewChat:          'Bagong Usapan',
     aiAskAnything:      'Magtanong tungkol sa iyong palay',
+    aiSuggFertilizer:   'Magkano ang pataba na dapat kong ilagay?',
+    aiSuggHarvest:      'Kailan ang tamang panahon para mag-ani?',
+    aiSuggPest:         'Paano ko kokontrolin ang mga peste?',
+    aiSuggWater:        'Anong antas ng tubig ang dapat kong panatilihin?',
+    aiSuggRain:         'Paano kung inaasahan ang malakas na ulan?',
 
     // Progress Dashboard — Health & Adherence detail rows
     healthFromLogs:        'Mula sa {n} pinakabagong tala',
@@ -730,6 +735,11 @@ const t = {
     aiHistory:          'History',
     aiNewChat:          'New Chat',
     aiAskAnything:      'Ask about your rice farming',
+    aiSuggFertilizer:   'How much fertilizer should I apply?',
+    aiSuggHarvest:      'When is the right time to harvest?',
+    aiSuggPest:         'How do I control pests?',
+    aiSuggWater:        'What water level should I keep?',
+    aiSuggRain:         'What if heavy rain is expected?',
 
     healthFromLogs:        'From your {n} most recent logs',
     healthInsect:          'Insect',
@@ -1201,6 +1211,11 @@ const t = {
     aiHistory:          'Kasaysayan',
     aiNewChat:          'Bag-ong Estorya',
     aiAskAnything:      'Pangutana bahin sa imong humay',
+    aiSuggFertilizer:   'Pila ka abono ang akong ibutang?',
+    aiSuggHarvest:      'Kanus-a ang saktong panahon sa pag-ani?',
+    aiSuggPest:         'Unsaon nako pagkontrol sa mga peste?',
+    aiSuggWater:        'Unsang lebel sa tubig ang akong ipabilin?',
+    aiSuggRain:         'Unsa kung naay kusog nga ulan nga gilauman?',
 
     healthFromLogs:        'Gikan sa {n} pinakabag-o nga log',
     healthInsect:          'Insekto',

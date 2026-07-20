@@ -47,11 +47,16 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
     } catch { /* fall back to the default guide content */ }
   };
 
-  // Fallback when no callbacks are passed (i.e. the screen was reached from
-  // inside the app via the Add-Farm flow, not via the initial-setup navigator).
-  // Pop back to the root of the current stack (DashboardHome).
-  const popHome = () => {
-    try { navigation.popToTop(); } catch { navigation.goBack(); }
+  // When reached from inside the app (Add-Farm / scan flow in the RootStack),
+  // no setup callbacks are passed — navigate to the target tab directly.
+  // `navigate('MainTabs', { screen })` pops the pushed flow screens off the
+  // RootStack AND switches to the requested bottom tab in one action.
+  const goToTab = (tab: 'HomeTab' | 'PlantingTab') => {
+    try {
+      navigation.navigate('MainTabs', { screen: tab });
+    } catch {
+      try { navigation.popToTop(); } catch { navigation.goBack(); }
+    }
   };
 
   const handleGoToDashboard = async () => {
@@ -59,7 +64,8 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
     setGenerating('dashboard');
     await generateGuide();
     setGenerating(null);
-    if (onEnterApp) onEnterApp(); else popHome();
+    if (onEnterApp) onEnterApp();
+    else goToTab('HomeTab');
   };
 
   const handleOpenGuide = async () => {
@@ -67,8 +73,9 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
     setGenerating('guide');
     await generateGuide();
     setGenerating(null);
-    const cb = onGoToGuide ?? onEnterApp;
-    if (cb) cb(); else popHome();
+    if (onGoToGuide) onGoToGuide();
+    else if (onEnterApp) onEnterApp();
+    else goToTab('PlantingTab');
   };
 
   const FEATURES: { icon: IoniconsName; label: string }[] = [

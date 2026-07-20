@@ -180,6 +180,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await storage.removeItem(STORAGE_KEYS.NOTIF_ENABLED);
       await storage.removeItem(STORAGE_KEYS.WEATHER_ALERTS);
       await storage.removeItem(STORAGE_KEYS.PROFILE_OVERRIDES);
+      await storage.removeItem(STORAGE_KEYS.SELECTED_FARM);
       useAppStore.getState().reset();
       set({ user: null, isAuthenticated: false, isLoading: false });
     } catch (error) {

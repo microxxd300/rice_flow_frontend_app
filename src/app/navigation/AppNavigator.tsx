@@ -146,12 +146,15 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
 };
 
 /* ── Main tabs (the 5-tab floating bar) ────────────── */
+// Registered via `component` (not a render function) so nested tab navigation
+// works — e.g. navigate('MainTabs', { screen: 'PlantingTab' }) from a pushed
+// flow screen. The starting tab comes from route params (set by initialParams).
 
-const MainTabs: React.FC<{ initialTab?: string }> = ({ initialTab }) => (
+const MainTabs: React.FC<{ route?: any }> = ({ route }) => (
   <Tab.Navigator
     tabBar={(props) => <CustomTabBar {...props} />}
     screenOptions={{ headerShown: false }}
-    initialRouteName={initialTab ?? 'HomeTab'}
+    initialRouteName={route?.params?.initialTab ?? 'HomeTab'}
   >
     <Tab.Screen name="HomeTab"     component={HomeStack} />
     <Tab.Screen name="ProgressTab" component={ProgressStack} />
@@ -169,14 +172,16 @@ const MainTabs: React.FC<{ initialTab?: string }> = ({ initialTab }) => (
 
 export const AppNavigator: React.FC<{ initialTab?: string }> = ({ initialTab }) => (
   <RootStack.Navigator screenOptions={{ headerShown: false }}>
-    <RootStack.Screen name="MainTabs">
-      {() => <MainTabs initialTab={initialTab} />}
-    </RootStack.Screen>
+    <RootStack.Screen
+      name="MainTabs"
+      component={MainTabs}
+      initialParams={{ initialTab }}
+    />
 
     {/* Add-farm flow — reuses the same screens as the initial setup. Pushed
         above the tabs so the floating tab bar is hidden during the flow.
-        After it ends (PlantingGuideHandoff), the screen pops back to
-        MainTabs since onEnterApp/onGoToGuide aren't passed here. */}
+        After it ends (PlantingGuideHandoff), it navigates back to the correct
+        MainTabs tab (Home or Planting). */}
     <RootStack.Screen name="FarmDetailsForm"      component={FarmDetailsFormScreen} />
     <RootStack.Screen name="LocationPermission"   component={LocationPermissionScreen} />
     <RootStack.Screen name="FarmMapTagging"       component={FarmMapTaggingScreen} />

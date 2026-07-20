@@ -37,6 +37,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
   const apiDoneRef        = useRef(false);
   const animDoneRef       = useRef(false);
   const navigatedRef      = useRef(false);
+  const startedRef        = useRef(false);   // guards against creating a duplicate farm
 
   const tryNavigate = () => {
     if (apiDoneRef.current && animDoneRef.current && !navigatedRef.current) {
@@ -49,8 +50,12 @@ export const AnalysisLoadingScreen: React.FC = () => {
     }
   };
 
-  // Run the real API chain once on mount
+  // Run the real API chain once on mount. The guard prevents a second run —
+  // and thus a duplicate farm — if the effect re-fires (StrictMode double-invoke,
+  // fast refresh, or a remount).
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     const run = async () => {
       let step = 'init';
       try {

@@ -41,12 +41,13 @@ const HISTORY_ITEMS = {
   ],
 };
 
-const SUGGESTIONS: { label: string; icon: IoniconsName }[] = [
-  { label: 'How much fertilizer should I apply?', icon: 'flask-outline' },
-  { label: 'When is the right time to harvest?',  icon: 'calendar-outline' },
-  { label: 'How do I control pests?',              icon: 'bug-outline' },
-  { label: 'What water level should I keep?',      icon: 'water-outline' },
-  { label: 'What if heavy rain is expected?',      icon: 'rainy-outline' },
+// Icon + translation key per suggestion; labels resolved from `tr` at render.
+const SUGGESTION_META: { key: 'aiSuggFertilizer' | 'aiSuggHarvest' | 'aiSuggPest' | 'aiSuggWater' | 'aiSuggRain'; icon: IoniconsName }[] = [
+  { key: 'aiSuggFertilizer', icon: 'flask-outline' },
+  { key: 'aiSuggHarvest',    icon: 'calendar-outline' },
+  { key: 'aiSuggPest',       icon: 'bug-outline' },
+  { key: 'aiSuggWater',      icon: 'water-outline' },
+  { key: 'aiSuggRain',       icon: 'rainy-outline' },
 ];
 
 function nowTime() {
@@ -225,6 +226,10 @@ export const AIChatScreen: React.FC = () => {
     { group: tr.aiYesterday,items: HISTORY_ITEMS.yesterday },
     { group: tr.aiLastWeek, items: HISTORY_ITEMS.lastWeek },
   ];
+
+  // Suggestion chips in the current language — the label doubles as the message
+  // sent to the AI, which now replies in the user's language.
+  const SUGGESTIONS = SUGGESTION_META.map(({ key, icon }) => ({ label: tr[key], icon }));
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState('');
