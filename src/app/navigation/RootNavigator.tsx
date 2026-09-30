@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { AppNavigator } from './AppNavigator';
 import { SetupNavigator } from './SetupNavigator';
@@ -12,6 +12,17 @@ export const RootNavigator: React.FC = () => {
   const setupComplete = useAppStore(state => state.setupComplete);
   const setSetupComplete = useAppStore(state => state.setSetupComplete);
   const [initialTab, setInitialTab] = useState<string | undefined>(undefined);
+
+  // Stable across renders. Passed down into SetupNavigator, where a changing
+  // identity would remount the screen the user is currently looking at.
+  const handleComplete = useCallback(() => {
+    setSetupComplete(true);
+  }, [setSetupComplete]);
+
+  const handleGoToGuide = useCallback(() => {
+    setInitialTab('PlantingTab');
+    setSetupComplete(true);
+  }, [setSetupComplete]);
 
   if (!isAuthenticated) {
     return <AuthNavigator />;
@@ -32,11 +43,8 @@ export const RootNavigator: React.FC = () => {
   if (needsSetup) {
     return (
       <SetupNavigator
-        onComplete={() => setSetupComplete(true)}
-        onGoToGuide={() => {
-          setInitialTab('PlantingTab');
-          setSetupComplete(true);
-        }}
+        onComplete={handleComplete}
+        onGoToGuide={handleGoToGuide}
       />
     );
   }

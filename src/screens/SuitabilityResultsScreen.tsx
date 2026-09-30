@@ -7,6 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { mockRecommendations, mockRiceVarieties } from '../data/mockData';
 import type { Recommendation } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useAccessibility } from '@/context/AccessibilityContext';
 
 type Nav = StackNavigationProp<any>;
 
@@ -115,6 +116,8 @@ interface DisplayRec {
   suitabilityScore: number;
   rsiScore: number | string;
   suitabilityClass: string;
+  fitExplanation?: string;   // per-farm "why it fits" (from backend)
+  description?: string;      // variety narrative (from backend)
   variety: {
     name: string;
     maturityDays: number;
@@ -131,6 +134,8 @@ function buildFromReal(rec: Recommendation): DisplayRec[] {
     suitabilityScore: Math.round(r.rsi_score),
     rsiScore: r.rsi_score.toFixed(1),
     suitabilityClass: r.suitability_class,
+    fitExplanation: (r as any).fit_explanation || '',
+    description: (r.variety as any).ai_description || '',
     variety: {
       name: r.variety.common_name,
       maturityDays: r.variety.maturity_days,
@@ -163,6 +168,8 @@ function buildFromMock(): DisplayRec[] {
 
 export const SuitabilityResultsScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
+  const { isLargeText } = useAccessibility();
+  const T = isLargeText;   // easy-reading text scale
   const route      = useRoute<any>();
   const farmData   = route.params?.farmData ?? {};
   const realRec    = route.params?.recommendationData as Recommendation | undefined;
@@ -243,7 +250,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
             ))}
           </View>
 
-          <Text style={s.fieldNote}>
+          <Text style={[s.fieldNote, T && { fontSize: 14, lineHeight: 20 }]}>
             {allTied
               ? 'All three varieties below score equally on your field. Ranked by yield and days-to-harvest.'
               : 'The RSI score rates the field, not the variety. Ranked by score, yield, and days-to-harvest.'}
@@ -265,7 +272,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 </View>
                 <View style={s.varNameWrap}>
                   <Ionicons name="leaf" size={13} color={isTop ? '#059669' : '#9CA3AF'} />
-                  <Text style={s.varName} numberOfLines={1}>{rec.variety.name}</Text>
+                  <Text style={[s.varName, T && { fontSize: 19 }]} numberOfLines={1}>{rec.variety.name}</Text>
                 </View>
                 {isTop && (
                   <View style={s.recommendedBadge}>
@@ -279,7 +286,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.metricCol}>
                   <View style={s.metricHead}>
                     <Ionicons name="trending-up-outline" size={12} color="#9CA3AF" />
-                    <Text style={s.metricLabel}>Expected yield</Text>
+                    <Text style={[s.metricLabel, T && { fontSize: 13 }]}>Expected yield</Text>
                   </View>
                   <Text style={s.metricVal}>
                     {rec.variety.avgYield}<Text style={s.metricUnit}> t/ha</Text>
@@ -289,7 +296,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.metricCol}>
                   <View style={s.metricHead}>
                     <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                    <Text style={s.metricLabel}>To harvest</Text>
+                    <Text style={[s.metricLabel, T && { fontSize: 13 }]}>To harvest</Text>
                   </View>
                   <Text style={s.metricVal}>
                     {rec.variety.maturityDays}<Text style={s.metricUnit}> days</Text>
@@ -303,6 +310,22 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.tolDivider} />
                 <ToleranceMeter label="Drought" value={rec.variety.droughtTolerance} />
               </View>
+
+              {/* Farm-specific fit — built from this farm's real RSI factor scores */}
+              {rec.fitExplanation ? (
+                <View style={s.fitBox}>
+                  <View style={s.fitHead}>
+                    <Ionicons name="sparkles-outline" size={12} color="#059669" />
+                    <Text style={s.fitHeadText}>Why it fits your farm</Text>
+                  </View>
+                  <Text style={[s.fitText, T && { fontSize: 14, lineHeight: 20 }]}>{rec.fitExplanation}</Text>
+                </View>
+              ) : null}
+
+              {/* About the variety — grounded narrative (same for every farm) */}
+              {rec.description ? (
+                <Text style={[s.aboutText, T && { fontSize: 14, lineHeight: 20 }]}>{rec.description}</Text>
+              ) : null}
 
               <TouchableOpacity
                 style={[s.saveBtn, !isTop && s.saveBtnGhost]}
@@ -461,6 +484,19 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
   tolDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: '#E5E7EB' },
+
+  /* Farm-fit callout — soft green, since it's the personalized bit */
+  fitBox: {
+    backgroundColor: '#F0FDF4', borderRadius: 10,
+    borderWidth: 1, borderColor: '#D1FAE5',
+    paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12,
+  },
+  fitHead:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  fitHeadText: { fontSize: 11, fontWeight: '700', color: '#065F46', letterSpacing: 0.2 },
+  fitText:     { fontSize: 12.5, color: '#065F46', lineHeight: 18 },
+
+  /* About-the-variety prose */
+  aboutText: { fontSize: 12.5, color: '#6B7280', lineHeight: 18, marginBottom: 14 },
 
   /* Variety name with leading leaf icon */
   varNameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },

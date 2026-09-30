@@ -3,6 +3,7 @@ import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { authLogin, authRegister, apiFarms } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useLanguageStore } from '@/store/languageStore';
 
 /**
  * Restore the user's last-selected farm after the farms list loads.
@@ -53,18 +54,30 @@ interface AuthState {
  * farms is treated as set up; a brand-new user with no farms still needs setup.
  */
 async function establishSetupFlag(farmCount: number): Promise<void> {
-  let complete = await storage.getItem<boolean>(STORAGE_KEYS.SETUP_COMPLETE);
-  if (complete === null) {
-    complete = farmCount > 0;
-    await storage.setItem(STORAGE_KEYS.SETUP_COMPLETE, complete);
-  }
-  useAppStore.getState().setSetupComplete(complete);
+  // This runs on a background chain (farms load → flag). If the user finished
+  // setup while that chain was in flight, the value we're about to read from
+  // storage is already stale — applying it would tear the user back out of the
+  // app and into the step they just completed. Memory wins: never downgrade.
+  if (useAppStore.getState().setupComplete) {
+    await storage.setItem(STORAGE_KEYS.SETUP_COMPLETE, true).catch(() => {});
+  } else {
+    let complete = await storage.getItem<boolean>(STORAGE_KEYS.SETUP_COMPLETE);
+    if (complete === null) {
+      complete = farmCount > 0;
+      await storage.setItem(STORAGE_KEYS.SETUP_COMPLETE, complete);
+    }
+    // Re-check: the user may have completed setup during the awaits above.
+    if (!useAppStore.getState().setupComplete) {
+      useAppStore.getState().setSetupComplete(complete);
 
-  // If setup is unfinished, restore the exact step + data so the user resumes there
-  if (!complete) {
-    const progress = await storage.getItem<{ step: string; data: any }>(STORAGE_KEYS.SETUP_PROGRESS);
-    if (progress?.step) {
-      useAppStore.setState({ setupStep: progress.step, setupData: progress.data ?? {} });
+      // Setup unfinished → restore the exact step + data so the user resumes there
+      if (!complete) {
+        const progress = await storage.getItem<{ step: string; data: any }>(STORAGE_KEYS.SETUP_PROGRESS);
+        // Final guard: only resume if setup is still unfinished right now.
+        if (progress?.step && !useAppStore.getState().setupComplete) {
+          useAppStore.setState({ setupStep: progress.step, setupData: progress.data ?? {} });
+        }
+      }
     }
   }
 
@@ -134,6 +147,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       await storage.setItem(STORAGE_KEYS.USER, storeUser);
       useAppStore.getState().setUser(profile);
 
+      // Load THIS account's language (falls back to English for a new user).
+      // Must run after the USER key is written — that's how the store scopes it.
+      await useLanguageStore.getState().loadLanguage().catch(() => {});
+
       // Pre-load farms into global store
       let farmCount = 0;
       try {
@@ -182,6 +199,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       await storage.removeItem(STORAGE_KEYS.PROFILE_OVERRIDES);
       await storage.removeItem(STORAGE_KEYS.SELECTED_FARM);
       useAppStore.getState().reset();
+      // Back to English in memory so the next account on this device doesn't
+      // inherit this user's language. Their own key stays saved for next login.
+      useLanguageStore.getState().resetLanguage();
       set({ user: null, isAuthenticated: false, isLoading: false });
     } catch (error) {
       set({ isLoading: false });

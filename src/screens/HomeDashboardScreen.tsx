@@ -21,6 +21,7 @@ import { useAuthStore } from '@/features/auth/store';
 import { Skeleton } from '@/components/Skeleton';
 import { dedupeName } from '@/utils/formatting';
 import { useTranslation } from '@/i18n/useTranslation';
+import { useAccessibility } from '@/context/AccessibilityContext';
 import { useLanguageStore } from '@/store/languageStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { FarmSwitcher } from '@/components/FarmSwitcher';
@@ -54,6 +55,8 @@ function formatTime(d: Date) {
 export const HomeDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
+  const { isLargeText } = useAccessibility();
+  const T = isLargeText;   // easy-reading text scale
   const lang = useLanguageStore(s => s.language);
   const [greeting,    setGreeting]    = useState('');
   const [now,         setNow]         = useState(new Date());
@@ -225,8 +228,16 @@ export const HomeDashboardScreen: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); start.setHours(0, 0, 0, 0);
     const currentDay = Math.floor((today.getTime() - start.getTime()) / 86400000);
+    const seen = new Set<string>();
     return g.steps
       .filter((st: any) => (st.daysAfterPlanting ?? 0) >= currentDay)
+      // Drop any repeated step id so React list keys stay unique
+      .filter((st: any) => {
+        const key = String(st.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .sort((a: any, b: any) => a.daysAfterPlanting - b.daysAfterPlanting)
       .slice(0, 3)
       .map((st: any) => ({
@@ -258,8 +269,8 @@ export const HomeDashboardScreen: React.FC = () => {
           <Text style={s.avatarText}>{initials}</Text>
         </TouchableOpacity>
         <View style={s.appBarMid}>
-          <Text style={s.appBarGreet}>{tr.homeGreeting} {greeting}</Text>
-          <Text style={s.appBarSub}>{displayName}</Text>
+          <Text style={[s.appBarGreet, T && { fontSize: 17 }]}>{tr.homeGreeting} {greeting}</Text>
+          <Text style={[s.appBarSub, T && { fontSize: 14 }]}>{displayName}</Text>
         </View>
         <NotificationBell color="#059669" size={22} />
       </View>
@@ -356,7 +367,7 @@ export const HomeDashboardScreen: React.FC = () => {
         {upcomingTasks.length > 0 && (
           <View style={s.section}>
             <View style={[s.card, { paddingTop: 14, paddingBottom: 4 }]}>
-              <Text style={s.cardTitle}>{tr.homeUpcomingTasks}</Text>
+              <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeUpcomingTasks}</Text>
               {upcomingTasks.map((t: { id?: string; title: string; cat: TaskCat; offset: number }, i: number) => {
                 const meta = TASK_META[t.cat] || TASK_META.planting;
                 return (
@@ -373,7 +384,7 @@ export const HomeDashboardScreen: React.FC = () => {
                       <Ionicons name={meta.icon} size={16} color={meta.color} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.taskTitle} numberOfLines={1}>{t.title}</Text>
+                      <Text style={[s.taskTitle, T && { fontSize: 16 }]} numberOfLines={1}>{t.title}</Text>
                       <Text style={[s.taskMeta, { color: meta.color }]}>{taskDayLabel(t.offset)}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
@@ -387,7 +398,7 @@ export const HomeDashboardScreen: React.FC = () => {
         {/* ── 3. My Farms ── */}
         <View style={s.section}>
           <View style={[s.card, { paddingTop: 14 }]}>
-            <Text style={s.cardTitle}>{tr.homeMyFarms}</Text>
+            <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeMyFarms}</Text>
 
             {/* Skeleton while farms list is still loading from backend */}
             {!farmsLoaded && realFarms.length === 0 && (
@@ -421,7 +432,7 @@ export const HomeDashboardScreen: React.FC = () => {
                     <Ionicons name="storefront-outline" size={16} color="#059669" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.bukidName} numberOfLines={1}>{f.name}</Text>
+                    <Text style={[s.bukidName, T && { fontSize: 16 }]} numberOfLines={1}>{f.name}</Text>
                     <Text style={s.bukidMeta} numberOfLines={1}>{location} · {area}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
@@ -481,8 +492,8 @@ export const HomeDashboardScreen: React.FC = () => {
                   >
                     <View style={[s.logAccent, { backgroundColor: hasIssue ? '#D97706' : '#6BC99B' }]} />
                     <View style={s.logBody}>
-                      <Text style={s.logStage}>{log.growthStage}</Text>
-                      <Text style={s.logNote} numberOfLines={2}>
+                      <Text style={[s.logStage, T && { fontSize: 15 }]}>{log.growthStage}</Text>
+                      <Text style={[s.logNote, T && { fontSize: 14, lineHeight: 20 }]} numberOfLines={2}>
                         {hasIssue ? log.observedIssue : log.notes}
                       </Text>
                     </View>
@@ -541,7 +552,7 @@ export const HomeDashboardScreen: React.FC = () => {
                     <Ionicons name="leaf-outline" size={16} color="#059669" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.bukidName} numberOfLines={1}>{topVariety?.name}</Text>
+                    <Text style={[s.bukidName, T && { fontSize: 16 }]} numberOfLines={1}>{topVariety?.name}</Text>
                     <Text style={s.bukidMeta} numberOfLines={1}>{metaLine}</Text>
                   </View>
                   <Text style={s.recScoreFlat}>{topScore}%</Text>

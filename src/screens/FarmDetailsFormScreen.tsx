@@ -68,13 +68,20 @@ export const FarmDetailsFormScreen: React.FC = () => {
             autoCapitalize="words"
           />
           <Field
-            label="Area"
+            label="Farm size"
             value={area}
             onChangeText={setArea}
             placeholder="e.g. 2.5"
             keyboardType="decimal-pad"
             unit="ha"
           />
+          {/* Clarify that size is self-reported and only for yield estimates —
+              the variety recommendation is derived from GPS location, not area. */}
+          <Text style={s.fieldNote}>
+            Enter your land size in hectares. This is used only for yield
+            estimates — your rice variety recommendation is based on your
+            farm's location.
+          </Text>
 
           {/* Account location — read-only, plain row, no decorative chip */}
           {accountLoc ? (
@@ -171,6 +178,7 @@ const s = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 },
   lead:   { fontSize: 14, color: '#374151', lineHeight: 21, marginBottom: 22 },
+  fieldNote: { fontSize: 12, color: '#9CA3AF', lineHeight: 17, marginTop: -6, marginBottom: 2 },
 
   accountLoc: {
     marginTop: 14, paddingVertical: 14,

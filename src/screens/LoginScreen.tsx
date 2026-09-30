@@ -24,7 +24,11 @@ export const LoginScreen: React.FC = () => {
   const toEmail = (u: string) => u.includes('@') ? u.trim() : `${u.trim()}@georice.app`;
 
   const handleLogin = () => {
-    if (!isValid || loading) return;
+    if (loading) return;
+    // Tell the user what's missing instead of silently doing nothing.
+    if (!username.trim() && !password) { setError('Please enter your email and password.'); return; }
+    if (!username.trim())              { setError('Please enter your email.'); return; }
+    if (!password)                     { setError('Please enter your password.'); return; }
     setError(null);
     setLoading(true);
     authLogin(toEmail(username), password)
@@ -107,9 +111,9 @@ export const LoginScreen: React.FC = () => {
 
           {/* Primary action — same vocabulary as the rest of the app */}
           <TouchableOpacity
-            style={[s.saveBtn, (!isValid || loading) && { opacity: 0.55 }]}
+            style={[s.saveBtn, loading && { opacity: 0.55 }]}
             onPress={handleLogin}
-            disabled={!isValid || loading}
+            disabled={loading}
             activeOpacity={0.85}
           >
             {loading

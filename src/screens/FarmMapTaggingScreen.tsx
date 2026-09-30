@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -7,6 +7,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import MapView, { UrlTile, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useAppStore } from '@/store/appStore';
+import { apiFarms, type PinWarningReason } from '@/services/apiService';
+import { useTranslation } from '@/i18n/useTranslation';
 
 type Nav = StackNavigationProp<any>;
 
@@ -23,6 +25,8 @@ export const FarmMapTaggingScreen: React.FC = () => {
   const route      = useRoute<any>();
   const { bottom: bottomInset } = useSafeAreaInsets();
   const mapRef     = useRef<MapView>(null);
+  const tr         = useTranslation();
+  const checkingRef = useRef(false);
 
   const farmData = route.params?.farmData  ?? {};
   const initLat  = route.params?.latitude  ?? DEFAULT_LAT;
@@ -82,7 +86,7 @@ export const FarmMapTaggingScreen: React.FC = () => {
     }
   };
 
-  const handleConfirm = () =>
+  const goToAnalysis = (locationConfirmed: boolean) =>
     navigation.navigate('AnalysisLoading', {
       farmData: {
         ...farmData,
@@ -91,8 +95,36 @@ export const FarmMapTaggingScreen: React.FC = () => {
         barangay:     resolved.barangay     || farmData.barangay     || '',
         municipality: resolved.municipality || farmData.municipality || '',
         province:     resolved.province     || farmData.province     || '',
+        location_confirmed: locationConfirmed,
       },
     });
+
+  const pinWarning: Record<PinWarningReason, string> = {
+    on_building: tr.pinWarnOnBuilding,
+    built_up:    tr.pinWarnBuiltUp,
+    water:       tr.pinWarnWater,
+    mangrove:    tr.pinWarnMangrove,
+  };
+
+  // Warn, don't block: ask before saving a pin that looks like a building, town,
+  // or water. A failed check (weak signal) must never stop the farmer from saving.
+  const handleConfirm = async () => {
+    if (checkingRef.current) return;
+    checkingRef.current = true;
+    let reason: PinWarningReason | null = null;
+    try {
+      const { data } = await apiFarms.checkLocation(coords.lat, coords.lng);
+      if (data.status === 'warning') reason = data.reason;
+    } catch { /* unchecked — continue */ } finally {
+      checkingRef.current = false;
+    }
+
+    if (!reason) return goToAnalysis(false);
+    Alert.alert(tr.pinWarnTitle, pinWarning[reason] ?? tr.pinWarnBuiltUp, [
+      { text: tr.pinMove, style: 'cancel' },
+      { text: tr.pinKeep, onPress: () => goToAnalysis(true) },
+    ]);
+  };
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>

@@ -47,9 +47,21 @@ export interface Farm {
   ecosystem: string;
   elevation_m: number | null;
   slope_pct: number | null;
+  location_flag?: string;
+  location_confirmed?: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type PinWarningReason = 'on_building' | 'built_up' | 'water' | 'mangrove';
+
+export interface LocationCheck {
+  status: 'ok' | 'warning' | 'unchecked';
+  reason: PinWarningReason | null;
+  land_cover: string | null;
+  on_building: boolean | null;
+  message: string;
 }
 
 export interface RiceVarietyBrief {
@@ -126,6 +138,8 @@ export const apiFarms = {
   update: (id: number, data: Partial<Farm>) =>
                                        apiClient.patch<Farm>(API_ROUTES.farms.detail(id), data),
   delete: (id: number) =>              apiClient.delete<void>(API_ROUTES.farms.detail(id)),
+  checkLocation: (lat: number, lon: number) =>
+    apiClient.get<LocationCheck>(API_ROUTES.farms.checkLocation, { params: { lat, lon }, timeout: 5000 }),
 };
 
 // ── Environmental ──────────────────────────────────────────────────────────

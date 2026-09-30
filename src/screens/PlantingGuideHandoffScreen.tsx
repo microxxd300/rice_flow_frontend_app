@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
 import { apiGuides } from '@/services/apiService';
@@ -48,31 +48,46 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
   };
 
   // When reached from inside the app (Add-Farm / scan flow in the RootStack),
-  // no setup callbacks are passed — navigate to the target tab directly.
-  // `navigate('MainTabs', { screen })` pops the pushed flow screens off the
-  // RootStack AND switches to the requested bottom tab in one action.
+  // no setup callbacks are passed — exit the flow to the requested tab.
+  //
+  // This must be a RESET, not a navigate. The flow screens below this one
+  // (AnalysisLoading → SuitabilityResults) stay on the stack, and the previous
+  // fallback chain — navigate → popToTop → goBack — walked the user *backwards*
+  // into SuitabilityResults instead of forwards into the app. Resetting the
+  // root stack to MainTabs leaves nothing behind to fall back to.
   const goToTab = (tab: 'HomeTab' | 'PlantingTab') => {
-    try {
-      navigation.navigate('MainTabs', { screen: tab });
-    } catch {
-      try { navigation.popToTop(); } catch { navigation.goBack(); }
-    }
+    // This screen is registered in more than one navigator, so walk up to the
+    // root — only the root stack owns MainTabs.
+    let nav: any = navigation;
+    while (nav?.getParent?.()) nav = nav.getParent();
+    nav.dispatch(
+      CommonActions.reset({
+        index:  0,
+        routes: [{ name: 'MainTabs', params: { screen: tab } }],
+      }),
+    );
   };
 
-  const handleGoToDashboard = async () => {
+  // Leave IMMEDIATELY and let the guide finish generating in the background.
+  //
+  // This used to await the Gemini call before navigating, which held the user
+  // on this screen for several seconds — a long window in which a re-render
+  // could remount the screen and swallow the transition. Nothing is lost by
+  // leaving early: the result lands in the store, the "guide is ready"
+  // notification still fires, and the Planting Guide screen generates the
+  // guide itself if it arrives before the response does.
+  const handleGoToDashboard = () => {
     if (generating) return;
     setGenerating('dashboard');
-    await generateGuide();
-    setGenerating(null);
+    void generateGuide();
     if (onEnterApp) onEnterApp();
     else goToTab('HomeTab');
   };
 
-  const handleOpenGuide = async () => {
+  const handleOpenGuide = () => {
     if (generating) return;
     setGenerating('guide');
-    await generateGuide();
-    setGenerating(null);
+    void generateGuide();
     if (onGoToGuide) onGoToGuide();
     else if (onEnterApp) onEnterApp();
     else goToTab('PlantingTab');

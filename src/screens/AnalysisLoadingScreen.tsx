@@ -76,6 +76,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
           ecosystem:      farmData.ecosystem   || 'irrigated_lowland',
           elevation_m:    farmData.elevation_m ?? null,
           slope_pct:      null,
+          location_confirmed: !!farmData.location_confirmed,
         };
         step = 'create farm';
         const farmRes = await apiFarms.create(farmPayload);

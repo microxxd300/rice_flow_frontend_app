@@ -17,6 +17,7 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { dedupeName } from '@/utils/formatting';
+import { apiFarms, apiProgress } from '@/services/apiService';
 
 const LogoImage = require('../assets/icons/logo_for_rice-flow.png');
 
@@ -34,8 +35,20 @@ interface ProfileOverrides {
   province?: string;
 }
 
+// Menu entries that open a readable content sheet rather than a form.
+const CONTENT_MODALS = ['privacy', 'dataManagement', 'help', 'userGuide', 'about', 'terms'];
+
+/** One heading + paragraph block, the shared shape of every content sheet. */
+const InfoBlock: React.FC<{ heading: string; body: string; large?: boolean }> = ({ heading, body, large }) => (
+  <View style={s.infoBlock}>
+    <Text style={[s.infoHeading, large && { fontSize: 16 }]}>{heading}</Text>
+    <Text style={[s.infoBody, large && { fontSize: 15, lineHeight: 22 }]}>{body}</Text>
+  </View>
+);
+
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const { isLargeText, toggleLargeText } = useAccessibility();
+  const T = isLargeText;   // easy-reading text scale, matches the other screens
   const { user: authUser, logout } = useAuthStore();
   const {
     user: profileUser,
@@ -121,6 +134,59 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
     onLogout?.();
   };
 
+  /* ── Data management actions ───────────────────────────────────────────── */
+  // Both act only on this device's cached copy / a plain re-read. Neither
+  // deletes anything server-side, so there's no destructive path here.
+  const [dataBusy,   setDataBusy]   = useState(false);
+  const [dataStatus, setDataStatus] = useState<string | null>(null);
+
+  const refreshFromServer = async () => {
+    if (dataBusy) return;
+    setDataBusy(true);
+    setDataStatus(tr.dataRefreshing);
+    try {
+      const farmsRes = await apiFarms.list();
+      useAppStore.getState().setFarms(farmsRes.data);
+      // Field logs are best-effort: a farm with no cycle yet simply has none.
+      try {
+        const logsRes = await apiProgress.listLogs();
+        if (Array.isArray(logsRes.data)) {
+          useAppStore.getState().setProgressLogs(logsRes.data);
+        }
+      } catch {}
+      setDataStatus(tr.dataRefreshed);
+    } catch {
+      setDataStatus(tr.dataRefreshFailed);
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
+  const clearLocalCache = async () => {
+    if (dataBusy) return;
+    setDataBusy(true);
+    try {
+      // Cached farm data only — tokens and the signed-in user are left alone so
+      // clearing the cache never logs the farmer out.
+      await Promise.all([
+        storage.removeItem(STORAGE_KEYS.LATEST_REC),
+        storage.removeItem(STORAGE_KEYS.LATEST_GUIDE),
+        storage.removeItem(STORAGE_KEYS.PROGRESS_LOGS),
+        storage.removeItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS),
+        storage.removeItem(STORAGE_KEYS.NOTIFICATIONS),
+      ].map(p => p.catch(() => {})));
+      const st = useAppStore.getState();
+      st.setLatestRecommendation(null);
+      st.setLatestGuide(null);
+      st.setProgressLogs([]);
+      st.hydrateGuideSteps([]);
+      st.hydrateNotifications([]);
+      setDataStatus(tr.dataCleared);
+    } finally {
+      setDataBusy(false);
+    }
+  };
+
   // Use real farms if loaded, else fall back to mock (so the card isn't empty in demos)
   const farmList: any[] = realFarms.length > 0 ? realFarms : mockFarms;
 
@@ -150,8 +216,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
               <Text style={s.avatarText}>{initials}</Text>
             </View>
             <View style={s.profileInfo}>
-              <Text style={s.profileName} numberOfLines={1}>{displayName}</Text>
-              <Text style={s.profileEmail} numberOfLines={1}>{displayEmail}</Text>
+              <Text style={[s.profileName, T && { fontSize: 19 }]} numberOfLines={1}>{displayName}</Text>
+              <Text style={[s.profileEmail, T && { fontSize: 14 }]} numberOfLines={1}>{displayEmail}</Text>
             </View>
             <TouchableOpacity style={s.editIconBtn} onPress={openEdit} activeOpacity={0.7}>
               <Ionicons name="pencil-outline" size={16} color="#374151" />
@@ -161,30 +227,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
         {/* Location — internal title, hairline rows, no tinted icons */}
         <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={s.cardTitle}>{tr.profileLocation}</Text>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileLocation}</Text>
           {[
             { label: tr.profileEditBarangay,     value: displayBaran  || '—' },
             { label: tr.profileEditMunicipality, value: displayMunic  || '—' },
             { label: tr.profileEditProvince,     value: displayProv   || '—' },
           ].map((row, i, arr) => (
             <View key={row.label} style={[s.simpleRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-              <Text style={s.rowLabel}>{row.label}</Text>
-              <Text style={s.rowValue} numberOfLines={1}>{row.value}</Text>
+              <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
+              <Text style={[s.rowValue, T && { fontSize: 15 }]} numberOfLines={1}>{row.value}</Text>
             </View>
           ))}
         </View>
 
         {/* Farms — real farms with mock fallback, clean rows */}
         <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={s.cardTitle}>{tr.profileFarms}</Text>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileFarms}</Text>
           {farmList.map((farm: any, i: number, arr: any[]) => {
             const area = farm.area_hectares ?? farm.areaHectares ?? null;
             const location = [farm.barangay, farm.municipality].filter(Boolean).join(', ') || '—';
             return (
               <View key={farm.id ?? i} style={[s.simpleRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.farmName} numberOfLines={1}>{farm.name}</Text>
-                  <Text style={s.farmMeta} numberOfLines={1}>
+                  <Text style={[s.farmName, T && { fontSize: 16 }]} numberOfLines={1}>{farm.name}</Text>
+                  <Text style={[s.farmMeta, T && { fontSize: 14 }]} numberOfLines={1}>
                     {location}{area != null ? ` · ${area} ha` : ''}
                   </Text>
                 </View>
@@ -198,12 +264,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
         {/* Notifications + Accessibility — combined card with toggle rows */}
         <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={s.cardTitle}>{tr.profileSettings}</Text>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileSettings}</Text>
 
           <View style={s.toggleRow}>
             <View style={{ flex: 1 }}>
-              <Text style={s.toggleTitle}>{tr.profilePushNotif}</Text>
-              <Text style={s.toggleDesc}>{tr.profilePushNotifDesc}</Text>
+              <Text style={[s.toggleTitle, T && { fontSize: 16 }]}>{tr.profilePushNotif}</Text>
+              <Text style={[s.toggleDesc, T && { fontSize: 14, lineHeight: 19 }]}>{tr.profilePushNotifDesc}</Text>
             </View>
             <Switch
               value={notificationsEnabled}
@@ -215,8 +281,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
           <View style={s.toggleRow}>
             <View style={{ flex: 1 }}>
-              <Text style={s.toggleTitle}>{tr.profileWeather}</Text>
-              <Text style={s.toggleDesc}>{tr.profileWeatherDesc}</Text>
+              <Text style={[s.toggleTitle, T && { fontSize: 16 }]}>{tr.profileWeather}</Text>
+              <Text style={[s.toggleDesc, T && { fontSize: 14, lineHeight: 19 }]}>{tr.profileWeatherDesc}</Text>
             </View>
             <Switch
               value={weatherAlertsEnabled}
@@ -228,8 +294,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
           <View style={[s.toggleRow, { borderBottomWidth: 0 }]}>
             <View style={{ flex: 1 }}>
-              <Text style={s.toggleTitle}>{tr.profileLargeText}</Text>
-              <Text style={s.toggleDesc}>{tr.profileLargeTextDesc}</Text>
+              <Text style={[s.toggleTitle, T && { fontSize: 16 }]}>{tr.profileLargeText}</Text>
+              <Text style={[s.toggleDesc, T && { fontSize: 14, lineHeight: 19 }]}>{tr.profileLargeTextDesc}</Text>
             </View>
             <Switch
               value={isLargeText}
@@ -242,16 +308,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
         {/* Preferences */}
         <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={s.cardTitle}>{tr.profilePrefs}</Text>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profilePrefs}</Text>
           {PREFERENCES.map((item, i, arr) => (
             <TouchableOpacity
               key={item.id}
               style={[s.menuRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}
-              onPress={() => setActiveModal(item.id)}
+              onPress={() => { setDataStatus(null); setActiveModal(item.id); }}
               activeOpacity={0.65}
             >
               <Ionicons name={item.iconName} size={17} color="#6B7280" />
-              <Text style={s.menuLabel}>{item.label}</Text>
+              <Text style={[s.menuLabel, T && { fontSize: 16 }]}>{item.label}</Text>
               {item.id === 'language' && (
                 <Text style={s.menuValue}>{LANGUAGE_LABELS[language]}</Text>
               )}
@@ -262,16 +328,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
         {/* Support */}
         <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={s.cardTitle}>{tr.profileSupport}</Text>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileSupport}</Text>
           {SUPPORT.map((item, i, arr) => (
             <TouchableOpacity
               key={item.id}
               style={[s.menuRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}
-              onPress={() => setActiveModal(item.id)}
+              onPress={() => { setDataStatus(null); setActiveModal(item.id); }}
               activeOpacity={0.65}
             >
               <Ionicons name={item.iconName} size={17} color="#6B7280" />
-              <Text style={s.menuLabel}>{item.label}</Text>
+              <Text style={[s.menuLabel, T && { fontSize: 16 }]}>{item.label}</Text>
               <Ionicons name="chevron-forward" size={15} color="#D1D5DB" />
             </TouchableOpacity>
           ))}
@@ -372,22 +438,150 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
               </View>
             )}
 
-            {/* Generic placeholder modals */}
-            {(activeModal === 'privacy' || activeModal === 'dataManagement' || activeModal === 'help' || activeModal === 'userGuide' || activeModal === 'about' || activeModal === 'terms') && (
-              <View>
+            {/* Content sheets — Privacy / Data / Help / User Guide / About / Terms */}
+            {CONTENT_MODALS.includes(activeModal ?? '') && (
+              <View style={{ flexShrink: 1 }}>
                 <View style={s.mHeader}>
-                  <Text style={s.mTitle}>
+                  <Text style={[s.mTitle, T && { fontSize: 19 }]}>
                     {[...PREFERENCES, ...SUPPORT].find(m => m.id === activeModal)?.label ?? ''}
                   </Text>
                   <TouchableOpacity onPress={() => setActiveModal(null)} style={s.mClose} activeOpacity={0.7}>
                     <Ionicons name="close" size={18} color="#6B7280" />
                   </TouchableOpacity>
                 </View>
-                <View style={s.mPlaceholder}>
-                  <Ionicons name="construct-outline" size={28} color="#9CA3AF" />
-                  <Text style={s.mPlaceholderTitle}>{tr.comingSoon}</Text>
-                  <Text style={[s.mBodyText, { textAlign: 'center' }]}>{tr.comingSoonBody}</Text>
-                </View>
+
+                <ScrollView style={s.mScroll} showsVerticalScrollIndicator={false}>
+
+                  {activeModal === 'privacy' && (
+                    <>
+                      <Text style={[s.mLead, T && { fontSize: 15, lineHeight: 22 }]}>{tr.privIntro}</Text>
+                      {[
+                        { h: tr.privH1, b: tr.privB1 }, { h: tr.privH2, b: tr.privB2 },
+                        { h: tr.privH3, b: tr.privB3 }, { h: tr.privH4, b: tr.privB4 },
+                        { h: tr.privH5, b: tr.privB5 },
+                      ].map(sec => <InfoBlock key={sec.h} heading={sec.h} body={sec.b} large={T} />)}
+                    </>
+                  )}
+
+                  {activeModal === 'dataManagement' && (
+                    <>
+                      <Text style={[s.mLead, T && { fontSize: 15, lineHeight: 22 }]}>{tr.dataIntro}</Text>
+                      <InfoBlock heading={tr.dataH1} body={tr.dataB1} large={T} />
+                      <InfoBlock heading={tr.dataH2} body={tr.dataB2} large={T} />
+
+                      {/* Real, working actions — both are local/read-only */}
+                      <TouchableOpacity
+                        style={[s.dataAction, dataBusy && { opacity: 0.5 }]}
+                        onPress={refreshFromServer}
+                        disabled={dataBusy}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="cloud-download-outline" size={19} color="#059669" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.dataActionTitle, T && { fontSize: 16 }]}>{tr.dataRefresh}</Text>
+                          <Text style={[s.dataActionDesc, T && { fontSize: 14 }]}>{tr.dataRefreshDesc}</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[s.dataAction, dataBusy && { opacity: 0.5 }]}
+                        onPress={clearLocalCache}
+                        disabled={dataBusy}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={19} color="#B45309" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.dataActionTitle, T && { fontSize: 16 }]}>{tr.dataClear}</Text>
+                          <Text style={[s.dataActionDesc, T && { fontSize: 14 }]}>{tr.dataClearDesc}</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {dataStatus && (
+                        <Text style={[s.dataStatus, T && { fontSize: 14 }]}>{dataStatus}</Text>
+                      )}
+                    </>
+                  )}
+
+                  {activeModal === 'help' && (
+                    <>
+                      <Text style={[s.mLead, T && { fontSize: 15, lineHeight: 22 }]}>{tr.helpIntro}</Text>
+                      {[
+                        { q: tr.helpQ1, a: tr.helpA1 }, { q: tr.helpQ2, a: tr.helpA2 },
+                        { q: tr.helpQ3, a: tr.helpA3 }, { q: tr.helpQ4, a: tr.helpA4 },
+                        { q: tr.helpQ5, a: tr.helpA5 },
+                      ].map(item => (
+                        <View key={item.q} style={s.faqItem}>
+                          <View style={s.faqQRow}>
+                            <Ionicons name="help-circle-outline" size={17} color="#059669" />
+                            <Text style={[s.faqQ, T && { fontSize: 16 }]}>{item.q}</Text>
+                          </View>
+                          <Text style={[s.faqA, T && { fontSize: 15, lineHeight: 22 }]}>{item.a}</Text>
+                        </View>
+                      ))}
+                      <InfoBlock heading={tr.helpContact} body={tr.helpContactBody} large={T} />
+                    </>
+                  )}
+
+                  {activeModal === 'userGuide' && (
+                    <>
+                      <Text style={[s.mLead, T && { fontSize: 15, lineHeight: 22 }]}>{tr.ugIntro}</Text>
+                      {[
+                        { t: tr.ugS1, d: tr.ugD1, icon: 'location-outline' },
+                        { t: tr.ugS2, d: tr.ugD2, icon: 'scan-outline' },
+                        { t: tr.ugS3, d: tr.ugD3, icon: 'leaf-outline' },
+                        { t: tr.ugS4, d: tr.ugD4, icon: 'list-outline' },
+                        { t: tr.ugS5, d: tr.ugD5, icon: 'stats-chart-outline' },
+                      ].map(step => (
+                        <View key={step.t} style={s.ugStep}>
+                          <View style={s.ugIcon}>
+                            <Ionicons name={step.icon as IoniconsName} size={17} color="#059669" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[s.ugTitle, T && { fontSize: 16 }]}>{step.t}</Text>
+                            <Text style={[s.ugDesc, T && { fontSize: 15, lineHeight: 22 }]}>{step.d}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  {activeModal === 'about' && (
+                    <>
+                      <View style={s.aboutHead}>
+                        <Image source={LogoImage} style={{ width: 44, height: 44 }} resizeMode="contain" />
+                        <Text style={[s.aboutName, T && { fontSize: 18 }]}>Rice-flow · GeoRice Advisor</Text>
+                        <Text style={[s.aboutVer, T && { fontSize: 14 }]}>
+                          {tr.profileVersion.replace('{v}', '1.0.0')}
+                        </Text>
+                        <Text style={[s.aboutTag, T && { fontSize: 15 }]}>{tr.aboutTagline}</Text>
+                      </View>
+                      <Text style={[s.mLead, T && { fontSize: 15, lineHeight: 22 }]}>{tr.aboutWhat}</Text>
+                      <InfoBlock heading={tr.aboutSources} body={tr.aboutSourcesBody} large={T} />
+                      <InfoBlock heading={tr.aboutTeam}    body={tr.aboutTeamBody}    large={T} />
+                      <View style={s.noteBox}>
+                        <Ionicons name="information-circle-outline" size={16} color="#1E40AF" />
+                        <Text style={[s.noteBoxText, T && { fontSize: 14, lineHeight: 20 }]}>
+                          {tr.aboutDisclaimer}
+                        </Text>
+                      </View>
+                    </>
+                  )}
+
+                  {activeModal === 'terms' && (
+                    <>
+                      <Text style={[s.mLead, T && { fontSize: 15, lineHeight: 22 }]}>{tr.termsIntro}</Text>
+                      {[
+                        { h: tr.termsH1, b: tr.termsB1 }, { h: tr.termsH2, b: tr.termsB2 },
+                        { h: tr.termsH3, b: tr.termsB3 }, { h: tr.termsH4, b: tr.termsB4 },
+                        { h: tr.termsH5, b: tr.termsB5 },
+                      ].map(sec => <InfoBlock key={sec.h} heading={sec.h} body={sec.b} large={T} />)}
+                      <Text style={[s.termsUpdated, T && { fontSize: 13 }]}>{tr.termsUpdated}</Text>
+                    </>
+                  )}
+
+                  <View style={{ height: 8 }} />
+                </ScrollView>
+
                 <TouchableOpacity style={[s.mSaveBtn, { flex: 0 }]} onPress={() => setActiveModal(null)} activeOpacity={0.85}>
                   <Text style={s.mSaveBtnText}>{tr.ok}</Text>
                 </TouchableOpacity>
@@ -521,6 +715,54 @@ const s = StyleSheet.create({
   },
   mSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
 
-  mPlaceholder:      { alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', padding: 20, marginBottom: 16, gap: 8 },
-  mPlaceholderTitle: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  /* ── Content sheets (Privacy / Data / Help / Guide / About / Terms) ────── */
+  mScroll: { marginBottom: 14 },
+  mLead:   { fontSize: 13.5, color: '#374151', lineHeight: 20, marginBottom: 18 },
+
+  infoBlock:   { marginBottom: 18 },
+  infoHeading: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 5 },
+  infoBody:    { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+
+  /* Data management actions */
+  dataAction: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#F9FAFB', borderRadius: 12,
+    borderWidth: 1, borderColor: '#E5E7EB',
+    paddingVertical: 14, paddingHorizontal: 14, marginBottom: 10,
+    minHeight: 60,
+  },
+  dataActionTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 2 },
+  dataActionDesc:  { fontSize: 12, color: '#9CA3AF', lineHeight: 17 },
+  dataStatus:      { fontSize: 12.5, color: '#059669', fontWeight: '600', marginTop: 4, marginBottom: 6 },
+
+  /* FAQ */
+  faqItem: { marginBottom: 18 },
+  faqQRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 5 },
+  faqQ:    { flex: 1, fontSize: 13.5, fontWeight: '700', color: '#111827', lineHeight: 19 },
+  faqA:    { fontSize: 13, color: '#6B7280', lineHeight: 20, marginLeft: 25 },
+
+  /* User guide steps */
+  ugStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 18 },
+  ugIcon: {
+    width: 34, height: 34, borderRadius: 11,
+    backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center',
+  },
+  ugTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 3 },
+  ugDesc:  { fontSize: 13, color: '#6B7280', lineHeight: 20 },
+
+  /* About */
+  aboutHead: { alignItems: 'center', gap: 5, marginBottom: 18 },
+  aboutName: { fontSize: 15, fontWeight: '800', color: '#111827' },
+  aboutVer:  { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
+  aboutTag:  { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 2 },
+
+  noteBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 9,
+    backgroundColor: '#EFF6FF', borderRadius: 12,
+    borderWidth: 1, borderColor: '#BFDBFE',
+    padding: 13, marginBottom: 6,
+  },
+  noteBoxText: { flex: 1, fontSize: 12.5, color: '#1E40AF', lineHeight: 18, fontWeight: '500' },
+
+  termsUpdated: { fontSize: 12, color: '#9CA3AF', fontWeight: '600', marginTop: 2 },
 });

@@ -299,19 +299,29 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   // Track which recommendation we've generated a guide for. Regenerates when
   // the recId changes (e.g. after switching to a different farm), but never
   // loops on the same recId.
-  const fetchedRecIdRef = useRef<number | null>(null);
+  // Keyed on recommendation AND language: switching the app language must
+  // re-request the guide so the steps come back translated. The backend keeps
+  // the saved checklist when the language matches, and regenerates when it
+  // doesn't — so this costs a Gemini call only on an actual language change.
+  const fetchedRecIdRef = useRef<string | null>(null);
   const [genError,  setGenError]  = useState(false);
   const [retryTick, setRetryTick] = useState(0);
+  const [translating, setTranslating] = useState(false);
   useEffect(() => {
     if (!recId) {
       console.log('[GUIDE] No recId — cannot generate guide.');
       return;
     }
-    if (fetchedRecIdRef.current === recId) {
-      // Already generated for this recommendation — don't hammer the endpoint
+    const fetchKey = `${recId}:${language}`;
+    if (fetchedRecIdRef.current === fetchKey) {
+      // Already generated for this recommendation + language — don't hammer it
       return;
     }
-    fetchedRecIdRef.current = recId;
+    // Anything after the first fetch of this mount is a refresh (language
+    // switch or farm switch): the old guide stays on screen while it reloads.
+    const isRefresh = fetchedRecIdRef.current !== null;
+    fetchedRecIdRef.current = fetchKey;
+    setTranslating(isRefresh);
     setGenError(false);
     console.log('[GUIDE] Calling apiGuides.generate(recId=' + recId + ', logs=' + storeLogs.length + ')...');
     apiGuides.generate(recId, {
@@ -328,7 +338,14 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
         const serverDone = ((res.data?.steps ?? []) as any[])
           .filter(st => st.is_completed)
           .map(st => String(st.id));
-        if (serverDone.length > 0) {
+        // A regenerated guide (language switch) has brand-new step rows, so the
+        // locally-stored ids are stale — the server is authoritative and we
+        // replace. A SAVED guide is the same rows, so union keeps an offline
+        // check made just before this response.
+        const regenerated = (res.data as any)?.source !== 'SAVED';
+        if (regenerated) {
+          useAppStore.getState().hydrateGuideSteps(serverDone);
+        } else if (serverDone.length > 0) {
           const local = useAppStore.getState().completedGuideSteps;
           const union = Array.from(new Set([...local, ...serverDone]));
           useAppStore.getState().hydrateGuideSteps(union);
@@ -339,8 +356,9 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
         // Allow a retry (button or next mount) if it failed
         fetchedRecIdRef.current = null;
         setGenError(true);
-      });
-  }, [recId, retryTick]);
+      })
+      .finally(() => setTranslating(false));
+  }, [recId, retryTick, language]);
 
   // ── No real guide yet: loading / generating / empty — NEVER mock steps ──────
   // A farm that was never scanned has no recommendation, so no guide exists.
@@ -423,6 +441,17 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* Language switch in flight — the previous guide stays readable while
+            the translated steps are generated, so the screen never goes blank. */}
+        {translating && (
+          <View style={[s.note, { marginTop: 16, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+            <ActivityIndicator size="small" color="#2563EB" />
+            <Text style={[s.noteText, T && { fontSize: 12 }, { color: '#1E40AF' }]}>
+              {tr.guideTranslating}
+            </Text>
+          </View>
+        )}
 
         {/* Climate Advisory Card */}
         <View style={[s.climateCard, { marginTop: 24 }]}>

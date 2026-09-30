@@ -641,7 +641,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 onPress={() => setSelectedTab(t.id as any)}
                 activeOpacity={0.75}
               >
-                <Text style={[s.segText, active && s.segTextActive, T && { fontSize: 14 }]}>
+                <Text
+                  style={[s.segText, active && s.segTextActive, T && { fontSize: 14 }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {t.label}
                 </Text>
               </TouchableOpacity>
