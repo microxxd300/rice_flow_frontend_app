@@ -6,10 +6,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAccessibility } from '../context/AccessibilityContext';
 
-type Nav = NativeStackNavigationProp<any>;
+type Nav = StackNavigationProp<any>;
 
 const OTP_LENGTH = 6;
 

@@ -144,10 +144,10 @@ export const DashboardTourOverlay: React.FC<Props> = ({ visible, onDone }) => {
 };
 
 const s = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFillObject },
+  root: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
 
   fullDark: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.82)',
   },
   dark: {
