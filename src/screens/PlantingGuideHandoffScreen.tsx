@@ -7,6 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
 import { apiGuides } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
+import { goBackFromStep } from '@/utils/navigation';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -107,7 +108,7 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
 
       {/* Standard header — same vocabulary as the rest of the setup flow */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={s.backBtn}>
+        <TouchableOpacity onPress={() => goBackFromStep(navigation, 'PlantingGuideHandoff')} activeOpacity={0.7} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Planting Guide</Text>

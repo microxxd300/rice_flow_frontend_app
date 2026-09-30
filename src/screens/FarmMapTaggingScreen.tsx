@@ -9,6 +9,7 @@ import * as Location from 'expo-location';
 import { useAppStore } from '@/store/appStore';
 import { apiFarms, type PinWarningReason } from '@/services/apiService';
 import { useTranslation } from '@/i18n/useTranslation';
+import { goBackFromStep } from '@/utils/navigation';
 
 type Nav = StackNavigationProp<any>;
 
@@ -165,7 +166,7 @@ export const FarmMapTaggingScreen: React.FC = () => {
 
         {/* Floating header — same minimal header shape, just floats over the map */}
         <View style={s.topBar}>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={s.iconBtn}>
+          <TouchableOpacity onPress={() => goBackFromStep(navigation, 'FarmMapTagging')} activeOpacity={0.7} style={s.iconBtn}>
             <Ionicons name="chevron-back" size={20} color="#111827" />
           </TouchableOpacity>
           <View style={s.titleChip}>

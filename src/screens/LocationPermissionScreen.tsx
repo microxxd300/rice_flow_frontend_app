@@ -6,6 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 import { useAppStore } from '@/store/appStore';
+import { goBackFromStep } from '@/utils/navigation';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -61,7 +62,7 @@ export const LocationPermissionScreen: React.FC = () => {
 
       {/* Header — same shape as the other setup steps */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={s.backBtn}>
+        <TouchableOpacity onPress={() => goBackFromStep(navigation, 'LocationPermission')} activeOpacity={0.7} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Allow location</Text>

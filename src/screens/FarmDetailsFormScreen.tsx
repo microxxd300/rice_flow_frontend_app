@@ -8,6 +8,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
+import { goBackFromStep } from '@/utils/navigation';
 
 type Nav = StackNavigationProp<any>;
 
@@ -44,7 +45,7 @@ export const FarmDetailsFormScreen: React.FC = () => {
 
         {/* Header — back chevron + page title + step indicator */}
         <View style={s.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={s.backBtn}>
+          <TouchableOpacity onPress={() => goBackFromStep(navigation, 'FarmDetailsForm')} activeOpacity={0.7} style={s.backBtn}>
             <Ionicons name="chevron-back" size={22} color="#111827" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Farm details</Text>
