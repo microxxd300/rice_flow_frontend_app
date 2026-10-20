@@ -1,7 +1,8 @@
 import Constants from 'expo-constants';
 
 // @ts-ignore - process is available in Node but not typed in Expo
-const processEnv = typeof process !== 'undefined' ? process.env : {};
+const processEnv: { EXPO_PUBLIC_API_URL?: string; EXPO_PUBLIC_ENV?: string } =
+  typeof process !== 'undefined' ? process.env : {};
 
 export const ENV = {
   apiUrl: processEnv.EXPO_PUBLIC_API_URL || 'https://doing-haven-requisite.ngrok-free.dev/api',
