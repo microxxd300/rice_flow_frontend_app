@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { authLogin, authRegister, apiFarms } from '@/services/apiService';
+import { apiClient } from '@/services/api';
 import { useAppStore } from '@/store/appStore';
 
 /**
@@ -167,6 +168,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     set({ isLoading: true });
     try {
+      await apiClient.revokeRefreshToken();
       await storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
       await storage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
       await storage.removeItem(STORAGE_KEYS.USER);

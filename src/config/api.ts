@@ -13,6 +13,7 @@ export const API_ROUTES = {
     login:    'auth/login/',
     register: 'auth/register/',
     profile:  'auth/profile/',
+    logout:   'auth/logout/',
   },
   token: {
     refresh: 'token/refresh/',
