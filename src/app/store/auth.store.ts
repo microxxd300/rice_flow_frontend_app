@@ -3,6 +3,7 @@ import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { authLogin, authRegister, apiFarms } from '@/services/apiService';
 import { apiClient } from '@/services/api';
+import { tokenStorage } from '@/services/tokenStorage';
 import { useAppStore } from '@/store/appStore';
 
 /**
@@ -118,8 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await authLogin({ email, password });
       const { user: profile, access_token, refresh_token } = res.data;
 
-      await storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, access_token);
-      await storage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refresh_token);
+      await tokenStorage.setTokens(access_token, refresh_token);
 
       // Guard against legacy accounts where last_name == first_name (old register
       // bug). Don't display "Juan Juan" — only join when the parts actually differ.
@@ -169,8 +169,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       await apiClient.revokeRefreshToken();
-      await storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-      await storage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+      await tokenStorage.clear();
       await storage.removeItem(STORAGE_KEYS.USER);
       await storage.removeItem(STORAGE_KEYS.SETUP_COMPLETE);
       await storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS);
@@ -193,7 +192,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   initializeAuth: async () => {
     try {
-      const token = await storage.getItem<string>(STORAGE_KEYS.ACCESS_TOKEN);
+      const token = await tokenStorage.getAccessToken();
       if (!token) {
         set({ isAuthenticated: false, user: null, isLoading: false });
         return;
