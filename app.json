@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.riceflow.app",
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
       "navigationBar": {
         "backgroundColor": "#FFFFFF",
