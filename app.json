@@ -38,7 +38,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Kailangan ng RiceFlow ang inyong lokasyon para matukoy ang inyong bukid sa mapa."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "tsconfigPaths": true

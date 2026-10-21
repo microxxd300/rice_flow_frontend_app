@@ -1,14 +1,12 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_CONFIG, API_ROUTES } from '@/config';
-import { STORAGE_KEYS } from '@/constants/api';
+import { tokenStorage } from './tokenStorage';
 
 const BASE_URL: string = (API_CONFIG as any).baseURL as string;
 const DEFAULT_TIMEOUT: number = (API_CONFIG as any).timeout ?? 30000;
 
 class ApiClient {
-  private async getToken(): Promise<string | null> {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-    return raw ? (JSON.parse(raw) as string) : null;
+  private getToken(): Promise<string | null> {
+    return tokenStorage.getAccessToken();
   }
 
   // One refresh at a time: the server rotates refresh tokens and rejects a used one,
@@ -23,8 +21,7 @@ class ApiClient {
   }
 
   private async refreshOnce(): Promise<string | null> {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-    const refreshToken = raw ? (JSON.parse(raw) as string) : null;
+    const refreshToken = await tokenStorage.getRefreshToken();
     if (!refreshToken) return null;
     try {
       const res = await fetch(`${BASE_URL}/${API_ROUTES.token.refresh}`, {
@@ -34,13 +31,11 @@ class ApiClient {
       });
       if (!res.ok) throw new Error('refresh failed');
       const { access, refresh } = await res.json();
-      await AsyncStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, JSON.stringify(access));
       // Keep the rotated refresh token; the previous one no longer works
-      if (refresh) await AsyncStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, JSON.stringify(refresh));
+      await tokenStorage.setTokens(access, refresh);
       return access as string;
     } catch {
-      await AsyncStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-      await AsyncStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+      await tokenStorage.clear();
       return null;
     }
   }
@@ -112,8 +107,7 @@ class ApiClient {
 
   /** Ask the server to revoke the stored refresh token. Best effort: logout goes ahead offline. */
   async revokeRefreshToken(): Promise<void> {
-    const raw = await AsyncStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
-    const refreshToken = raw ? (JSON.parse(raw) as string) : null;
+    const refreshToken = await tokenStorage.getRefreshToken();
     if (!refreshToken) return;
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), 5000);
