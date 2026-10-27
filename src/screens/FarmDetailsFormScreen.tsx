@@ -31,7 +31,7 @@ export const FarmDetailsFormScreen: React.FC = () => {
   const isValid = Boolean(farmName.trim());
 
   const handleContinue = () => {
-    navigation.navigate('LocationPermission', {
+    navigation.navigateDeprecated('LocationPermission', {
       farmData: { farmName, barangay, municipality, province, area },
     });
   };

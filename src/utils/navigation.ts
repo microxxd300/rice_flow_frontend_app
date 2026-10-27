@@ -23,6 +23,8 @@ interface BackCapableNavigation {
   canGoBack: () => boolean;
   goBack: () => void;
   navigate: (...args: any[]) => void;
+  // React Navigation 7: navigate with 6.x semantics (goes back to the screen if it's in the stack)
+  navigateDeprecated: (...args: any[]) => void;
 }
 
 /** Ordered setup steps, so each screen knows what sits behind it. */
@@ -62,7 +64,7 @@ export function goBackOr(
     navigation.goBack();
     return;
   }
-  if (fallback) navigation.navigate(fallback);
+  if (fallback) navigation.navigateDeprecated(fallback);
 }
 
 /** Convenience wrapper: go back, or to whatever precedes `step`. */

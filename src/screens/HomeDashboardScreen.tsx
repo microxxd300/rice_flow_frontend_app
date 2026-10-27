@@ -263,7 +263,7 @@ export const HomeDashboardScreen: React.FC = () => {
       <View style={s.appBar}>
         <TouchableOpacity
           style={s.avatar}
-          onPress={() => navigation.navigate('ProfileTab')}
+          onPress={() => navigation.navigateDeprecated('ProfileTab')}
           activeOpacity={0.85}
         >
           <Text style={s.avatarText}>{initials}</Text>
@@ -375,7 +375,7 @@ export const HomeDashboardScreen: React.FC = () => {
                     key={t.id ?? i}
                     onPress={() => {
                       useAppStore.getState().setPendingGuideCategory(t.cat);
-                      navigation.navigate('PlantingTab');
+                      navigation.navigateDeprecated('PlantingTab');
                     }}
                     activeOpacity={0.75}
                     style={[s.taskRow, i < upcomingTasks.length - 1 && s.taskRowBorder]}
@@ -425,7 +425,7 @@ export const HomeDashboardScreen: React.FC = () => {
                 <TouchableOpacity
                   key={f.id ?? i}
                   style={[s.bukidRow, !isLast && s.bukidRowBorder]}
-                  onPress={() => navigation.navigate('GISPinning', { farmId: f.id })}
+                  onPress={() => navigation.navigateDeprecated('GISPinning', { farmId: f.id })}
                   activeOpacity={0.75}
                 >
                   <View style={s.bukidIcon}>
@@ -453,7 +453,7 @@ export const HomeDashboardScreen: React.FC = () => {
             {/* Add Farm action */}
             <TouchableOpacity
               style={s.bukidAddRow}
-              onPress={() => navigation.navigate('FarmDetailsForm')}
+              onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
               activeOpacity={0.75}
             >
               <View style={s.bukidAddIcon}>
@@ -487,7 +487,7 @@ export const HomeDashboardScreen: React.FC = () => {
                   <TouchableOpacity
                     key={log.id}
                     style={s.logCard}
-                    onPress={() => navigation.navigate('ProgressTab')}
+                    onPress={() => navigation.navigateDeprecated('ProgressTab')}
                     activeOpacity={0.85}
                   >
                     <View style={[s.logAccent, { backgroundColor: hasIssue ? '#D97706' : '#6BC99B' }]} />
@@ -506,7 +506,7 @@ export const HomeDashboardScreen: React.FC = () => {
 
           <TouchableOpacity
             style={[s.logAddCard, { marginTop: 10 }]}
-            onPress={() => navigation.navigate('ProgressTab')}
+            onPress={() => navigation.navigateDeprecated('ProgressTab')}
             activeOpacity={0.85}
           >
             <Ionicons name="create-outline" size={16} color="#FFFFFF" />
@@ -544,7 +544,7 @@ export const HomeDashboardScreen: React.FC = () => {
             return (
               <TouchableOpacity
                 style={s.card}
-                onPress={() => navigation.navigate('RecommendationResults')}
+                onPress={() => navigation.navigateDeprecated('RecommendationResults')}
                 activeOpacity={0.75}
               >
                 <View style={s.bukidRow}>

@@ -51,7 +51,9 @@ export const RootProviders: React.FC<{ children: React.ReactNode }> = ({
               (time, battery, wifi) is actually visible. */}
           <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
           <QueryClientProvider client={reactQueryClient}>
-            <NavigationContainer key={navMode}>
+            {/* navigationInChildEnabled keeps React Navigation 6's navigate-by-name into
+                nested navigators (removed by default in 7) */}
+            <NavigationContainer key={navMode} navigationInChildEnabled>
               {children}
             </NavigationContainer>
           </QueryClientProvider>

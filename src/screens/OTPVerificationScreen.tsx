@@ -51,7 +51,7 @@ export const OTPVerificationScreen: React.FC = () => {
     setTimeout(() => {
       setLoading(false);
       setVerified(true);
-      setTimeout(() => navigation.navigate('App' as never), 800);
+      setTimeout(() => navigation.navigateDeprecated('App' as never), 800);
     }, 1400);
   };
 

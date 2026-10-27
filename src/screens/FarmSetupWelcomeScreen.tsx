@@ -60,7 +60,7 @@ export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () 
       <View style={s.footer}>
         <TouchableOpacity
           style={s.saveBtn}
-          onPress={() => navigation.navigate('FarmDetailsForm')}
+          onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
           activeOpacity={0.85}
         >
           <Text style={s.saveBtnText}>Get started</Text>

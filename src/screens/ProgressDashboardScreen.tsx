@@ -784,7 +784,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 <EmptyYieldChart
                   width={cW2}
                   expectedYield={hasRealCycle && predictedYield != null ? predictedYield : null}
-                  onRecord={() => navigation.navigate('YieldRecord')}
+                  onRecord={() => navigation.navigateDeprecated('YieldRecord')}
                 />
               ) : (() => {
                 const data  = realYields;
@@ -947,7 +947,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.logActionBtn, s.logActionBtnGhost]}
-                onPress={() => navigation.navigate('YieldRecord')}
+                onPress={() => navigation.navigateDeprecated('YieldRecord')}
                 activeOpacity={0.7}
               >
                 <Ionicons name="basket-outline" size={16} color="#6B7280" />
@@ -1028,7 +1028,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 return (
                   <TouchableOpacity
                     style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => navigation.navigate('RecommendationResults')}
+                    onPress={() => navigation.navigateDeprecated('RecommendationResults')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
@@ -1252,7 +1252,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 return (
                   <TouchableOpacity
                     style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => navigation.navigate('PlantingTab')}
+                    onPress={() => navigation.navigateDeprecated('PlantingTab')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
@@ -1294,7 +1294,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
               {/* "Buong Kasaysayan" → goes to Reports screen (full historical view across all seasons/farms) */}
               <TouchableOpacity
-                onPress={() => navigation.navigate('ReportsHome')}
+                onPress={() => navigation.navigateDeprecated('ReportsHome')}
                 activeOpacity={0.85}
                 style={{ height: 50, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', marginTop: 16, flexDirection: 'row', gap: 6 }}
               >

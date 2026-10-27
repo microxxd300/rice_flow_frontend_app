@@ -22,7 +22,6 @@ export const AuthNavigator: React.FC = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        animationEnabled: true,
       }}
     >
       <Stack.Screen

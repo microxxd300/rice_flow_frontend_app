@@ -66,7 +66,7 @@ export const WelcomeScreen: React.FC = () => {
         {/* Primary action */}
         <TouchableOpacity
           style={s.saveBtn}
-          onPress={() => navigation.navigate('Login')}
+          onPress={() => navigation.navigateDeprecated('Login')}
           activeOpacity={0.85}
         >
           <Text style={s.saveBtnText}>Log in</Text>
@@ -77,7 +77,7 @@ export const WelcomeScreen: React.FC = () => {
         {/* Secondary action */}
         <TouchableOpacity
           style={s.cancelBtn}
-          onPress={() => navigation.navigate('Register')}
+          onPress={() => navigation.navigateDeprecated('Register')}
           activeOpacity={0.7}
         >
           <Text style={s.cancelBtnText}>Create an account</Text>

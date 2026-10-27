@@ -41,7 +41,7 @@ export const LocationPermissionScreen: React.FC = () => {
         return;
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      navigation.navigate('FarmMapTagging', {
+      navigation.navigateDeprecated('FarmMapTagging', {
         farmData,
         latitude:  pos.coords.latitude,
         longitude: pos.coords.longitude,

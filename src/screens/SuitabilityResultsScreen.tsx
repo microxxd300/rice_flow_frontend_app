@@ -199,7 +199,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
     ranked.every(r => r.suitabilityScore === ranked[0].suitabilityScore);
 
   const handleDetail = (rec: DisplayRec) => {
-    navigation.navigate('PlantingGuideHandoff', {
+    navigation.navigateDeprecated('PlantingGuideHandoff', {
       farmData,
       selectedVariety: rec.variety,
       recommendation: rec,

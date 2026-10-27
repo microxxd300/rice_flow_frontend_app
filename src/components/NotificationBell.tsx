@@ -59,7 +59,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
     markNotificationRead(n.id);
     if (n.category) {
       setPendingGuideCategory(n.category);
-      try { navigation.navigate('PlantingTab'); } catch { /* navigator may not have this route */ }
+      try { navigation.navigateDeprecated('PlantingTab'); } catch { /* navigator may not have this route */ }
     }
     setOpen(false);
   };

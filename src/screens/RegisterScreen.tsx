@@ -97,7 +97,7 @@ export const RegisterScreen: React.FC = () => {
         municipality: municipality.trim(),
         province:     province.trim(),
       });
-      navigation.navigate('Login' as never);
+      navigation.navigateDeprecated('Login' as never);
     } catch (err: any) {
       const data   = err?.response?.data;
       const status = err?.response?.status;
@@ -272,7 +272,7 @@ export const RegisterScreen: React.FC = () => {
           {/* Login link */}
           <View style={s.loginRow}>
             <Text style={s.loginText}>Already have an account?  </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => navigation.navigateDeprecated('Login')} activeOpacity={0.7}>
               <Text style={s.loginLink}>Sign in</Text>
             </TouchableOpacity>
           </View>

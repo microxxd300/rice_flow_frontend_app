@@ -125,7 +125,7 @@ export const LoginScreen: React.FC = () => {
           {/* Register link */}
           <View style={s.registerRow}>
             <Text style={s.registerText}>New here?  </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => navigation.navigateDeprecated('Register')} activeOpacity={0.7}>
               <Text style={s.registerLink}>Create an account</Text>
             </TouchableOpacity>
           </View>

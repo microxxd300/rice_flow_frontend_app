@@ -169,7 +169,7 @@ export const RecommendationResultsScreen: React.FC<RecommendationResultsScreenPr
                 elevation: 6,
               }]}
               activeOpacity={0.8}
-              onPress={() => { onViewDetails?.(rec.varietyId); navigation.navigate('VarietyDetail'); }}
+              onPress={() => { onViewDetails?.(rec.varietyId); navigation.navigateDeprecated('VarietyDetail'); }}
             >
 
               {/* Name + score */}

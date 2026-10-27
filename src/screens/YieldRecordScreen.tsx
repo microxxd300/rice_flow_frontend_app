@@ -210,7 +210,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
             <TouchableOpacity style={s.cancelBtn} onPress={() => setSaved(false)} activeOpacity={0.7}>
               <Text style={[s.cancelBtnText, T && { fontSize: 15 }]}>{tr.commonEdit}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.saveBtn} onPress={() => navigation.navigate('YieldProgress')} activeOpacity={0.85}>
+            <TouchableOpacity style={s.saveBtn} onPress={() => navigation.navigateDeprecated('YieldProgress')} activeOpacity={0.85}>
               <Ionicons name="trending-up" size={16} color="#FFFFFF" />
               <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>View Progress</Text>
             </TouchableOpacity>

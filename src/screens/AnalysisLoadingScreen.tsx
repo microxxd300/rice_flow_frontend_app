@@ -42,7 +42,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
   const tryNavigate = () => {
     if (apiDoneRef.current && animDoneRef.current && !navigatedRef.current) {
       navigatedRef.current = true;
-      navigation.navigate('SuitabilityResults', {
+      navigation.navigateDeprecated('SuitabilityResults', {
         farmData,
         recommendationData: recommendationRef.current,
         scanData: scanRef.current,

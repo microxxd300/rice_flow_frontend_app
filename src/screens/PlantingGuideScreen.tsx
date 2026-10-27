@@ -410,7 +410,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
               <Text style={s.emptyBody}>{tr.guideNoRecBody}</Text>
               <TouchableOpacity
                 style={s.emptyCta}
-                onPress={() => navigation.navigate('HomeTab', { screen: 'EnvironmentalScanner' })}
+                onPress={() => navigation.navigateDeprecated('HomeTab', { screen: 'EnvironmentalScanner' })}
                 activeOpacity={0.85}
               >
                 <Ionicons name="scan-outline" size={16} color="#FFFFFF" />

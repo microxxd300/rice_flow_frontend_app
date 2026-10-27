@@ -316,7 +316,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
             {rec && (
               <TouchableOpacity
                 style={s.ctaBtn}
-                onPress={() => navigation.navigate('SuitabilityResults', {
+                onPress={() => navigation.navigateDeprecated('SuitabilityResults', {
                   farmData: {
                     farmName:  farm?.name,
                     barangay:  farm?.barangay,
