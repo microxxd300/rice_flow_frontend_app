@@ -234,7 +234,7 @@ export const AIChatScreen: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   // Track keyboard so we can collapse the tab-bar clearance when typing
   const [keyboardOpen, setKeyboardOpen] = useState(false);

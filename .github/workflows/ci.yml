@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  mobile:
+    name: Mobile app (install, type-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      # .npmrc sets legacy-peer-deps=true, which npm ci needs for this dependency tree
+      - run: npm ci
+      - name: Type-check
+        run: npm run type-check

@@ -14,6 +14,7 @@
     },
     "android": {
       "package": "com.riceflow.app",
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -37,7 +38,8 @@
           "locationAlwaysAndWhenInUsePermission": "Kailangan ng RiceFlow ang inyong lokasyon para matukoy ang inyong bukid sa mapa."
         }
       ],
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-secure-store"
     ],
     "experiments": {
       "tsconfigPaths": true

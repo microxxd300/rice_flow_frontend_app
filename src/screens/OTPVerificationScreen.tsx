@@ -25,7 +25,7 @@ export const OTPVerificationScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
 
-  const inputs = useRef<Array<TextInput | null>>(Array(OTP_LENGTH).fill(null));
+  const inputs = useRef<Array<React.ComponentRef<typeof TextInput> | null>>(Array(OTP_LENGTH).fill(null));
 
   const handleDigit = (text: string, index: number) => {
     if (!/^\d*$/.test(text)) return;

@@ -1,9 +1,9 @@
-import { AxiosError } from 'axios';
 import { ApiError, ApiResponse } from './common';
 
 export type { ApiError, ApiResponse };
 
-export type ApiErrorType = AxiosError<ApiError>;
+// Shape of the errors thrown by services/api.ts (fetch-based client)
+export type ApiErrorType = Error & { response?: { status: number; data: ApiError } };
 
 export interface AuthTokens {
   accessToken: string;

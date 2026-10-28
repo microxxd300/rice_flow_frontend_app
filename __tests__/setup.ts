@@ -1,4 +1,6 @@
-import '@testing-library/jest-native/extend-expect';
+// Jest matchers (toBeVisible, toHaveTextContent, ...) are built into React Native Testing
+// Library 12.4+; the separate jest-native package was never installed.
+import '@testing-library/react-native/extend-expect';
 
 /**
  * Jest setup file for React Native

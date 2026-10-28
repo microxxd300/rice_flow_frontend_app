@@ -61,7 +61,7 @@ const STEPS: {
 
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onDone }) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const isLast = currentStep === STEPS.length - 1;
   const step = STEPS[currentStep];
 

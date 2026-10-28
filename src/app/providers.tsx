@@ -49,7 +49,7 @@ export const RootProviders: React.FC<{ children: React.ReactNode }> = ({
         <GestureHandlerRootView style={{ flex: 1 }}>
           {/* Dark icons/text on the white app background so the status bar
               (time, battery, wifi) is actually visible. */}
-          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+          <StatusBar barStyle="dark-content" />
           <QueryClientProvider client={reactQueryClient}>
             {/* navigationInChildEnabled keeps React Navigation 6's navigate-by-name into
                 nested navigators (removed by default in 7) */}
