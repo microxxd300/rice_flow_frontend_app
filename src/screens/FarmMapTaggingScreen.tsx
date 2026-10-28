@@ -113,11 +113,19 @@ export const FarmMapTaggingScreen: React.FC = () => {
     if (checkingRef.current) return;
     checkingRef.current = true;
     let reason: PinWarningReason | null = null;
+    let outside = false;
     try {
       const { data } = await apiFarms.checkLocation(coords.lat, coords.lng);
-      if (data.status === 'warning') reason = data.reason;
+      if ((data as any).status === 'outside') outside = true;
+      else if (data.status === 'warning') reason = data.reason;
     } catch { /* unchecked — continue */ } finally {
       checkingRef.current = false;
+    }
+
+    // Outside Panabo City can't be kept (the server refuses the farm too): only Move pin
+    if (outside) {
+      Alert.alert(tr.pinWarnTitle, tr.pinWarnOutside, [{ text: tr.pinMove, style: 'cancel' }]);
+      return;
     }
 
     if (!reason) return goToAnalysis(false);

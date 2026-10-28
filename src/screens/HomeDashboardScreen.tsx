@@ -160,8 +160,10 @@ export const HomeDashboardScreen: React.FC = () => {
   // Live weather (current + next 8 hours) from Open-Meteo via Django
   const [wxCurrent, setWxCurrent] = useState<WeatherCurrent | null>(null);
   const [wxHourly,  setWxHourly]  = useState<WeatherHour[]>([]);
-  const farmLat = realFarms[0]?.latitude;
-  const farmLng = realFarms[0]?.longitude;
+  // Weather for the farm being shown, not the first farm on the account
+  const weatherFarm = (selectedFarm as any) ?? realFarms[0];
+  const farmLat = weatherFarm?.latitude;
+  const farmLng = weatherFarm?.longitude;
   const fetchWeather = () => {
     if (farmLat == null || farmLng == null) return;
     apiWeather.current(farmLat, farmLng)
