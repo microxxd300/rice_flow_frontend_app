@@ -117,6 +117,28 @@ async function establishSetupFlag(farmCount: number): Promise<void> {
   );
 }
 
+/**
+ * Remove everything cached for the signed-in farmer (farms, guide, recommendation, logs,
+ * notifications, setup progress). Used on logout, and on login when a different account
+ * signs in on this phone: an expired session only drops the tokens, so without this the
+ * next farmer would see the previous farmer's cached data.
+ */
+async function clearUserData(): Promise<void> {
+  await storage.removeItem(STORAGE_KEYS.USER);
+  await storage.removeItem(STORAGE_KEYS.SETUP_COMPLETE);
+  await storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS);
+  await storage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+  await storage.removeItem(STORAGE_KEYS.PROGRESS_LOGS);
+  await storage.removeItem(STORAGE_KEYS.LATEST_REC);
+  await storage.removeItem(STORAGE_KEYS.LATEST_GUIDE);
+  await storage.removeItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS);
+  await storage.removeItem(STORAGE_KEYS.NOTIF_ENABLED);
+  await storage.removeItem(STORAGE_KEYS.WEATHER_ALERTS);
+  await storage.removeItem(STORAGE_KEYS.PROFILE_OVERRIDES);
+  await storage.removeItem(STORAGE_KEYS.SELECTED_FARM);
+  useAppStore.getState().reset();
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   user: null,
@@ -131,6 +153,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const res = await authLogin({ email, password });
       const { user: profile, access_token, refresh_token } = res.data;
+
+      // Another account's data may still be cached (e.g. after an expired session)
+      const previous = await storage.getItem<any>(STORAGE_KEYS.USER);
+      if (!previous || String(previous.id) !== String(profile.id)) await clearUserData();
 
       await tokenStorage.setTokens(access_token, refresh_token);
 
@@ -187,19 +213,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await apiClient.revokeRefreshToken();
       await tokenStorage.clear();
-      await storage.removeItem(STORAGE_KEYS.USER);
-      await storage.removeItem(STORAGE_KEYS.SETUP_COMPLETE);
-      await storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS);
-      await storage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
-      await storage.removeItem(STORAGE_KEYS.PROGRESS_LOGS);
-      await storage.removeItem(STORAGE_KEYS.LATEST_REC);
-      await storage.removeItem(STORAGE_KEYS.LATEST_GUIDE);
-      await storage.removeItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS);
-      await storage.removeItem(STORAGE_KEYS.NOTIF_ENABLED);
-      await storage.removeItem(STORAGE_KEYS.WEATHER_ALERTS);
-      await storage.removeItem(STORAGE_KEYS.PROFILE_OVERRIDES);
-      await storage.removeItem(STORAGE_KEYS.SELECTED_FARM);
-      useAppStore.getState().reset();
+      await clearUserData();
       // Back to English in memory so the next account on this device doesn't
       // inherit this user's language. Their own key stays saved for next login.
       useLanguageStore.getState().resetLanguage();

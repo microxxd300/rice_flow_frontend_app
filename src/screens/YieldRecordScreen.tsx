@@ -9,7 +9,8 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { apiProgress, apiPredictions } from '@/services/apiService';
+import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 
@@ -71,7 +72,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
   const cycleId     = route.params?.cycleId ?? activeCycle?.id ?? null;
 
   // Auto-fill variety from the cycle's recommendation (no free-text typing → no typos)
-  const cycleVariety = (latestRec as any)?.results?.[0]?.variety?.common_name ?? '—';
+  const recVariety   = (latestRec as any)?.results?.[0]?.variety;
+  const cycleVariety = recVariety?.common_name ?? '—';
+  const farm         = useSelectedFarm() as any;
 
   const [saved,            setSaved]            = useState(false);
   const [loading,          setLoading]          = useState(false);
@@ -119,9 +122,22 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
         });
       }
       try {
+        // Predict from the farm's own conditions (latest scan + variety), never from the
+        // harvest just entered, so "predicted vs actual" is a real comparison
+        const scanRes = farm?.id ? await apiScan.history(farm.id) : null;
+        const scan: any = (scanRes?.data ?? [])[0] ?? null;
         const predRes = await apiPredictions.predict({
           area_ha:           areaN,
-          variety_avg_yield: grossYieldKg / 1000 / areaN,
+          soil_ph:           scan?.soil_ph,
+          organic_matter:    scan?.organic_matter,
+          avg_temperature:   scan?.avg_temperature,
+          seasonal_rainfall: scan?.seasonal_rainfall_mm,
+          humidity:          scan?.humidity_pct,
+          elevation_m:       scan?.elevation_m,
+          flood_risk:        scan?.flood_risk,
+          ecosystem:         farm?.ecosystem,
+          maturity_days:     recVariety?.maturity_days,
+          variety_avg_yield: recVariety?.avg_yield_t_ha,
         });
         setPredictedYield(predRes.data.predicted_yield_t_ha);
         setModelUsed(predRes.data.model_used);
@@ -139,7 +155,8 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
   const areaNum    = parseFloat(areaHarvested) || 1;
   const yieldPerHa = (yieldNum / areaNum / 1000).toFixed(2);
 
-  const expectedYield = predictedYield ?? 6.5;
+  // Without a prediction, compare with the variety's average yield instead of a fixed number
+  const expectedYield = predictedYield ?? recVariety?.avg_yield_t_ha ?? 6.5;
   const yieldPct      = Math.round((parseFloat(yieldPerHa) / expectedYield) * 100);
   const perfStatus    = yieldPct >= 100 ? 'success' : yieldPct >= 80 ? 'warning' : 'error';
   const perfLabel     = yieldPct >= 100 ? 'Napakahusay' : yieldPct >= 80 ? 'Mahusay' : 'Kulang sa Inaasahan';
@@ -236,7 +253,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           </View>
           <View>
             <Text style={[s.headerTitle, T && { fontSize: 15 }]}>{tr.yieldRecordHeader}</Text>
-            <Text style={s.headerSub}>Santos Family Farm</Text>
+            <Text style={s.headerSub}>{farm?.name ?? ''}</Text>
           </View>
         </View>
         <NotificationBell color="#059669" size={22} />

@@ -130,8 +130,15 @@ export const RegisterScreen: React.FC = () => {
 
   // Password strength meter (0–4 thin bars)
   const len   = password.length;
-  const score = [len >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
-  const strengthLabel = ['', 'Weak', 'Fair', 'Strong', 'Very strong'][score];
+  // The server rejects common and all-number passwords (Django's password validators),
+  // so never call those "Fair" here
+  const COMMON_PASSWORDS = ['password', 'password1', 'password123', 'passw0rd', '12345678', '123456789',
+    '1234567890', '87654321', '11111111', '00000000', 'qwerty123', 'qwertyuiop', 'iloveyou', 'admin123',
+    'welcome1', 'abc12345', 'abcd1234', 'letmein1', 'sunshine', 'princess'];
+  const tooCommon = len > 0 && (/^\d+$/.test(password) || COMMON_PASSWORDS.includes(password.toLowerCase()));
+  const score = tooCommon ? 1
+    : [len >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
+  const strengthLabel = tooCommon ? 'Too common' : ['', 'Weak', 'Fair', 'Strong', 'Very strong'][score];
   const strengthColor = ['', '#DC2626', '#D97706', '#059669', '#0F4C28'][score];
 
   return (

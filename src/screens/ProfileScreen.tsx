@@ -7,7 +7,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
-import { mockUser, mockFarms } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useAuthStore } from '@/features/auth/store';
 import { useAppStore } from '@/store/appStore';
@@ -79,12 +78,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const resolvedName  = overrides.name
     ?? dedupeName(authUser?.name)
     ?? profileFull
-    ?? mockUser.name;
-  const displayName   = resolvedName && resolvedName.trim() ? resolvedName : mockUser.name;
-  const displayEmail  = overrides.email ?? authUser?.email ?? (profileUser as any)?.email ?? mockUser.email;
-  const displayBaran  = overrides.barangay     ?? (profileUser as any)?.barangay     ?? mockUser.barangay;
-  const displayMunic  = overrides.municipality ?? (profileUser as any)?.municipality ?? mockUser.municipality;
-  const displayProv   = overrides.province     ?? (profileUser as any)?.province     ?? mockUser.province;
+    ?? '';
+  const displayName   = resolvedName && resolvedName.trim() ? resolvedName : 'Farmer';
+  const displayEmail  = overrides.email ?? authUser?.email ?? (profileUser as any)?.email ?? '';
+  const displayBaran  = overrides.barangay     ?? (profileUser as any)?.barangay     ?? '';
+  const displayMunic  = overrides.municipality ?? (profileUser as any)?.municipality ?? '';
+  const displayProv   = overrides.province     ?? (profileUser as any)?.province     ?? '';
 
   const [activeModal,      setActiveModal]      = useState<string | null>(null);
   const [editName,         setEditName]         = useState('');
@@ -187,8 +186,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
     }
   };
 
-  // Use real farms if loaded, else fall back to mock (so the card isn't empty in demos)
-  const farmList: any[] = realFarms.length > 0 ? realFarms : mockFarms;
+  // Real farms only; the card shows its empty state when there are none
+  const farmList: any[] = realFarms;
 
   return (
     <SafeAreaView style={s.container}>

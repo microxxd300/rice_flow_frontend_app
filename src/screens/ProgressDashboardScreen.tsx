@@ -13,7 +13,7 @@ import Svg, { Path, Defs, LinearGradient, Stop, Circle, Text as SvgText, Line } 
 import { LinearGradient as ExpoGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/Skeleton';
 import { Button } from '../components';
-import { mockProgressLogs, mockFarmCycles, mockPlantingGuides, mockSeasonalYields } from '../data/mockData';
+
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiGuides, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
@@ -209,7 +209,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // Source of truth = persisted store.progressLogs; backend logs merged on mount. Mock only as fallback.
   const storeLogs = useAppStore(s => s.progressLogs);
   const localLogs = storeLogs;
-  const [currentCycle, setCurrentCycle] = useState<any>(mockFarmCycles[0]);
+  // Real active cycle only (null until loaded or when there is none) — never a sample cycle
+  const [currentCycle, setCurrentCycle] = useState<any>(null);
   const [logStage,     setLogStage]     = useState('');
   const [logDate,      setLogDate]      = useState(new Date().toISOString().split('T')[0]);
   const [logIssue,     setLogIssue]     = useState('');
@@ -441,10 +442,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     })();
   }, [selectedFarmId, variety, farmArea]);
 
-  // Use Gemini-generated guide steps if we have them, else fall back to mock
-  const guideSteps = (Array.isArray((latestGuide as any)?.steps) && (latestGuide as any).steps.length > 0)
-    ? (latestGuide as any).steps
-    : (mockPlantingGuides[0]?.steps ?? []);
+  // Gemini-generated guide steps for this farm (none until a guide exists)
+  const guideSteps = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
 
   // Live temperature for the metric tile (from Open-Meteo via Django)
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
@@ -1324,9 +1323,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
             <View style={s.modalContextRow}>
               {[
-                { icon: 'home-outline' as const,     label: 'Santos Family Farm' },
-                { icon: 'calendar-outline' as const, label: 'Day 45' },
-                { icon: 'sunny-outline' as const,    label: 'Wet Season 2024' },
+                { icon: 'home-outline' as const,     label: (selectedFarm as any)?.name ?? '—' },
+                { icon: 'calendar-outline' as const, label: hasRealCycle ? `Day ${CURRENT_DAY}` : 'No active cycle' },
+                { icon: 'sunny-outline' as const,    label: currentCycle ? `${currentCycle.season ?? ''} ${currentCycle.year ?? ''}`.trim() : '—' },
               ].map(c => (
                 <View key={c.label} style={s.contextChip}>
                   <Ionicons name={c.icon} size={12} color="#6B7280" />
