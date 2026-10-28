@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import MapView, { UrlTile, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useAppStore } from '@/store/appStore';
 import { apiFarms, type PinWarningReason } from '@/services/apiService';
@@ -88,7 +88,7 @@ export const FarmMapTaggingScreen: React.FC = () => {
   };
 
   const goToAnalysis = (locationConfirmed: boolean) =>
-    navigation.navigate('AnalysisLoading', {
+    navigation.navigateDeprecated('AnalysisLoading', {
       farmData: {
         ...farmData,
         latitude:     coords.lat,
@@ -144,6 +144,8 @@ export const FarmMapTaggingScreen: React.FC = () => {
           ref={mapRef}
           style={StyleSheet.absoluteFill}
           provider={PROVIDER_DEFAULT}
+          // Satellite + labels so farmers can see roofs and paddies before pinning
+          mapType="hybrid"
           initialRegion={{
             latitude:       initLat,
             longitude:      initLng,
@@ -155,11 +157,6 @@ export const FarmMapTaggingScreen: React.FC = () => {
           showsCompass={false}
           toolbarEnabled={false}
         >
-          <UrlTile
-            urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            maximumZ={19}
-            flipY={false}
-          />
           <Marker
             coordinate={{ latitude: coords.lat, longitude: coords.lng }}
             draggable

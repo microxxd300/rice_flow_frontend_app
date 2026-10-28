@@ -139,7 +139,7 @@ export const apiFarms = {
                                        apiClient.patch<Farm>(API_ROUTES.farms.detail(id), data),
   delete: (id: number) =>              apiClient.delete<void>(API_ROUTES.farms.detail(id)),
   checkLocation: (lat: number, lon: number) =>
-    apiClient.get<LocationCheck>(API_ROUTES.farms.checkLocation, { params: { lat, lon }, timeout: 5000 }),
+    apiClient.get<LocationCheck>(`${API_ROUTES.farms.checkLocation}?lat=${lat}&lon=${lon}`, { timeout: 5000 }),
 };
 
 // ── Environmental ──────────────────────────────────────────────────────────
