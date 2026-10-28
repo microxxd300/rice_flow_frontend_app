@@ -184,14 +184,14 @@ export const GISFarmPinningScreen: React.FC = () => {
       const res = await apiScan.run(selectedFarm.id as number);
       setLatestScan(res.data);
       useAppStore.getState().addNotification({
-        title: 'Na-update ang scan',
-        body:  'Pinakabagong datos ng lupa at panahon.',
+        title: 'Scan updated',
+        body:  'Latest soil and weather data loaded.',
         icon:  'sync-outline',
       });
     } catch {
       useAppStore.getState().addNotification({
-        title: 'Hindi ma-update ang scan',
-        body:  'Subukan muli kapag may koneksyon.',
+        title: 'Could not update the scan',
+        body:  'Try again when you are online.',
         icon:  'alert-circle-outline',
       });
     } finally { setRescanning(false); }
@@ -211,8 +211,8 @@ export const GISFarmPinningScreen: React.FC = () => {
         const res = await apiFarms.list();
         useAppStore.getState().setFarms(res.data);
         useAppStore.getState().addNotification({
-          title: 'Na-update ang lokasyon',
-          body:  `Tinama ang barangay sa: ${resolved.barangay}`,
+          title: 'Location updated',
+          body:  `Barangay corrected to ${resolved.barangay}`,
           icon:  'checkmark-circle-outline',
         });
       } catch { /* keep banner; user can retry by re-selecting */ }

@@ -20,6 +20,14 @@ export function dedupeName(name: string | null | undefined): string {
   return unique.join(' ');
 }
 
+/**
+ * Season label for a farm cycle: { season: 'wet', year: 2026 } → "Wet 2026"
+ */
+export function seasonLabel(cycle: { season?: string | null; year?: number | string | null } | null | undefined): string {
+  const season = String(cycle?.season ?? '').replace(/^./, c => c.toUpperCase());
+  return `${season} ${cycle?.year ?? ''}`.trim();
+}
+
 export const formatters = {
   /**
    * Format date to readable string

@@ -124,6 +124,12 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   const latestGuide  = useAppStore(s => s.latestGuide);
   const hasRealGuide = !!(latestGuide && Array.isArray(latestGuide.steps) && latestGuide.steps.length > 0);
   const guide        = hasRealGuide ? latestGuide : mockPlantingGuides[0];
+  // The guide only stores the variety id; its name comes from the recommendation it was made from
+  const recForGuide      = useAppStore(s => s.latestRecommendation) as any;
+  const guideVariety     = (recForGuide?.results ?? [])
+    .map((r: any) => r.variety)
+    .find((v: any) => v?.id === (latestGuide as any)?.variety);
+  const guideVarietyName = guideVariety?.common_name ?? '';
   // Map backend → frontend shape and infer category from keywords when missing.
   const inferCategory = (title: string, desc: string): string => {
     const t = `${title} ${desc}`.toLowerCase();
@@ -434,7 +440,9 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
           </View>
           <View>
             <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.guideScreenTitle}</Text>
-            <Text style={s.headerSub}>{(guide as any).season ?? 'Wet Season'} · {(guide as any).varietyName ?? 'NSIC Rc160'}</Text>
+            <Text style={s.headerSub}>
+              {[(guide as any).season ?? 'Wet Season', guideVarietyName].filter(Boolean).join(' · ')}
+            </Text>
           </View>
         </View>
         <NotificationBell color="#059669" size={22} />

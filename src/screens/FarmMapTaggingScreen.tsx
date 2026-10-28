@@ -156,6 +156,12 @@ export const FarmMapTaggingScreen: React.FC = () => {
           showsMyLocationButton={false}
           showsCompass={false}
           toolbarEnabled={false}
+          // Tapping the map moves the pin too — easier than the press-and-hold drag
+          onPress={e => {
+            const { latitude, longitude } = e.nativeEvent.coordinate;
+            setCoords({ lat: latitude, lng: longitude });
+            resolveAddress(latitude, longitude);
+          }}
         >
           <Marker
             coordinate={{ latitude: coords.lat, longitude: coords.lng }}
@@ -184,6 +190,11 @@ export const FarmMapTaggingScreen: React.FC = () => {
               : <Ionicons name="navigate" size={18} color="#059669" />
             }
           </TouchableOpacity>
+        </View>
+
+        <View style={s.hintChip} pointerEvents="none">
+          <Ionicons name="hand-left-outline" size={13} color="#FFFFFF" />
+          <Text style={s.hintText}>Tap the map or drag the pin onto your field</Text>
         </View>
       </View>
 
@@ -262,6 +273,13 @@ const s = StyleSheet.create({
   },
   titleText: { fontSize: 14, fontWeight: '700', color: '#111827' },
   titleStep: { fontSize: 12, fontWeight: '600', color: '#9CA3AF' },
+  hintChip: {
+    position: 'absolute', bottom: 12, alignSelf: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(17,24,39,0.75)', borderRadius: 9999,
+    paddingVertical: 6, paddingHorizontal: 12,
+  },
+  hintText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
 
   /* Panel */
   panel: {

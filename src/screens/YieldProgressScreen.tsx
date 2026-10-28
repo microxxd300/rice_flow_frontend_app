@@ -91,7 +91,7 @@ export const YieldProgressScreen: React.FC = () => {
           <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.75}>
             <Ionicons name="chevron-back" size={22} color="#111827" />
           </TouchableOpacity>
-          <Text style={[s.headerTitle, { flex: 1 }]}>Progreso ng Ani</Text>
+          <Text style={[s.headerTitle, { flex: 1 }]}>Yield Progress</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10 }}>
           <Ionicons name="basket-outline" size={30} color="#9CA3AF" />
@@ -117,7 +117,7 @@ export const YieldProgressScreen: React.FC = () => {
             <Ionicons name="trending-up-outline" size={16} color="#FFFFFF" />
           </View>
           <View>
-            <Text style={[s.headerTitle, T && { fontSize: 15 }]}>Progreso ng Ani</Text>
+            <Text style={[s.headerTitle, T && { fontSize: 15 }]}>Yield Progress</Text>
             <Text style={s.headerSub}>{selectedFarm?.name ?? ''}{selectedFarm?.area_hectares ? ` · ${selectedFarm.area_hectares} ha` : ''}</Text>
           </View>
         </View>
@@ -132,7 +132,7 @@ export const YieldProgressScreen: React.FC = () => {
             <Text style={[s.heroVal, T && { fontSize: 32 }]}>
               {LAST_YIELD}<Text style={s.heroUnit}>t</Text>
             </Text>
-            <Text style={s.heroLabel}>Pinakabagong Ani</Text>
+            <Text style={s.heroLabel}>Latest Harvest</Text>
           </View>
           <View style={s.heroDiv} />
           <View style={s.heroStat}>
@@ -265,8 +265,8 @@ export const YieldProgressScreen: React.FC = () => {
           {/* Legend */}
           <View style={s.legendRow}>
             {[
-              { color: '#D97706', label: 'Pinakabago (latest)' },
-              { color: '#059669', label: 'Nakaraang Season'    },
+              { color: '#D97706', label: 'Latest'              },
+              { color: '#059669', label: 'Past seasons'        },
               { color: '#FCD34D', label: `Avg ${AVG_YIELD}t`, dashed: true },
             ].map(l => (
               <View key={l.label} style={s.legendItem}>
@@ -297,7 +297,7 @@ export const YieldProgressScreen: React.FC = () => {
                     <Text style={[s.seasonName, T && { fontSize: 15 }]}>{y.season}</Text>
                     {isLatest && (
                       <View style={s.latestPill}>
-                        <Text style={s.latestPillText}>Pinakabago</Text>
+                        <Text style={s.latestPillText}>Latest</Text>
                       </View>
                     )}
                   </View>

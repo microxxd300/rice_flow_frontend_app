@@ -97,10 +97,15 @@ async function establishSetupFlag(farmCount: number): Promise<void> {
 
   // Restore the last recommendation + Gemini-generated guide so the Planting tab
   // shows real content (not mock) after restart, and auto-refresh has a recId.
-  const storedRec = await storage.getItem<any>(STORAGE_KEYS.LATEST_REC);
-  if (storedRec) useAppStore.setState({ latestRecommendation: storedRec });
+  // Only for the selected farm: a cache left by another farm or account would point
+  // the guide at a recommendation this farmer can't open (404).
+  const farmId      = useAppStore.getState().selectedFarmId;
+  const storedRec   = await storage.getItem<any>(STORAGE_KEYS.LATEST_REC);
   const storedGuide = await storage.getItem<any>(STORAGE_KEYS.LATEST_GUIDE);
-  if (storedGuide) useAppStore.setState({ latestGuide: storedGuide });
+  if (storedRec?.farm === farmId) useAppStore.setState({ latestRecommendation: storedRec });
+  else if (storedRec) await storage.removeItem(STORAGE_KEYS.LATEST_REC);
+  if (storedGuide?.farm === farmId) useAppStore.setState({ latestGuide: storedGuide });
+  else if (storedGuide) await storage.removeItem(STORAGE_KEYS.LATEST_GUIDE);
 
   // Restore the farmer's "I did this step" checks so the Gabay card reflects reality
   const storedSteps = await storage.getItem<string[]>(STORAGE_KEYS.COMPLETED_GUIDE_STEPS);
