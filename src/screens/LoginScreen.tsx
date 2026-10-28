@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, TextInput as RNTextInput, TouchableOpacity, ScrollView,
+  Platform, TextInput as RNTextInput, TouchableOpacity, ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -105,7 +105,15 @@ export const LoginScreen: React.FC = () => {
           />
 
           {/* Forgot link */}
-          <TouchableOpacity style={s.forgotBtn} onPress={() => {}} activeOpacity={0.7}>
+          {/* No self-service reset: agriculturists set a new password from the admin site */}
+          <TouchableOpacity
+            style={s.forgotBtn}
+            onPress={() => Alert.alert(
+              'Forgot your password?',
+              'Ask your agriculturist or rice technician to reset it. They can set a new password for you in RiceFlow, then you can log in again.',
+            )}
+            activeOpacity={0.7}
+          >
             <Text style={s.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 

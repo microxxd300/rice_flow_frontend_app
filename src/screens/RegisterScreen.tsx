@@ -239,9 +239,9 @@ export const RegisterScreen: React.FC = () => {
             </View>
             <Text style={s.termsText}>
               I agree to the{' '}
-              <Text style={s.termsLink}>Terms</Text>
+              <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Terms</Text>
               {' '}and{' '}
-              <Text style={s.termsLink}>Privacy Policy</Text>.
+              <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Privacy Policy</Text>.
             </Text>
           </TouchableOpacity>
           {fieldErrors.terms ? <Text style={s.termsError}>{fieldErrors.terms}</Text> : null}

@@ -5,6 +5,7 @@ export { OnboardingScreen } from './OnboardingScreen';
 export { LoginScreen } from './LoginScreen';
 export { RegisterScreen } from './RegisterScreen';
 export { OTPVerificationScreen } from './OTPVerificationScreen';
+export { PrivacyNoticeScreen } from './PrivacyNoticeScreen';
 export { HomeDashboardScreen } from './HomeDashboardScreen';
 
 // GIS & Environmental

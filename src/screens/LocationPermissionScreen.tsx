@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, AppState, Linking,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -27,19 +29,25 @@ export const LocationPermissionScreen: React.FC = () => {
   useEffect(() => { setSetupProgress('LocationPermission', { farmData }); }, []);
 
   const [locating, setLocating] = useState(false);
+  // Location was refused. Setup can't continue without it, so the screen offers Settings
+  // (iOS asks only once, and Android stops asking after a second refusal).
+  const [blocked, setBlocked] = useState(false);
+  const busy = useRef(false);
 
   const handleAllow = async () => {
+    if (busy.current) return;
+    busy.current = true;
     setLocating(true);
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert(
-          'Location permission required',
-          'RiceFlow needs your location to pin your farm on the map and tailor rice variety recommendations to your area. Please enable location access in your phone settings to continue.',
-          [{ text: 'OK' }]
-        );
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== 'granted' && perm.canAskAgain) {
+        perm = await Location.requestForegroundPermissionsAsync();
+      }
+      if (perm.status !== 'granted') {
+        setBlocked(true);
         return;
       }
+      setBlocked(false);
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       navigation.navigateDeprecated('FarmMapTagging', {
         farmData,
@@ -53,9 +61,21 @@ export const LocationPermissionScreen: React.FC = () => {
         [{ text: 'OK' }]
       );
     } finally {
+      busy.current = false;
       setLocating(false);
     }
   };
+
+  // Coming back from the phone's Settings: check again and continue if location is now on
+  useEffect(() => {
+    if (!blocked) return;
+    const sub = AppState.addEventListener('change', async state => {
+      if (state !== 'active') return;
+      const perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status === 'granted') handleAllow();
+    });
+    return () => sub.remove();
+  }, [blocked]);
 
   return (
     <SafeAreaView style={s.root}>
@@ -70,6 +90,22 @@ export const LocationPermissionScreen: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {blocked && (
+          <View style={s.blockedCard}>
+            <View style={s.whyHeader}>
+              <Ionicons name="location" size={16} color="#B91C1C" />
+              <Text style={s.blockedTitle}>Location is required</Text>
+            </View>
+            <Text style={s.blockedBody}>
+              RiceFlow needs your farm's location to get its soil, rainfall, and elevation data.
+              You can't continue without it.
+            </Text>
+            <Text style={s.blockedSteps}>
+              Tap Open Settings, turn on Location for this app, then come back here.
+            </Text>
+          </View>
+        )}
 
         <Text style={s.lead}>
           We use your location to put your farm on the map and tailor recommendations to your area.
@@ -102,13 +138,24 @@ export const LocationPermissionScreen: React.FC = () => {
         </View>
 
         <Text style={s.privacyNote}>
-          Your location stays private. We don't share it with anyone.
+          Your farm location is used only for RiceFlow recommendations. Only you and RiceFlow's
+          agriculturists can see it.
         </Text>
 
       </ScrollView>
 
-      {/* Footer — single full-width primary action (no skip) */}
+      {/* Footer — no skip: without location, setup stops here */}
       <View style={s.footer}>
+        {blocked && (
+          <TouchableOpacity
+            style={[s.saveBtnFull, s.settingsBtn]}
+            onPress={() => Linking.openSettings()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="settings-outline" size={16} color="#FFFFFF" />
+            <Text style={s.saveBtnText}>Open Settings</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[s.saveBtnFull, locating && { opacity: 0.6 }]}
           onPress={handleAllow}
@@ -116,7 +163,9 @@ export const LocationPermissionScreen: React.FC = () => {
           activeOpacity={0.85}
         >
           <Ionicons name={locating ? 'hourglass-outline' : 'navigate'} size={16} color="#FFFFFF" />
-          <Text style={s.saveBtnText}>{locating ? 'Locating...' : 'Allow location access'}</Text>
+          <Text style={s.saveBtnText}>
+            {locating ? 'Locating...' : blocked ? 'Try again' : 'Allow location access'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -179,4 +228,16 @@ const s = StyleSheet.create({
   whyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   whyTitle:  { fontSize: 13, fontWeight: '700', color: '#065F46' },
   whyBody:   { fontSize: 12, color: '#047857', lineHeight: 18 },
+
+  blockedCard: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1, borderColor: '#FECACA',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+  },
+  blockedTitle: { fontSize: 13, fontWeight: '700', color: '#B91C1C' },
+  blockedBody:  { fontSize: 12, color: '#7F1D1D', lineHeight: 18 },
+  blockedSteps: { fontSize: 12, color: '#7F1D1D', lineHeight: 18, marginTop: 6, fontWeight: '600' },
+  settingsBtn:  { backgroundColor: '#374151', shadowColor: '#374151', marginBottom: 10 },
 });

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { ROUTES } from '@/constants/routes';
 import {
-  SplashScreen, WelcomeScreen, LoginScreen, RegisterScreen, OTPVerificationScreen,
+  SplashScreen, WelcomeScreen, LoginScreen, RegisterScreen, OTPVerificationScreen, PrivacyNoticeScreen,
 } from '@/screens';
 
 const Stack = createStackNavigator();
@@ -41,6 +41,11 @@ export const AuthNavigator: React.FC = () => {
       <Stack.Screen
         name="Register"
         component={RegisterScreen}
+        options={{ cardStyle: { backgroundColor: '#FFFFFF' } }}
+      />
+      <Stack.Screen
+        name="PrivacyNotice"
+        component={PrivacyNoticeScreen}
         options={{ cardStyle: { backgroundColor: '#FFFFFF' } }}
       />
       <Stack.Screen
