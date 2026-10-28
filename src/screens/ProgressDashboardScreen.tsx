@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -40,11 +40,25 @@ const CROP_STAGES = [
 ];
 
 const GROWTH_STAGES = [
-  'Early Growth', 'Tillering', 'Stem Elongation',
+  'Land Prep & Planting', 'Early Growth', 'Tillering', 'Stem Elongation',
   'Panicle Initiation', 'Heading', 'Grain Filling',
 ];
 
+// The backend keeps its own stage list (GrowthStage.stage_no) and issue choices;
+// these map the app's labels onto them so a saved log is accepted by the server.
+const STAGE_NO: Record<string, number> = {
+  'Land Prep & Planting': 1, 'Early Growth': 2, 'Tillering': 3, 'Stem Elongation': 4,
+  'Panicle Initiation': 5, 'Heading': 6, 'Grain Filling': 7,
+};
+
 const ISSUE_OPTIONS = ['None', 'Insect', 'Disease', 'Drought', 'Flood', 'Other'];
+
+const ISSUE_TO_API: Record<string, string> = {
+  Insect: 'pest', Disease: 'disease', Drought: 'weather', Flood: 'weather', Other: 'other',
+};
+const ISSUE_FROM_API: Record<string, string> = {
+  pest: 'Insect', disease: 'Disease', weather: 'Weather', nutrient: 'Nutrient', other: 'Other',
+};
 
 
 // ── Animated empty-state for Kasaysayan ng Ani ──
@@ -219,6 +233,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const [logNotes,     setLogNotes]     = useState('');
   const [openStage,    setOpenStage]    = useState(false);
   const [openIssue,    setOpenIssue]    = useState(false);
+  const [growthStages, setGrowthStages] = useState<any[]>([]);
+  const [savingLog,    setSavingLog]    = useState(false);
 
   const hasIssue = logIssue && logIssue !== 'None';
 
@@ -232,7 +248,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     const load = async () => {
       try {
         const farmId = selectedFarmId;
-        const cyclesRes = await apiProgress.listCycles(farmId);
+        const [cyclesRes, stagesRes] = await Promise.all([
+          apiProgress.listCycles(farmId),
+          apiProgress.growthStages().catch(() => ({ data: [] as any[] })),
+        ]);
+        setGrowthStages(stagesRes.data);
         const cycles = cyclesRes.data;
         if (cycles.length > 0) {
           const active = cycles.find((c: any) => c.status === 'active') ?? cycles[0];
@@ -241,20 +261,25 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
           const logsRes = await apiProgress.listLogs(active.id);
           if (logsRes.data.length > 0) {
-            // Normalize real log shape to match mock shape
-            const normalized = logsRes.data.map((l: any) => ({
-              id:            String(l.id),
-              cycleId:       String(l.farm_cycle),
-              logDate:       l.log_date,
-              growthStage:   l.growth_stage,
-              observedIssue: l.issue_type || 'None',
-              actionTaken:   l.action_taken,
-              notes:         l.observation,
-            }));
-            // Merge backend logs with existing local logs (dedupe by id), persist
+            // Server log shape → the app's log shape (stage id and issue choice back to labels)
+            const stageNoById = new Map(stagesRes.data.map((g: any) => [g.id, g.stage_no]));
+            const normalized = logsRes.data.map((l: any) => {
+              const no = stageNoById.get(l.growth_stage);
+              return {
+                id:            String(l.id),
+                cycleId:       String(l.farm_cycle),
+                logDate:       l.log_date,
+                growthStage:   Object.keys(STAGE_NO).find(k => STAGE_NO[k] === no) ?? '',
+                observedIssue: ISSUE_FROM_API[l.issue_type] ?? 'None',
+                actionTaken:   l.action_taken,
+                notes:         l.observation,
+              };
+            });
+            // Merge backend logs with existing local logs (dedupe by id), persist. The local copy
+            // wins for fields the server does not store (severity, Drought vs Flood).
             const existing = useAppStore.getState().progressLogs;
             const merged = [
-              ...normalized,
+              ...normalized.map((n: any) => ({ ...n, ...existing.find((e: any) => e.id === n.id) })),
               ...existing.filter((e: any) => !normalized.some((n: any) => n.id === e.id)),
             ];
             useAppStore.getState().setProgressLogs(merged);
@@ -489,11 +514,38 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   };
 
   const handleSaveLog = async () => {
+    if (savingLog) return;
+    if (!currentCycle?.id) {
+      Alert.alert('No active season', 'Start a planting season before adding field logs.');
+      return;
+    }
     const issueClean = logIssue.trim();
-    const issueIsReal = !!issueClean && issueClean !== 'Wala';
+    const issueIsReal = !!issueClean && issueClean !== 'Wala' && issueClean !== 'None';
+
+    // Save to the server first; the log only shows in the app once the server has it.
+    // Notes are required by the server, so a log without notes falls back to its stage/issue.
+    let saved: any;
+    setSavingLog(true);
+    try {
+      const res = await apiProgress.createLog({
+        farm_cycle:   currentCycle.id,
+        log_date:     logDate,
+        growth_stage: growthStages.find((g: any) => g.stage_no === STAGE_NO[logStage])?.id ?? null,
+        issue_type:   issueIsReal ? (ISSUE_TO_API[issueClean] ?? 'other') : '',
+        action_taken: issueIsReal ? logAction.trim() : '',
+        observation:  logNotes.trim() || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check',
+      });
+      saved = res.data;
+    } catch {
+      Alert.alert('Log not saved', 'Check your internet connection and try again.');
+      return;
+    } finally {
+      setSavingLog(false);
+    }
+
     const newLog = {
-      id:            `log_${Date.now()}`,
-      cycleId:       String(currentCycle?.id ?? 'cycle_001'),
+      id:            String(saved.id),
+      cycleId:       String(currentCycle.id),
       logDate,
       growthStage:   logStage,
       observedIssue: issueClean || 'None',
@@ -501,7 +553,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       actionTaken:   issueIsReal ? logAction.trim() : '',
       notes:         logNotes.trim(),
     };
-    // Optimistic UI update — persist to the store so it survives app restart
     useAppStore.getState().addProgressLog(newLog);
 
     // In-app notification (always fires) with deep-link to the relevant guide category
@@ -541,18 +592,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     setLogIssue(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
     setLogStage(''); setShowAddLog(false);
-
-    // Persist to backend
-    try {
-      await apiProgress.createLog({
-        farm_cycle:   currentCycle?.id,
-        log_date:     logDate,
-        growth_stage: logStage,
-        issue_type:   logIssue.trim() === 'Wala' ? '' : logIssue.trim(),
-        action_taken: logAction.trim(),
-        observation:  logNotes.trim(),
-      });
-    } catch {}
   };
 
   // Format ISO date → "Jun 15" (short month + day)
@@ -621,7 +660,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           </View>
           <View>
             <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.progressHeader}</Text>
-            <Text style={s.headerSub}>{currentCycle?.season ?? 'Wet'} Season {currentCycle?.year ?? new Date().getFullYear()}</Text>
+            <Text style={s.headerSub}>
+              {currentCycle
+                ? `${String(currentCycle.season ?? '').replace(/^./, (c: string) => c.toUpperCase())} Season ${currentCycle.year ?? ''}`
+                : 'No active cycle'}
+            </Text>
           </View>
         </View>
         <NotificationBell color="#059669" size={22} />
@@ -1105,10 +1148,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 const SEV_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
                 const worst = (cat: 'insekto' | 'sakit' | 'tubig'): string => {
                   const re = cat === 'insekto'
-                    ? /peste|insekto|brown ?planthopper|stem ?borer/i
+                    ? /insect|\bpest\b|peste|insekto|brown ?planthopper|stem ?borer/i
                     : cat === 'sakit'
                     ? /sakit|blast|sheath|brown ?spot|disease/i
-                    : /water|flood|baha|tubig|drain|patubig|tagtuyot|\btuyot\b|drought/i;
+                    : /water|weather|flood|baha|tubig|drain|patubig|tagtuyot|\btuyot\b|drought/i;
                   let worstSev = 0; let worstName = tr.healthNone;
                   for (const l of recentLogs as any[]) {
                     const text = `${l.observedIssue ?? l.observed_issue ?? ''} ${l.notes ?? ''}`;
@@ -1487,7 +1530,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 <TouchableOpacity style={s.mCancelBtn} onPress={() => setShowAddLog(false)} activeOpacity={0.7}>
                   <Text style={[s.mCancelBtnText, T && { fontSize: 15 }]}>{tr.cancel}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.mSaveBtn} onPress={handleSaveLog} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={[s.mSaveBtn, savingLog && { opacity: 0.6 }]}
+                  onPress={handleSaveLog}
+                  disabled={savingLog}
+                  activeOpacity={0.85}
+                >
                   <Ionicons name="checkmark" size={18} color="#FFFFFF" />
                   <Text style={[s.mSaveBtnText, T && { fontSize: 15 }]}>{tr.save}</Text>
                 </TouchableOpacity>

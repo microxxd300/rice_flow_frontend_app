@@ -256,20 +256,25 @@ export const apiAI = {
 
 // ── Progress ───────────────────────────────────────────────────────────────
 
+// Cycle and log lists come back paginated ({count, next, results}); screens expect an array.
+// page_size=100 keeps a whole season's logs on one page (the server default is 20).
+const listOf = async <T,>(url: string): Promise<{ data: T[] }> => {
+  const res = await apiClient.get<T[] | { results: T[] }>(url);
+  return { data: Array.isArray(res.data) ? res.data : (res.data?.results ?? []) };
+};
+
 export const apiProgress = {
   listCycles:   (farmId?: number) =>
-    apiClient.get<any[]>(farmId
-      ? `${API_ROUTES.progress.cycles}?farm_id=${farmId}`
-      : API_ROUTES.progress.cycles),
+    listOf<any>(`${API_ROUTES.progress.cycles}?page_size=100${farmId ? `&farm_id=${farmId}` : ''}`),
   createCycle:  (data: any) => apiClient.post<any>(API_ROUTES.progress.cycles, data),
   getCycle:     (id: number) => apiClient.get<any>(API_ROUTES.progress.cycle(id)),
   updateCycle:  (id: number, data: any) => apiClient.patch<any>(API_ROUTES.progress.cycle(id), data),
   listLogs:     (cycleId?: number) =>
-    apiClient.get<any[]>(cycleId
-      ? `${API_ROUTES.progress.logs}?cycle_id=${cycleId}`
-      : API_ROUTES.progress.logs),
+    listOf<any>(`${API_ROUTES.progress.logs}?page_size=100${cycleId ? `&cycle_id=${cycleId}` : ''}`),
   createLog:    (data: any) => apiClient.post<any>(API_ROUTES.progress.logs, data),
-  getYield:     (cycleId: number) => apiClient.get<any>(API_ROUTES.progress.yield(cycleId)),
+  // Logs store the stage as a GrowthStage id, so the screen maps its stage names through this list
+  growthStages: () => listOf<any>(API_ROUTES.varieties.growthStages),
+  getYield:    (cycleId: number) => apiClient.get<any>(API_ROUTES.progress.yield(cycleId)),
   createYield:  (cycleId: number, data: any) =>
     apiClient.post<any>(API_ROUTES.progress.yield(cycleId), data),
   updateYield:  (cycleId: number, data: any) =>
