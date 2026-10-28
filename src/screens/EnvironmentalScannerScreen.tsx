@@ -17,6 +17,12 @@ import {
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 type FetchState = 'idle' | 'locating' | 'fetching' | 'done';
+// Returned by a fresh scan (not by scan history): how soil was sampled across the farm
+type SoilSampling = {
+  points: number; points_without_data: number; estimated: boolean;
+  ph_range: [number, number] | null; clay_pct_range: [number, number] | null;
+  varies: boolean; message: string;
+};
 
 const FLOOD_COLOR: Record<string, string> = { high: '#EF4444', moderate: '#D97706', low: '#065F46' };
 const FLOOD_BG:    Record<string, string> = { high: '#FEF2F2', moderate: '#FFF7ED', low: '#ECFDF5' };
@@ -137,6 +143,11 @@ export const EnvironmentalScannerScreen: React.FC = () => {
   const rainMm    = num((scan as any)?.annual_rainfall_mm) ?? num((scan as any)?.seasonal_rainfall_mm);
   const elevM     = num(scan?.elevation_m);
   const soilPh    = num(scan?.soil_ph);
+  const sampling  = (scan as any)?.soil_sampling as SoilSampling | undefined;
+  const soilSub   = [
+    soilPh != null ? `pH ${soilPh}` : null,
+    sampling && sampling.points > 1 ? `${sampling.points} ${tr.envSoilPoints}` : null,
+  ].filter(Boolean).join(' · ') || '—';
   const scannedAt = (scan as any)?.scanned_at
     ? String((scan as any).scanned_at).slice(0, 10)
     : new Date().toISOString().slice(0, 10);
@@ -263,7 +274,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
         {state === 'done' && scan && (
           <>
             {[
-              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilPh != null ? `pH ${soilPh}` : '—',   source: 'SoilGrids' },
+              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilSub,   source: 'SoilGrids' },
               { icon: 'rainy-outline'       as IoniconsName, label: tr.envRainPerYear, value: rainMm != null ? `${Math.round(rainMm).toLocaleString()} mm` : '—', sub: tr.envAnnualAvg,        source: 'Open-Meteo' },
               { icon: 'trending-up-outline' as IoniconsName, label: tr.envElevation,   value: elevM != null ? `${Math.round(elevM)} m` : '—',        sub: tr.envLowland,                            source: 'Open-Meteo' },
             ].map(item => (
@@ -285,6 +296,26 @@ export const EnvironmentalScannerScreen: React.FC = () => {
                 </View>
               </View>
             ))}
+
+            {/* Soil varies across the farm, or no survey data at the pin */}
+            {(sampling?.varies || sampling?.estimated) && (
+              <View style={[s.dataCard, s.noticeCard]}>
+                <Ionicons name="warning-outline" size={18} color="#D97706" />
+                <View style={{ flex: 1 }}>
+                  {sampling.varies ? (
+                    <>
+                      <Text style={s.noticeTitle}>{tr.envSoilVariesTitle}</Text>
+                      <Text style={s.noticeBody}>
+                        {sampling.ph_range ? `pH ${sampling.ph_range[0]}–${sampling.ph_range[1]}. ` : ''}
+                        {tr.envSoilVariesBody}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={s.noticeBody}>{tr.envSoilEstimated}</Text>
+                  )}
+                </View>
+              </View>
+            )}
 
             {/* Flood risk card */}
             <View style={[s.dataCard, { backgroundColor: FLOOD_BG[floodKey] ?? '#FFFFFF', borderColor: '#E5E7EB' }]}>
@@ -457,6 +488,12 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   dataLabel: { fontSize: 13, fontWeight: '600', color: '#111827' },
+  noticeCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: '#FFF7ED', borderColor: '#FED7AA',
+  },
+  noticeTitle: { fontSize: 13, fontWeight: '700', color: '#9A3412' },
+  noticeBody:  { fontSize: 12, color: '#7C2D12', marginTop: 2, lineHeight: 17 },
   dataSub:   { fontSize: 11, color: '#6B7280', marginTop: 2 },
   dataRight: { alignItems: 'flex-end', gap: 4 },
   dataValue: { fontSize: 15, fontWeight: '700', color: '#111827' },

@@ -528,6 +528,10 @@ const t = {
 
     // ── Environmental Scanner screen ──
     envSoilType:          'Uri ng Lupa',
+    envSoilPoints:        'puntong sinukat',
+    envSoilVariesTitle:   'Magkakaiba ang lupa sa bukid na ito',
+    envSoilVariesBody:    'Kung magkakaiba ang mga bahagi ng inyong lupa, idagdag ang mga ito bilang hiwalay na bukid para may sariling rekomendasyon ang bawat bahagi.',
+    envSoilEstimated:     'Walang soil survey data sa lugar na ito (hal. may mga gusali). Tantiya lamang ang mga halaga ng lupa.',
     envElevation:         'Taas ng Lugar',
     envLowland:           'Patag na lugar (Lowland)',
     envSoilColor:         'Kulay',
@@ -1091,6 +1095,10 @@ const t = {
 
     // ── Environmental Scanner screen ──
     envSoilType:          'Soil Type',
+    envSoilPoints:        'points measured',
+    envSoilVariesTitle:   'Soil differs across this farm',
+    envSoilVariesBody:    'If parts of your land are different, add them as separate farms so each part gets its own recommendation.',
+    envSoilEstimated:     'No soil survey data for this spot (for example, a built-up area). Soil values are estimates.',
     envElevation:         'Elevation',
     envLowland:           'Flat area (Lowland)',
     envSoilColor:         'Color',
@@ -1654,6 +1662,10 @@ const t = {
 
     // ── Environmental Scanner screen ──
     envSoilType:          'Klase sa Yuta',
+    envSoilPoints:        'ka puntos nga gisukod',
+    envSoilVariesTitle:   'Lahi-lahi ang yuta niining umahan',
+    envSoilVariesBody:    'Kung lahi-lahi ang mga bahin sa inyong yuta, idugang kini isip lahi nga umahan aron ang matag bahin adunay kaugalingong rekomendasyon.',
+    envSoilEstimated:     'Walay soil survey data niining dapita (pananglitan, adunay mga building). Banabana lang ang mga value sa yuta.',
     envElevation:         'Gitas-on sa Lugar',
     envLowland:           'Patag nga lugar (Lowland)',
     envSoilColor:         'Kolor',
