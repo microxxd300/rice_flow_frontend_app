@@ -19,40 +19,39 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "@/app": [
-        "src/app"
+        "./src/app"
       ],
       "@/features": [
-        "src/features"
+        "./src/features"
       ],
       "@/components": [
-        "src/components"
+        "./src/components"
       ],
       "@/services": [
-        "src/services"
+        "./src/services"
       ],
       "@/theme": [
-        "src/theme"
+        "./src/theme"
       ],
       "@/hooks": [
-        "src/hooks"
+        "./src/hooks"
       ],
       "@/utils": [
-        "src/utils"
+        "./src/utils"
       ],
       "@/constants": [
-        "src/constants"
+        "./src/constants"
       ],
       "@/types": [
-        "src/types"
+        "./src/types"
       ],
       "@/config": [
-        "src/config"
+        "./src/config"
       ]
     },
     "types": [

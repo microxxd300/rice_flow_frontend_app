@@ -149,10 +149,10 @@ export const VarietyDetailScreen: React.FC<VarietyDetailScreenProps> = ({
           <TouchableOpacity style={s.primaryBtn} onPress={onUseThisVariety} activeOpacity={0.85}>
             <Text style={s.primaryBtnText}>{tr.vdUseBtn}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.navigate('PlantingGuide')} activeOpacity={0.75}>
+          <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.navigateDeprecated('PlantingGuide')} activeOpacity={0.75}>
             <Text style={s.secondaryBtnText}>{tr.vdViewGuide}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.navigate('SuitabilityResults')} activeOpacity={0.75}>
+          <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.navigateDeprecated('SuitabilityResults')} activeOpacity={0.75}>
             <Text style={s.secondaryBtnText}>{tr.vdCompareBtn}</Text>
           </TouchableOpacity>
         </View>

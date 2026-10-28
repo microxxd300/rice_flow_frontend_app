@@ -80,25 +80,47 @@ export const useAppStore = create<AppState>((set) => ({
   weatherAlertsEnabled: true,
 
   setUser:                 user    => set({ user }),
-  setFarms:                farms   => set({ farms }),
+  setFarms:                farms   => {
+    // Dedupe by id defensively — a duplicate farm would collide React list keys.
+    const seen = new Set<number>();
+    const unique = (farms ?? []).filter(f => {
+      if (seen.has(f.id)) return false;
+      seen.add(f.id);
+      return true;
+    });
+    set({ farms: unique });
+  },
   setFarmsLoaded:          loaded  => set({ farmsLoaded: loaded }),
   setSetupComplete:        done    => {
-    set({ setupComplete: done });
+    // Flip memory and clear the resume point in ONE update, before any async
+    // work. A half-applied state (complete, but a saved step still present) is
+    // what let a late background read bounce the user back into setup.
+    if (done) {
+      set({ setupComplete: true, setupStep: null, setupData: {} });
+      storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS).catch(() => {});
+    } else {
+      set({ setupComplete: false });
+    }
     // Persist so an unfinished setup resumes after the app is quit and reopened
     storage.setItem(STORAGE_KEYS.SETUP_COMPLETE, done).catch(() => {});
-    // Once finished, clear the saved step so a future setup starts fresh
-    if (done) {
-      set({ setupStep: null, setupData: {} });
-      storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS).catch(() => {});
-    }
   },
   setSetupProgress:        (step, data) => {
+    // Once setup is finished, stop recording resume points. Setup screens write
+    // their step on mount, and they briefly remount while the navigator tree
+    // swaps over to the app — without this guard that write re-arms the setup
+    // flow and the user gets thrown back to the step they just left.
+    if (useAppStore.getState().setupComplete) return;
     set({ setupStep: step, setupData: data });
     storage.setItem(STORAGE_KEYS.SETUP_PROGRESS, { step, data }).catch(() => {});
   },
   addFarm:                 farm    => {
     // Auto-select a newly added farm so the app immediately shows it.
-    set(s => ({ farms: [...s.farms, farm], selectedFarmId: farm.id }));
+    // Replace an existing entry with the same id instead of appending a
+    // duplicate (the backend dedup guard can return an already-known farm).
+    set(s => {
+      const others = s.farms.filter(f => f.id !== farm.id);
+      return { farms: [...others, farm], selectedFarmId: farm.id };
+    });
     storage.setItem(STORAGE_KEYS.SELECTED_FARM, farm.id).catch(() => {});
   },
   removeFarm:              id      => {

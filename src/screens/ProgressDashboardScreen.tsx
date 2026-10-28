@@ -13,7 +13,7 @@ import Svg, { Path, Defs, LinearGradient, Stop, Circle, Text as SvgText, Line } 
 import { LinearGradient as ExpoGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/Skeleton';
 import { Button } from '../components';
-import { mockProgressLogs, mockFarmCycles, mockPlantingGuides, mockSeasonalYields } from '../data/mockData';
+
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiGuides, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
@@ -209,7 +209,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // Source of truth = persisted store.progressLogs; backend logs merged on mount. Mock only as fallback.
   const storeLogs = useAppStore(s => s.progressLogs);
   const localLogs = storeLogs;
-  const [currentCycle, setCurrentCycle] = useState<any>(mockFarmCycles[0]);
+  // Real active cycle only (null until loaded or when there is none) — never a sample cycle
+  const [currentCycle, setCurrentCycle] = useState<any>(null);
   const [logStage,     setLogStage]     = useState('');
   const [logDate,      setLogDate]      = useState(new Date().toISOString().split('T')[0]);
   const [logIssue,     setLogIssue]     = useState('');
@@ -441,10 +442,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     })();
   }, [selectedFarmId, variety, farmArea]);
 
-  // Use Gemini-generated guide steps if we have them, else fall back to mock
-  const guideSteps = (Array.isArray((latestGuide as any)?.steps) && (latestGuide as any).steps.length > 0)
-    ? (latestGuide as any).steps
-    : (mockPlantingGuides[0]?.steps ?? []);
+  // Gemini-generated guide steps for this farm (none until a guide exists)
+  const guideSteps = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
 
   // Live temperature for the metric tile (from Open-Meteo via Django)
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
@@ -641,7 +640,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 onPress={() => setSelectedTab(t.id as any)}
                 activeOpacity={0.75}
               >
-                <Text style={[s.segText, active && s.segTextActive, T && { fontSize: 14 }]}>
+                <Text
+                  style={[s.segText, active && s.segTextActive, T && { fontSize: 14 }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
                   {t.label}
                 </Text>
               </TouchableOpacity>
@@ -779,7 +783,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 <EmptyYieldChart
                   width={cW2}
                   expectedYield={hasRealCycle && predictedYield != null ? predictedYield : null}
-                  onRecord={() => navigation.navigate('YieldRecord')}
+                  onRecord={() => navigation.navigateDeprecated('YieldRecord')}
                 />
               ) : (() => {
                 const data  = realYields;
@@ -942,7 +946,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.logActionBtn, s.logActionBtnGhost]}
-                onPress={() => navigation.navigate('YieldRecord')}
+                onPress={() => navigation.navigateDeprecated('YieldRecord')}
                 activeOpacity={0.7}
               >
                 <Ionicons name="basket-outline" size={16} color="#6B7280" />
@@ -1023,7 +1027,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 return (
                   <TouchableOpacity
                     style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => navigation.navigate('RecommendationResults')}
+                    onPress={() => navigation.navigateDeprecated('RecommendationResults')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
@@ -1247,7 +1251,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 return (
                   <TouchableOpacity
                     style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => navigation.navigate('PlantingTab')}
+                    onPress={() => navigation.navigateDeprecated('PlantingTab')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
@@ -1289,7 +1293,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
               {/* "Buong Kasaysayan" → goes to Reports screen (full historical view across all seasons/farms) */}
               <TouchableOpacity
-                onPress={() => navigation.navigate('ReportsHome')}
+                onPress={() => navigation.navigateDeprecated('ReportsHome')}
                 activeOpacity={0.85}
                 style={{ height: 50, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', marginTop: 16, flexDirection: 'row', gap: 6 }}
               >
@@ -1319,9 +1323,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
             <View style={s.modalContextRow}>
               {[
-                { icon: 'home-outline' as const,     label: 'Santos Family Farm' },
-                { icon: 'calendar-outline' as const, label: 'Day 45' },
-                { icon: 'sunny-outline' as const,    label: 'Wet Season 2024' },
+                { icon: 'home-outline' as const,     label: (selectedFarm as any)?.name ?? '—' },
+                { icon: 'calendar-outline' as const, label: hasRealCycle ? `Day ${CURRENT_DAY}` : 'No active cycle' },
+                { icon: 'sunny-outline' as const,    label: currentCycle ? `${currentCycle.season ?? ''} ${currentCycle.year ?? ''}`.trim() : '—' },
               ].map(c => (
                 <View key={c.label} style={s.contextChip}>
                   <Ionicons name={c.icon} size={12} color="#6B7280" />
@@ -1758,7 +1762,7 @@ const s = StyleSheet.create({
 
   /* Modal */
   modalOverlay:  { flex: 1, justifyContent: 'flex-end' },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
   modalSheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20, borderTopRightRadius: 20,

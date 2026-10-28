@@ -17,7 +17,7 @@ interface TextInputProps extends RNTextInputProps {
 /**
  * Reusable text input with label, error, and hint support
  */
-export const TextInput = React.forwardRef<RNTextInput, TextInputProps>(
+export const TextInput = React.forwardRef<React.ComponentRef<typeof RNTextInput>, TextInputProps>(
   ({ label, error, hint, style, ...rest }, ref) => {
     const theme = useTheme();
 

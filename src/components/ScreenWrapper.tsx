@@ -22,7 +22,7 @@ interface ScreenWrapperProps extends SafeAreaViewProps {
  * Universal screen wrapper with safe area, padding, and background
  * Use this for all screen components
  */
-export const ScreenWrapper = React.forwardRef<View, ScreenWrapperProps>(
+export const ScreenWrapper = React.forwardRef<React.ComponentRef<typeof View>, ScreenWrapperProps>(
   ({ children, padding = true, style, ...rest }, ref) => {
     const theme = useTheme();
 

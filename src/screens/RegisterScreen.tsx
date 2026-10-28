@@ -41,7 +41,27 @@ export const RegisterScreen: React.FC = () => {
   const [error,           setError]           = useState<string | null>(null);
   const [barangayOpen,    setBarangayOpen]    = useState(false);
 
+  // Per-field error messages so the user sees exactly what to fix.
+  type FieldErrors = Partial<Record<'fullName' | 'email' | 'password' | 'confirmPassword' | 'terms', string>>;
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
   const pwMismatch = submitted && confirmPassword.length > 0 && password !== confirmPassword;
+
+  // Client-side validation → returns a map of field → message (empty = valid).
+  const validate = (): FieldErrors => {
+    const fe: FieldErrors = {};
+    if (!fullName.trim()) fe.fullName = 'Please enter your full name.';
+    const emailTrim = email.trim();
+    if (!emailTrim) {
+      fe.email = 'Please enter your email.';
+    } else if (emailTrim.includes('@') && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailTrim)) {
+      fe.email = 'Enter a valid email address.';
+    }
+    if (password.length < 8) fe.password = 'Password must be at least 8 characters.';
+    if (confirmPassword !== password) fe.confirmPassword = "Passwords don't match.";
+    if (!agreed) fe.terms = 'Please accept the Terms to continue.';
+    return fe;
+  };
 
   const isValid =
     fullName.trim().length > 0 &&
@@ -53,7 +73,10 @@ export const RegisterScreen: React.FC = () => {
   const handleRegister = async () => {
     setSubmitted(true);
     setError(null);
-    if (!isValid || loading) return;
+    // Show which fields are wrong instead of silently doing nothing.
+    const fe = validate();
+    setFieldErrors(fe);
+    if (Object.keys(fe).length > 0 || loading) return;
     setLoading(true);
 
     // Single-word names → keep last_name empty (don't duplicate first_name,
@@ -74,30 +97,32 @@ export const RegisterScreen: React.FC = () => {
         municipality: municipality.trim(),
         province:     province.trim(),
       });
-      navigation.navigate('Login' as never);
+      navigation.navigateDeprecated('Login' as never);
     } catch (err: any) {
       const data   = err?.response?.data;
       const status = err?.response?.status;
-      let msg: string;
-      if (data && typeof data === 'object') {
-        // Pull first useful message from DRF-style { field: [errors] } or { detail }
-        const detail = data.detail || data.error;
-        if (detail) {
-          msg = String(detail);
+      const first  = (v: any) => (Array.isArray(v) ? String(v[0]) : String(v));
+
+      if (!err?.response) {
+        setError('Can’t reach the server. Check your internet connection.');
+      } else if (data && typeof data === 'object') {
+        // Map DRF field errors ({ email: [...], password: [...] }) onto the
+        // matching field so the user sees exactly what's wrong and where.
+        const fe: FieldErrors = {};
+        if (data.email)     fe.email    = first(data.email);
+        if (data.password)  fe.password = first(data.password);
+        if (data.password2) fe.confirmPassword = first(data.password2);
+        if (Object.keys(fe).length > 0) {
+          setFieldErrors(prev => ({ ...prev, ...fe }));
+          setError(null);
         } else {
-          const firstField = Object.entries(data).find(([, v]) => Array.isArray(v) && v.length);
-          msg = firstField
-            ? `${firstField[0]}: ${(firstField[1] as any[])[0]}`
-            : 'Could not register. Please check your details and try again.';
+          setError(String(data.detail || data.error || 'Could not register. Please check your details and try again.'));
         }
-      } else if (!err?.response) {
-        msg = 'Can’t reach the server. Check your internet connection.';
       } else if (status === 400) {
-        msg = 'That email may already be registered, or some fields are invalid.';
+        setError('That email may already be registered, or some fields are invalid.');
       } else {
-        msg = err?.message || 'Could not register. Please try again.';
+        setError(err?.message || 'Could not register. Please try again.');
       }
-      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -105,8 +130,15 @@ export const RegisterScreen: React.FC = () => {
 
   // Password strength meter (0–4 thin bars)
   const len   = password.length;
-  const score = [len >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
-  const strengthLabel = ['', 'Weak', 'Fair', 'Strong', 'Very strong'][score];
+  // The server rejects common and all-number passwords (Django's password validators),
+  // so never call those "Fair" here
+  const COMMON_PASSWORDS = ['password', 'password1', 'password123', 'passw0rd', '12345678', '123456789',
+    '1234567890', '87654321', '11111111', '00000000', 'qwerty123', 'qwertyuiop', 'iloveyou', 'admin123',
+    'welcome1', 'abc12345', 'abcd1234', 'letmein1', 'sunshine', 'princess'];
+  const tooCommon = len > 0 && (/^\d+$/.test(password) || COMMON_PASSWORDS.includes(password.toLowerCase()));
+  const score = tooCommon ? 1
+    : [len >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
+  const strengthLabel = tooCommon ? 'Too common' : ['', 'Weak', 'Fair', 'Strong', 'Very strong'][score];
   const strengthColor = ['', '#DC2626', '#D97706', '#059669', '#0F4C28'][score];
 
   return (
@@ -140,18 +172,19 @@ export const RegisterScreen: React.FC = () => {
           )}
 
           {/* About you */}
-          <Field label="Full name" value={fullName} onChangeText={setFullName} placeholder="Juan Dela Cruz" autoCapitalize="words" />
-          <Field label="Email" value={email} onChangeText={setEmail} placeholder="juan@example.com" autoCapitalize="none" keyboardType="email-address" />
+          <Field label="Full name" value={fullName} onChangeText={(v) => { setFullName(v); if (fieldErrors.fullName) setFieldErrors(e => ({ ...e, fullName: undefined })); }} placeholder="Juan Dela Cruz" autoCapitalize="words" error={fieldErrors.fullName} />
+          <Field label="Email" value={email} onChangeText={(v) => { setEmail(v); if (fieldErrors.email) setFieldErrors(e => ({ ...e, email: undefined })); }} placeholder="juan@example.com" autoCapitalize="none" keyboardType="email-address" error={fieldErrors.email} />
 
           {/* Security */}
           <View style={s.groupGap} />
           <Field
             label="Password"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(v) => { setPassword(v); if (fieldErrors.password) setFieldErrors(e => ({ ...e, password: undefined })); }}
             placeholder="At least 8 characters"
             autoCapitalize="none"
             secure={!showPw}
+            error={fieldErrors.password}
             rightSlot={
               <TouchableOpacity onPress={() => setShowPw(v => !v)} activeOpacity={0.7} style={s.eye}>
                 <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color="#9CA3AF" />
@@ -173,11 +206,11 @@ export const RegisterScreen: React.FC = () => {
           <Field
             label="Confirm password"
             value={confirmPassword}
-            onChangeText={setConfirmPassword}
+            onChangeText={(v) => { setConfirmPassword(v); if (fieldErrors.confirmPassword) setFieldErrors(e => ({ ...e, confirmPassword: undefined })); }}
             placeholder="Re-enter password"
             autoCapitalize="none"
             secure={!showCPw}
-            error={pwMismatch ? "Passwords don't match" : undefined}
+            error={fieldErrors.confirmPassword ?? (pwMismatch ? "Passwords don't match" : undefined)}
             rightSlot={
               <TouchableOpacity onPress={() => setShowCPw(v => !v)} activeOpacity={0.7} style={s.eye}>
                 <Ionicons name={showCPw ? 'eye-off-outline' : 'eye-outline'} size={18} color="#9CA3AF" />
@@ -207,17 +240,18 @@ export const RegisterScreen: React.FC = () => {
           <Field label="Province"            value={province}     onChangeText={setProvince}     placeholder="Davao del Norte"   autoCapitalize="words" />
 
           {/* Terms */}
-          <TouchableOpacity style={s.termsRow} onPress={() => setAgreed(v => !v)} activeOpacity={0.7}>
-            <View style={[s.checkbox, agreed && s.checkboxActive]}>
+          <TouchableOpacity style={s.termsRow} onPress={() => { setAgreed(v => !v); if (fieldErrors.terms) setFieldErrors(e => ({ ...e, terms: undefined })); }} activeOpacity={0.7}>
+            <View style={[s.checkbox, agreed && s.checkboxActive, fieldErrors.terms && { borderColor: '#DC2626' }]}>
               {agreed && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
             </View>
             <Text style={s.termsText}>
               I agree to the{' '}
-              <Text style={s.termsLink}>Terms</Text>
+              <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Terms</Text>
               {' '}and{' '}
-              <Text style={s.termsLink}>Privacy Policy</Text>.
+              <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Privacy Policy</Text>.
             </Text>
           </TouchableOpacity>
+          {fieldErrors.terms ? <Text style={s.termsError}>{fieldErrors.terms}</Text> : null}
 
           {/* Submit + Cancel — same primary/ghost vocabulary as the rest of the app */}
           <View style={s.actions}>
@@ -230,9 +264,9 @@ export const RegisterScreen: React.FC = () => {
               <Text style={s.cancelBtnText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[s.saveBtn, (!isValid || loading) && { opacity: 0.55 }]}
+              style={[s.saveBtn, loading && { opacity: 0.55 }]}
               onPress={handleRegister}
-              disabled={loading || !isValid}
+              disabled={loading}
               activeOpacity={0.85}
             >
               {loading
@@ -245,7 +279,7 @@ export const RegisterScreen: React.FC = () => {
           {/* Login link */}
           <View style={s.loginRow}>
             <Text style={s.loginText}>Already have an account?  </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => navigation.navigateDeprecated('Login')} activeOpacity={0.7}>
               <Text style={s.loginLink}>Sign in</Text>
             </TouchableOpacity>
           </View>
@@ -386,6 +420,7 @@ const s = StyleSheet.create({
   checkboxActive: { backgroundColor: '#059669', borderColor: '#059669' },
   termsText:      { flex: 1, fontSize: 13, color: '#374151', lineHeight: 19 },
   termsLink:      { color: '#059669', fontWeight: '600' },
+  termsError:     { fontSize: 12, color: '#DC2626', marginTop: 4, marginLeft: 30 },
 
   /* Actions — primary/ghost pair, same as modal Save/Cancel */
   actions:  { flexDirection: 'row', gap: 10, marginBottom: 24 },

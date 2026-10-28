@@ -8,7 +8,9 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle, Text as SvgText, Line } from 'react-native-svg';
-import { mockSeasonalYields } from '../data/mockData';
+
+// One harvest per season, from the farm's real cycles and yield records
+type SeasonYield = { season: string; variety: string; yieldTons: number; area: number; bags: number };
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiProgress } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
@@ -40,7 +42,7 @@ export const YieldProgressScreen: React.FC = () => {
   const selectedFarm = useSelectedFarm();
   const selectedFarmId = selectedFarm?.id;
 
-  const [yields, setYields] = useState(mockSeasonalYields);
+  const [yields, setYields] = useState<SeasonYield[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -48,7 +50,7 @@ export const YieldProgressScreen: React.FC = () => {
         const farmId = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles = cyclesRes.data as any[];
-        const realYields: typeof mockSeasonalYields = [];
+        const realYields: SeasonYield[] = [];
         for (const cycle of cycles) {
           try {
             const yr = await apiProgress.getYield(cycle.id);
@@ -58,12 +60,11 @@ export const YieldProgressScreen: React.FC = () => {
               variety: cycle.variety_name ?? 'Uri',
               yieldTons: parseFloat((data.net_yield_kg / 1000).toFixed(2)),
               area: data.area_harvested_ha ?? 1,
-              rsi: 8.0,
               bags: Math.round(data.net_yield_kg / 50),
             });
           } catch {}
         }
-        if (realYields.length > 0) setYields(realYields);
+        setYields(realYields);
       } catch {}
     };
     load();
@@ -81,6 +82,28 @@ export const YieldProgressScreen: React.FC = () => {
     [FIRST_YIELD, LAST_YIELD],
   );
 
+  // No recorded harvests yet: say so instead of showing sample seasons (the averages and
+  // chart below need at least one harvest)
+  if (yields.length === 0) {
+    return (
+      <SafeAreaView style={s.root}>
+        <View style={s.header}>
+          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.75}>
+            <Ionicons name="chevron-back" size={22} color="#111827" />
+          </TouchableOpacity>
+          <Text style={[s.headerTitle, { flex: 1 }]}>Progreso ng Ani</Text>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10 }}>
+          <Ionicons name="basket-outline" size={30} color="#9CA3AF" />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>No harvests recorded yet</Text>
+          <Text style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19 }}>
+            Record a harvest after each season to see your yield trend here.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={s.root}>
 
@@ -95,7 +118,7 @@ export const YieldProgressScreen: React.FC = () => {
           </View>
           <View>
             <Text style={[s.headerTitle, T && { fontSize: 15 }]}>Progreso ng Ani</Text>
-            <Text style={s.headerSub}>Santos Family Farm · 2.5 ha</Text>
+            <Text style={s.headerSub}>{selectedFarm?.name ?? ''}{selectedFarm?.area_hectares ? ` · ${selectedFarm.area_hectares} ha` : ''}</Text>
           </View>
         </View>
         <NotificationBell color="#059669" size={22} />
@@ -132,7 +155,6 @@ export const YieldProgressScreen: React.FC = () => {
           {[
             { icon: 'trophy-outline'      as IoniconsName, label: 'Pinakamataas', value: `${MAX_YIELD} t`,  color: '#D97706' },
             { icon: 'stats-chart-outline' as IoniconsName, label: 'Average',      value: `${AVG_YIELD} t`, color: '#1F6B3F' },
-            { icon: 'ribbon-outline'      as IoniconsName, label: 'RSI ngayon',   value: `${yields[yields.length - 1]?.rsi ?? 0}/10`, color: '#2563EB' },
           ].map(c => (
             <View key={c.label} style={s.summaryChip}>
               <Ionicons name={c.icon} size={16} color={c.color} />
@@ -292,7 +314,7 @@ export const YieldProgressScreen: React.FC = () => {
                   <Text style={[s.yieldVal, { color }, T && { fontSize: 20 }]}>
                     {y.yieldTons}<Text style={s.yieldUnit}>t</Text>
                   </Text>
-                  <Text style={[s.sakoText, T && { fontSize: 11 }]}>{y.bags} sako · RSI {y.rsi}</Text>
+                  <Text style={[s.sakoText, T && { fontSize: 11 }]}>{y.bags} sako</Text>
                   {delta !== null && (
                     <View style={[s.deltaBadge, {
                       backgroundColor: delta >= 0 ? '#E8F5E9' : '#FEF2F2',

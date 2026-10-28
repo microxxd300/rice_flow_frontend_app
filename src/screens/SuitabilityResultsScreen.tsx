@@ -4,9 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { mockRecommendations, mockRiceVarieties } from '../data/mockData';
+import { useTranslation } from '@/i18n/useTranslation';
 import type { Recommendation } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useAccessibility } from '@/context/AccessibilityContext';
 
 type Nav = StackNavigationProp<any>;
 
@@ -115,6 +116,8 @@ interface DisplayRec {
   suitabilityScore: number;
   rsiScore: number | string;
   suitabilityClass: string;
+  fitExplanation?: string;   // per-farm "why it fits" (from backend)
+  description?: string;      // variety narrative (from backend)
   variety: {
     name: string;
     maturityDays: number;
@@ -131,6 +134,8 @@ function buildFromReal(rec: Recommendation): DisplayRec[] {
     suitabilityScore: Math.round(r.rsi_score),
     rsiScore: r.rsi_score.toFixed(1),
     suitabilityClass: r.suitability_class,
+    fitExplanation: (r as any).fit_explanation || '',
+    description: (r.variety as any).ai_description || '',
     variety: {
       name: r.variety.common_name,
       maturityDays: r.variety.maturity_days,
@@ -141,28 +146,10 @@ function buildFromReal(rec: Recommendation): DisplayRec[] {
   }));
 }
 
-function buildFromMock(): DisplayRec[] {
-  return mockRecommendations.map(rec => {
-    const variety = mockRiceVarieties.find(v => v.id === rec.varietyId)!;
-    return {
-      id: rec.id,
-      rank: rec.rank,
-      suitabilityScore: rec.suitabilityScore,
-      rsiScore: rec.rsiScore,
-      suitabilityClass: rec.rank === 1 ? 'S1' : rec.rank === 2 ? 'S2' : 'S3',
-      variety: {
-        name: variety?.name ?? '—',
-        maturityDays: variety?.maturityDays ?? 0,
-        floodTolerance: variety?.floodTolerance ?? '—',
-        droughtTolerance: variety?.droughtTolerance ?? '—',
-        avgYield: variety?.yieldPotential ?? 0,
-      },
-    };
-  });
-}
-
 export const SuitabilityResultsScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
+  const { isLargeText } = useAccessibility();
+  const T = isLargeText;   // easy-reading text scale
   const route      = useRoute<any>();
   const farmData   = route.params?.farmData ?? {};
   const realRec    = route.params?.recommendationData as Recommendation | undefined;
@@ -173,7 +160,12 @@ export const SuitabilityResultsScreen: React.FC = () => {
     setSetupProgress('SuitabilityResults', { farmData, recommendationData: realRec, scanData: realScan });
   }, []);
 
-  const combined: DisplayRec[] = realRec ? buildFromReal(realRec) : buildFromMock();
+  const tr = useTranslation();
+  // Real results only: if the analysis failed there is nothing to show, never mock varieties
+  const combined: DisplayRec[] = realRec ? buildFromReal(realRec) : [];
+  // How the soil was read (from the scan response): estimates, or soil that varies
+  const soilSampling = (realScan as any)?.soil_sampling as
+    { estimated?: boolean; varies?: boolean; ph_range?: [number, number] | null } | undefined;
   const envItems   = buildEnvItems(realScan, farmData);
 
   // Display-only tiebreaker (does NOT change the validated RSI score)
@@ -192,12 +184,32 @@ export const SuitabilityResultsScreen: React.FC = () => {
     ranked.every(r => r.suitabilityScore === ranked[0].suitabilityScore);
 
   const handleDetail = (rec: DisplayRec) => {
-    navigation.navigate('PlantingGuideHandoff', {
+    navigation.navigateDeprecated('PlantingGuideHandoff', {
       farmData,
       selectedVariety: rec.variety,
       recommendation: rec,
     });
   };
+
+  if (combined.length === 0) {
+    return (
+      <SafeAreaView style={s.root}>
+        <View style={s.header}>
+          <View style={{ width: 32 }} />
+          <Text style={s.headerTitle}>Recommendations</Text>
+          <Text style={s.stepText}>4 / 4</Text>
+        </View>
+        <View style={s.failBox}>
+          <Ionicons name="cloud-offline-outline" size={30} color="#9CA3AF" />
+          <Text style={s.failTitle}>We couldn't get recommendations</Text>
+          <Text style={s.failBody}>The analysis didn't finish, so there are no results to show. Go back and try again.</Text>
+          <TouchableOpacity style={s.failBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+            <Text style={s.failBtnText}>Go back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.root}>
@@ -243,11 +255,23 @@ export const SuitabilityResultsScreen: React.FC = () => {
             ))}
           </View>
 
-          <Text style={s.fieldNote}>
+          <Text style={[s.fieldNote, T && { fontSize: 14, lineHeight: 20 }]}>
             {allTied
               ? 'All three varieties below score equally on your field. Ranked by yield and days-to-harvest.'
               : 'The RSI score rates the field, not the variety. Ranked by score, yield, and days-to-harvest.'}
           </Text>
+
+          {/* Soil read as estimates (no SoilGrids data), or soil that differs across the farm */}
+          {(soilSampling?.estimated || soilSampling?.varies) && (
+            <View style={s.soilNotice}>
+              <Ionicons name="warning-outline" size={16} color="#D97706" />
+              <Text style={s.soilNoticeText}>
+                {soilSampling.estimated
+                  ? tr.envSoilEstimated
+                  : `${tr.envSoilVariesTitle}${soilSampling.ph_range ? ` (pH ${soilSampling.ph_range[0]}–${soilSampling.ph_range[1]})` : ''}. ${tr.envSoilVariesBody}`}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Top 3 list */}
@@ -265,7 +289,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 </View>
                 <View style={s.varNameWrap}>
                   <Ionicons name="leaf" size={13} color={isTop ? '#059669' : '#9CA3AF'} />
-                  <Text style={s.varName} numberOfLines={1}>{rec.variety.name}</Text>
+                  <Text style={[s.varName, T && { fontSize: 19 }]} numberOfLines={1}>{rec.variety.name}</Text>
                 </View>
                 {isTop && (
                   <View style={s.recommendedBadge}>
@@ -279,7 +303,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.metricCol}>
                   <View style={s.metricHead}>
                     <Ionicons name="trending-up-outline" size={12} color="#9CA3AF" />
-                    <Text style={s.metricLabel}>Expected yield</Text>
+                    <Text style={[s.metricLabel, T && { fontSize: 13 }]}>Expected yield</Text>
                   </View>
                   <Text style={s.metricVal}>
                     {rec.variety.avgYield}<Text style={s.metricUnit}> t/ha</Text>
@@ -289,7 +313,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.metricCol}>
                   <View style={s.metricHead}>
                     <Ionicons name="time-outline" size={12} color="#9CA3AF" />
-                    <Text style={s.metricLabel}>To harvest</Text>
+                    <Text style={[s.metricLabel, T && { fontSize: 13 }]}>To harvest</Text>
                   </View>
                   <Text style={s.metricVal}>
                     {rec.variety.maturityDays}<Text style={s.metricUnit}> days</Text>
@@ -303,6 +327,22 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.tolDivider} />
                 <ToleranceMeter label="Drought" value={rec.variety.droughtTolerance} />
               </View>
+
+              {/* Farm-specific fit — built from this farm's real RSI factor scores */}
+              {rec.fitExplanation ? (
+                <View style={s.fitBox}>
+                  <View style={s.fitHead}>
+                    <Ionicons name="sparkles-outline" size={12} color="#059669" />
+                    <Text style={s.fitHeadText}>Why it fits your farm</Text>
+                  </View>
+                  <Text style={[s.fitText, T && { fontSize: 14, lineHeight: 20 }]}>{rec.fitExplanation}</Text>
+                </View>
+              ) : null}
+
+              {/* About the variety — grounded narrative (same for every farm) */}
+              {rec.description ? (
+                <Text style={[s.aboutText, T && { fontSize: 14, lineHeight: 20 }]}>{rec.description}</Text>
+              ) : null}
 
               <TouchableOpacity
                 style={[s.saveBtn, !isTop && s.saveBtnGhost]}
@@ -358,6 +398,16 @@ export const SuitabilityResultsScreen: React.FC = () => {
 };
 
 const s = StyleSheet.create({
+  soilNotice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12,
+    backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 10, padding: 10,
+  },
+  soilNoticeText: { flex: 1, fontSize: 12, color: '#7C2D12', lineHeight: 17 },
+  failBox:     { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10 },
+  failTitle:   { fontSize: 16, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  failBody:    { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19 },
+  failBtn:     { marginTop: 8, backgroundColor: '#059669', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 22 },
+  failBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
   root: { flex: 1, backgroundColor: '#FFFFFF' },
 
   /* Header — same as Login / Register / FarmSetup / etc. */
@@ -461,6 +511,19 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
   tolDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: '#E5E7EB' },
+
+  /* Farm-fit callout — soft green, since it's the personalized bit */
+  fitBox: {
+    backgroundColor: '#F0FDF4', borderRadius: 10,
+    borderWidth: 1, borderColor: '#D1FAE5',
+    paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12,
+  },
+  fitHead:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
+  fitHeadText: { fontSize: 11, fontWeight: '700', color: '#065F46', letterSpacing: 0.2 },
+  fitText:     { fontSize: 12.5, color: '#065F46', lineHeight: 18 },
+
+  /* About-the-variety prose */
+  aboutText: { fontSize: 12.5, color: '#6B7280', lineHeight: 18, marginBottom: 14 },
 
   /* Variety name with leading leaf icon */
   varNameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },

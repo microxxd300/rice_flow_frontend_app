@@ -5,19 +5,17 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTabletMode": true,
+      "supportsTablet": true,
       "bundleIdentifier": "com.riceflow.app"
     },
     "android": {
       "package": "com.riceflow.app",
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
-      "navigationBar": {
-        "backgroundColor": "#FFFFFF",
-        "barStyle": "dark-content"
-      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -25,7 +23,7 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "single"
     },
     "plugins": [
       [
@@ -40,6 +38,7 @@
           "locationAlwaysAndWhenInUsePermission": "Kailangan ng RiceFlow ang inyong lokasyon para matukoy ang inyong bukid sa mapa."
         }
       ],
+      "expo-splash-screen",
       "expo-secure-store"
     ],
     "experiments": {

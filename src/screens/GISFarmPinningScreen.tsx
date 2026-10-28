@@ -346,7 +346,7 @@ export const GISFarmPinningScreen: React.FC = () => {
         {realFarms.length === 0 && (
           <TouchableOpacity
             style={[s.farmCard, { justifyContent: 'center' }]}
-            onPress={() => navigation.navigate('FarmDetailsForm')}
+            onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
             activeOpacity={0.8}
           >
             <View style={s.farmIconBox}>
@@ -404,7 +404,7 @@ export const GISFarmPinningScreen: React.FC = () => {
         {realFarms.length > 0 && (
           <TouchableOpacity
             style={s.addFarmRow}
-            onPress={() => navigation.navigate('FarmDetailsForm')}
+            onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
             activeOpacity={0.75}
           >
             <View style={s.addFarmIcon}>

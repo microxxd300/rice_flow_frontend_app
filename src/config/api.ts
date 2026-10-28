@@ -21,6 +21,7 @@ export const API_ROUTES = {
   farms: {
     list:   'farms/',
     detail: (id: number) => `farms/${id}/`,
+    checkLocation: 'farms/check-location/',
   },
   environmental: {
     scan:    (farmId: number) => `environmental/scan/${farmId}/`,

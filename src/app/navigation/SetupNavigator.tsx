@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
   FarmSetupWelcomeScreen,
@@ -27,13 +27,28 @@ const RESUMABLE_STEPS = [
 ];
 
 export const SetupNavigator: React.FC<SetupNavigatorProps> = ({ onComplete, onGoToGuide }) => {
-  const setupStep = useAppStore(s => s.setupStep);
-  const setupData = useAppStore(s => s.setupData);
+  // Read the resume point ONCE, at mount.
+  //
+  // These values only seed the navigator's initial route and params, which
+  // React Navigation reads on first mount and never again. Subscribing to them
+  // reactively meant every screen that recorded its progress (each one writes a
+  // fresh setupData object on mount) re-rendered this navigator — which in turn
+  // churned the screen definitions below and remounted the visible screen
+  // mid-transition. That churn is what made "Go to Dashboard" bounce.
+  const [{ initialRoute, resumeParams }] = useState(() => {
+    const { setupStep, setupData } = useAppStore.getState();
+    return {
+      initialRoute: setupStep && RESUMABLE_STEPS.includes(setupStep) ? setupStep : 'FarmSetupWelcome',
+      resumeParams: setupData ?? {},
+    };
+  });
 
-  const initialRoute =
-    setupStep && RESUMABLE_STEPS.includes(setupStep) ? setupStep : 'FarmSetupWelcome';
-  // setupData holds the exact route params recorded for the current step
-  const resumeParams = setupData ?? {};
+  // Stable identity: a new inline function here would be treated as a new
+  // component type on every render, unmounting and remounting the screen.
+  const renderHandoff = useCallback(
+    () => <PlantingGuideHandoffScreen onEnterApp={onComplete} onGoToGuide={onGoToGuide} />,
+    [onComplete, onGoToGuide],
+  );
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
@@ -44,7 +59,7 @@ export const SetupNavigator: React.FC<SetupNavigatorProps> = ({ onComplete, onGo
       <Stack.Screen name="AnalysisLoading"    component={AnalysisLoadingScreen} />
       <Stack.Screen name="SuitabilityResults" component={SuitabilityResultsScreen} initialParams={resumeParams} />
       <Stack.Screen name="PlantingGuideHandoff" initialParams={resumeParams}>
-        {() => <PlantingGuideHandoffScreen onEnterApp={onComplete} onGoToGuide={onGoToGuide} />}
+        {renderHandoff}
       </Stack.Screen>
     </Stack.Navigator>
   );

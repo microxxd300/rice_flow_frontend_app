@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, TextInput as RNTextInput, TouchableOpacity, ScrollView,
+  Platform, TextInput as RNTextInput, TouchableOpacity, ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -24,7 +24,11 @@ export const LoginScreen: React.FC = () => {
   const toEmail = (u: string) => u.includes('@') ? u.trim() : `${u.trim()}@georice.app`;
 
   const handleLogin = () => {
-    if (!isValid || loading) return;
+    if (loading) return;
+    // Tell the user what's missing instead of silently doing nothing.
+    if (!username.trim() && !password) { setError('Please enter your email and password.'); return; }
+    if (!username.trim())              { setError('Please enter your email.'); return; }
+    if (!password)                     { setError('Please enter your password.'); return; }
     setError(null);
     setLoading(true);
     authLogin(toEmail(username), password)
@@ -101,15 +105,23 @@ export const LoginScreen: React.FC = () => {
           />
 
           {/* Forgot link */}
-          <TouchableOpacity style={s.forgotBtn} onPress={() => {}} activeOpacity={0.7}>
+          {/* No self-service reset: agriculturists set a new password from the admin site */}
+          <TouchableOpacity
+            style={s.forgotBtn}
+            onPress={() => Alert.alert(
+              'Forgot your password?',
+              'Ask your agriculturist or rice technician to reset it. They can set a new password for you in RiceFlow, then you can log in again.',
+            )}
+            activeOpacity={0.7}
+          >
             <Text style={s.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
           {/* Primary action — same vocabulary as the rest of the app */}
           <TouchableOpacity
-            style={[s.saveBtn, (!isValid || loading) && { opacity: 0.55 }]}
+            style={[s.saveBtn, loading && { opacity: 0.55 }]}
             onPress={handleLogin}
-            disabled={!isValid || loading}
+            disabled={loading}
             activeOpacity={0.85}
           >
             {loading
@@ -121,7 +133,7 @@ export const LoginScreen: React.FC = () => {
           {/* Register link */}
           <View style={s.registerRow}>
             <Text style={s.registerText}>New here?  </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7}>
+            <TouchableOpacity onPress={() => navigation.navigateDeprecated('Register')} activeOpacity={0.7}>
               <Text style={s.registerLink}>Create an account</Text>
             </TouchableOpacity>
           </View>

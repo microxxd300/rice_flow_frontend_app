@@ -22,7 +22,7 @@ interface ButtonProps extends TouchableOpacityProps {
  * Modern, premium button component
  * Soft rounded corners, refined shadows, clear visual hierarchy
  */
-export const Button = React.forwardRef<View, ButtonProps>(
+export const Button = React.forwardRef<React.ComponentRef<typeof View>, ButtonProps>(
   (
     {
       label,

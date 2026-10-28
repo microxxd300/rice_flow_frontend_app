@@ -11,7 +11,7 @@ interface CardProps extends ViewProps {
 /**
  * Reusable card component with consistent styling
  */
-export const Card = React.forwardRef<View, CardProps>(
+export const Card = React.forwardRef<React.ComponentRef<typeof View>, CardProps>(
   ({ children, padding = true, style, ...rest }, ref) => {
     const theme = useTheme();
 

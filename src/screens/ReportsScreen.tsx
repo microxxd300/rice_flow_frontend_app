@@ -348,7 +348,7 @@ export const ReportsScreen: React.FC = () => {
             <TouchableOpacity
               key={h.id}
               style={s.historyCard}
-              onPress={() => navigation.navigate('YieldProgress')}
+              onPress={() => navigation.navigateDeprecated('YieldProgress')}
               activeOpacity={0.85}
             >
               <View style={s.historyIcon}>

@@ -11,6 +11,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiProgress, apiGuides } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 
@@ -65,6 +66,7 @@ export const ProgressLogScreen: React.FC<ProgressLogScreenProps> = ({ onSaveLog 
   const route      = useRoute<any>();
   const { isLargeText } = useAccessibility();
   const tr = useTranslation();
+  const farm = useSelectedFarm() as any;
   const T = isLargeText;
 
   const activeCycle = useAppStore(s => s.activeCycle);
@@ -218,7 +220,7 @@ export const ProgressLogScreen: React.FC<ProgressLogScreenProps> = ({ onSaveLog 
           </View>
           <View>
             <Text style={[s.headerTitle, T && { fontSize: 15 }]}>{tr.plogModalTitle}</Text>
-            <Text style={s.headerSub}>Santos Family Farm</Text>
+            <Text style={s.headerSub}>{farm?.name ?? ''}</Text>
           </View>
         </View>
         <NotificationBell color="#059669" size={22} />

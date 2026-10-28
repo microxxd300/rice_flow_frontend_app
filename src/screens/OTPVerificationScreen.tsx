@@ -6,10 +6,10 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAccessibility } from '../context/AccessibilityContext';
 
-type Nav = NativeStackNavigationProp<any>;
+type Nav = StackNavigationProp<any>;
 
 const OTP_LENGTH = 6;
 
@@ -25,7 +25,7 @@ export const OTPVerificationScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
 
-  const inputs = useRef<Array<TextInput | null>>(Array(OTP_LENGTH).fill(null));
+  const inputs = useRef<Array<React.ComponentRef<typeof TextInput> | null>>(Array(OTP_LENGTH).fill(null));
 
   const handleDigit = (text: string, index: number) => {
     if (!/^\d*$/.test(text)) return;
@@ -51,7 +51,7 @@ export const OTPVerificationScreen: React.FC = () => {
     setTimeout(() => {
       setLoading(false);
       setVerified(true);
-      setTimeout(() => navigation.navigate('App' as never), 800);
+      setTimeout(() => navigation.navigateDeprecated('App' as never), 800);
     }, 1400);
   };
 

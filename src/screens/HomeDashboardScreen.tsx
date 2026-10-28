@@ -7,20 +7,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import {
-  mockUser,
-  mockFarms,
-  mockEnvironmentalScans,
-  mockRecommendations,
-  mockRiceVarieties,
-  mockPlantingGuides,
-} from '../data/mockData';
 import { useAppStore } from '@/store/appStore';
 import { apiWeather, type WeatherCurrent, type WeatherHour } from '@/services/apiService';
 import { useAuthStore } from '@/features/auth/store';
 import { Skeleton } from '@/components/Skeleton';
 import { dedupeName } from '@/utils/formatting';
 import { useTranslation } from '@/i18n/useTranslation';
+import { useAccessibility } from '@/context/AccessibilityContext';
 import { useLanguageStore } from '@/store/languageStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { FarmSwitcher } from '@/components/FarmSwitcher';
@@ -54,6 +47,8 @@ function formatTime(d: Date) {
 export const HomeDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
+  const { isLargeText } = useAccessibility();
+  const T = isLargeText;   // easy-reading text scale
   const lang = useLanguageStore(s => s.language);
   const [greeting,    setGreeting]    = useState('');
   const [now,         setNow]         = useState(new Date());
@@ -82,39 +77,23 @@ export const HomeDashboardScreen: React.FC = () => {
     return () => clearInterval(timer);
   }, [tr]);
 
-  // Use the currently SELECTED farm (falls back to first farm, then mock)
+  // Use the currently SELECTED farm (falls back to the first farm). No mock farm: a new
+  // farmer sees the empty state instead of made-up data.
   const selectedFarm = useSelectedFarm();
-  const hasFarms = realFarms.length > 0;
-  const farm     = (selectedFarm as any) ?? (hasFarms ? realFarms[0] as any : mockFarms[0]);
-  const farm2    = hasFarms && realFarms.length > 1 ? realFarms[1] as any : mockFarms[1];
 
-  const scan       = mockEnvironmentalScans[0];
-  const rawStage   = 'Panicle Initiation';
-  const stageLabel = STAGE_LABELS[rawStage] ?? rawStage;
-
-  const guide      = mockPlantingGuides[0];
-  const guideSteps = guide?.steps ?? [];
-  const cycleDay   = 45;
-  const cycleDays  = guideSteps.reduce((max, s) => Math.max(max, s.daysAfterPlanting), 0) || 115;
-  const daysLeft   = cycleDays - cycleDay;
-  const progress   = Math.round((cycleDay / cycleDays) * 100);
-
-  // Use real recommendation top result if available
+  // Real recommendation only; with none yet the card invites the farmer to scan
   const topRealResult = latestRecommendation?.results?.[0];
-  const topRec        = topRealResult ? null : mockRecommendations[0];
   const topVariety    = topRealResult
     ? { name: topRealResult.variety.common_name, maturityDays: topRealResult.variety.maturity_days, avgYield: topRealResult.variety.avg_yield_t_ha, floodTolerance: topRealResult.variety.submergence_tolerance }
-    : (mockRiceVarieties.find(v => v.id === topRec?.varietyId) ?? mockRiceVarieties[0]);
-  const topScore      = topRealResult ? Math.round(topRealResult.rsi_score) : topRec?.suitabilityScore ?? 88;
+    : null;
+  const topScore      = topRealResult ? Math.round(topRealResult.rsi_score) : null;
 
-  const floodRisk  = scan?.floodRisk ?? 'high';
-  const rainfallMm = scan?.rainfallMm ?? 2500;
-  const rainPct    = rainfallMm >= 2500 ? 80 : rainfallMm >= 2000 ? 60 : 35;
-  const temp        = 32;
-  const windKph     = 12;
+  // Shown only after the live weather loads (skeletons before), so no fake numbers
+  const rainPct = 0;
+  const temp    = 0;
+  const windKph = 0;
 
-  // Derive display name: prefer real auth user, fall back to mock
-  const displayName = dedupeName(authUser?.name) || mockUser.name;
+  const displayName = dedupeName(authUser?.name) || 'Farmer';
   const initials    = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
 
   const WX_IMAGES = {
@@ -157,8 +136,10 @@ export const HomeDashboardScreen: React.FC = () => {
   // Live weather (current + next 8 hours) from Open-Meteo via Django
   const [wxCurrent, setWxCurrent] = useState<WeatherCurrent | null>(null);
   const [wxHourly,  setWxHourly]  = useState<WeatherHour[]>([]);
-  const farmLat = realFarms[0]?.latitude;
-  const farmLng = realFarms[0]?.longitude;
+  // Weather for the farm being shown, not the first farm on the account
+  const weatherFarm = (selectedFarm as any) ?? realFarms[0];
+  const farmLat = weatherFarm?.latitude;
+  const farmLng = weatherFarm?.longitude;
   const fetchWeather = () => {
     if (farmLat == null || farmLng == null) return;
     apiWeather.current(farmLat, farmLng)
@@ -191,13 +172,8 @@ export const HomeDashboardScreen: React.FC = () => {
     let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
     return `${h}${ampm}`;
   };
-  const hourlyForecast = wxHourly.length > 0
-    ? wxHourly.map(h => ({ time: hourFmt(h.time), img: codeToImage(h.weather_code), temp: Math.round(h.temp) }))
-    : [
-        { time: '2PM', img: WX_IMAGES.partly_cloudy, temp: 32 },
-        { time: '3PM', img: WX_IMAGES.partly_cloudy, temp: 31 },
-        { time: '4PM', img: WX_IMAGES.light_rain,    temp: 30 },
-      ];
+  // Real hourly forecast only (empty until it loads)
+  const hourlyForecast = wxHourly.map(h => ({ time: hourFmt(h.time), img: codeToImage(h.weather_code), temp: Math.round(h.temp) }));
 
   // Normalize log shape: store-saved logs may use snake_case from backend
   const allLogs = progressLogs.map((l: any) => ({
@@ -225,8 +201,16 @@ export const HomeDashboardScreen: React.FC = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); start.setHours(0, 0, 0, 0);
     const currentDay = Math.floor((today.getTime() - start.getTime()) / 86400000);
+    const seen = new Set<string>();
     return g.steps
       .filter((st: any) => (st.daysAfterPlanting ?? 0) >= currentDay)
+      // Drop any repeated step id so React list keys stay unique
+      .filter((st: any) => {
+        const key = String(st.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .sort((a: any, b: any) => a.daysAfterPlanting - b.daysAfterPlanting)
       .slice(0, 3)
       .map((st: any) => ({
@@ -243,7 +227,8 @@ export const HomeDashboardScreen: React.FC = () => {
 
   const floodColor = liveFloodRisk === 'high' ? '#EF4444' : liveFloodRisk === 'moderate' ? '#D97706' : '#111111';
   const floodBg    = liveFloodRisk === 'high' ? '#FFEBEE' : liveFloodRisk === 'moderate' ? '#FFF7ED' : '#F5F5F5';
-  const floodLabel = liveFloodRisk === 'high' ? tr.floodWarning : liveFloodRisk === 'moderate' ? tr.floodCaution : tr.floodSafe;
+  const floodLabel = !wxCurrent ? '—'
+    : liveFloodRisk === 'high' ? tr.floodWarning : liveFloodRisk === 'moderate' ? tr.floodCaution : tr.floodSafe;
 
   return (
     <SafeAreaView style={s.root}>
@@ -252,14 +237,14 @@ export const HomeDashboardScreen: React.FC = () => {
       <View style={s.appBar}>
         <TouchableOpacity
           style={s.avatar}
-          onPress={() => navigation.navigate('ProfileTab')}
+          onPress={() => navigation.navigateDeprecated('ProfileTab')}
           activeOpacity={0.85}
         >
           <Text style={s.avatarText}>{initials}</Text>
         </TouchableOpacity>
         <View style={s.appBarMid}>
-          <Text style={s.appBarGreet}>{tr.homeGreeting} {greeting}</Text>
-          <Text style={s.appBarSub}>{displayName}</Text>
+          <Text style={[s.appBarGreet, T && { fontSize: 17 }]}>{tr.homeGreeting} {greeting}</Text>
+          <Text style={[s.appBarSub, T && { fontSize: 14 }]}>{displayName}</Text>
         </View>
         <NotificationBell color="#059669" size={22} />
       </View>
@@ -356,7 +341,7 @@ export const HomeDashboardScreen: React.FC = () => {
         {upcomingTasks.length > 0 && (
           <View style={s.section}>
             <View style={[s.card, { paddingTop: 14, paddingBottom: 4 }]}>
-              <Text style={s.cardTitle}>{tr.homeUpcomingTasks}</Text>
+              <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeUpcomingTasks}</Text>
               {upcomingTasks.map((t: { id?: string; title: string; cat: TaskCat; offset: number }, i: number) => {
                 const meta = TASK_META[t.cat] || TASK_META.planting;
                 return (
@@ -364,7 +349,7 @@ export const HomeDashboardScreen: React.FC = () => {
                     key={t.id ?? i}
                     onPress={() => {
                       useAppStore.getState().setPendingGuideCategory(t.cat);
-                      navigation.navigate('PlantingTab');
+                      navigation.navigateDeprecated('PlantingTab');
                     }}
                     activeOpacity={0.75}
                     style={[s.taskRow, i < upcomingTasks.length - 1 && s.taskRowBorder]}
@@ -373,7 +358,7 @@ export const HomeDashboardScreen: React.FC = () => {
                       <Ionicons name={meta.icon} size={16} color={meta.color} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.taskTitle} numberOfLines={1}>{t.title}</Text>
+                      <Text style={[s.taskTitle, T && { fontSize: 16 }]} numberOfLines={1}>{t.title}</Text>
                       <Text style={[s.taskMeta, { color: meta.color }]}>{taskDayLabel(t.offset)}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
@@ -387,7 +372,7 @@ export const HomeDashboardScreen: React.FC = () => {
         {/* ── 3. My Farms ── */}
         <View style={s.section}>
           <View style={[s.card, { paddingTop: 14 }]}>
-            <Text style={s.cardTitle}>{tr.homeMyFarms}</Text>
+            <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeMyFarms}</Text>
 
             {/* Skeleton while farms list is still loading from backend */}
             {!farmsLoaded && realFarms.length === 0 && (
@@ -414,14 +399,14 @@ export const HomeDashboardScreen: React.FC = () => {
                 <TouchableOpacity
                   key={f.id ?? i}
                   style={[s.bukidRow, !isLast && s.bukidRowBorder]}
-                  onPress={() => navigation.navigate('GISPinning', { farmId: f.id })}
+                  onPress={() => navigation.navigateDeprecated('GISPinning', { farmId: f.id })}
                   activeOpacity={0.75}
                 >
                   <View style={s.bukidIcon}>
                     <Ionicons name="storefront-outline" size={16} color="#059669" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.bukidName} numberOfLines={1}>{f.name}</Text>
+                    <Text style={[s.bukidName, T && { fontSize: 16 }]} numberOfLines={1}>{f.name}</Text>
                     <Text style={s.bukidMeta} numberOfLines={1}>{location} · {area}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
@@ -442,7 +427,7 @@ export const HomeDashboardScreen: React.FC = () => {
             {/* Add Farm action */}
             <TouchableOpacity
               style={s.bukidAddRow}
-              onPress={() => navigation.navigate('FarmDetailsForm')}
+              onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
               activeOpacity={0.75}
             >
               <View style={s.bukidAddIcon}>
@@ -476,13 +461,13 @@ export const HomeDashboardScreen: React.FC = () => {
                   <TouchableOpacity
                     key={log.id}
                     style={s.logCard}
-                    onPress={() => navigation.navigate('ProgressTab')}
+                    onPress={() => navigation.navigateDeprecated('ProgressTab')}
                     activeOpacity={0.85}
                   >
                     <View style={[s.logAccent, { backgroundColor: hasIssue ? '#D97706' : '#6BC99B' }]} />
                     <View style={s.logBody}>
-                      <Text style={s.logStage}>{log.growthStage}</Text>
-                      <Text style={s.logNote} numberOfLines={2}>
+                      <Text style={[s.logStage, T && { fontSize: 15 }]}>{log.growthStage}</Text>
+                      <Text style={[s.logNote, T && { fontSize: 14, lineHeight: 20 }]} numberOfLines={2}>
                         {hasIssue ? log.observedIssue : log.notes}
                       </Text>
                     </View>
@@ -495,7 +480,7 @@ export const HomeDashboardScreen: React.FC = () => {
 
           <TouchableOpacity
             style={[s.logAddCard, { marginTop: 10 }]}
-            onPress={() => navigation.navigate('ProgressTab')}
+            onPress={() => navigation.navigateDeprecated('ProgressTab')}
             activeOpacity={0.85}
           >
             <Ionicons name="create-outline" size={16} color="#FFFFFF" />
@@ -533,7 +518,7 @@ export const HomeDashboardScreen: React.FC = () => {
             return (
               <TouchableOpacity
                 style={s.card}
-                onPress={() => navigation.navigate('RecommendationResults')}
+                onPress={() => navigation.navigateDeprecated('RecommendationResults')}
                 activeOpacity={0.75}
               >
                 <View style={s.bukidRow}>
@@ -541,10 +526,12 @@ export const HomeDashboardScreen: React.FC = () => {
                     <Ionicons name="leaf-outline" size={16} color="#059669" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.bukidName} numberOfLines={1}>{topVariety?.name}</Text>
-                    <Text style={s.bukidMeta} numberOfLines={1}>{metaLine}</Text>
+                    <Text style={[s.bukidName, T && { fontSize: 16 }]} numberOfLines={1}>
+                      {topVariety?.name ?? 'No recommendation yet'}
+                    </Text>
+                    <Text style={s.bukidMeta} numberOfLines={1}>{topVariety ? metaLine : 'Scan your farm to get one'}</Text>
                   </View>
-                  <Text style={s.recScoreFlat}>{topScore}%</Text>
+                  {topScore != null && <Text style={s.recScoreFlat}>{topScore}%</Text>}
                 </View>
               </TouchableOpacity>
             );
