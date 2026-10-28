@@ -34,6 +34,7 @@ export const API_ROUTES = {
   varieties: {
     list:   'varieties/',
     detail: (id: number) => `varieties/${id}/`,
+    growthStages: 'varieties/growth-stages/',
   },
   guides: {
     list:         'guides/',
