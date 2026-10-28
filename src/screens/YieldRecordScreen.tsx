@@ -101,7 +101,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
 
   const handleSave = async () => {
     if (!harvestDate || !actualYield) {
-      Alert.alert('Kulang', 'Punan ang petsa ng pag-ani at dami ng ani.');
+      Alert.alert('Missing details', 'Enter the harvest date and the yield.');
       return;
     }
     setLoading(true);
@@ -145,7 +145,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
       onSaveYield?.({ harvestDate, variety, areaHarvested, actualYield, grainQuality, harvestMethod });
       setSaved(true);
     } catch {
-      Alert.alert('Error', 'Hindi ma-save ang rekord. Subukan muli.');
+      Alert.alert('Harvest not saved', 'Check your internet connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -159,7 +159,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
   const expectedYield = predictedYield ?? recVariety?.avg_yield_t_ha ?? 6.5;
   const yieldPct      = Math.round((parseFloat(yieldPerHa) / expectedYield) * 100);
   const perfStatus    = yieldPct >= 100 ? 'success' : yieldPct >= 80 ? 'warning' : 'error';
-  const perfLabel     = yieldPct >= 100 ? 'Napakahusay' : yieldPct >= 80 ? 'Mahusay' : 'Kulang sa Inaasahan';
+  const perfLabel     = yieldPct >= 100 ? 'Excellent' : yieldPct >= 80 ? 'Good' : 'Below Expected';
 
   const perfColors = {
     success: { bg: '#ECFDF5', border: '#D1FAE5', text: '#065F46' },
@@ -187,11 +187,11 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
               <Text style={s.cardTitleNew}>{tr.yieldSummary}</Text>
               {([
                 { icon: 'calendar-outline'  as IoniconsName, label: tr.yieldHarvestDate, value: harvestDate   || '—' },
-                { icon: 'leaf-outline'      as IoniconsName, label: 'Uri ng Palay',      value: variety       || '—' },
-                { icon: 'resize-outline'    as IoniconsName, label: 'Lugar na Inani',    value: areaHarvested ? `${areaHarvested} ha` : '—' },
+                { icon: 'leaf-outline'      as IoniconsName, label: 'Rice Variety',      value: variety       || '—' },
+                { icon: 'resize-outline'    as IoniconsName, label: 'Area Harvested',    value: areaHarvested ? `${areaHarvested} ha` : '—' },
                 { icon: 'cube-outline'      as IoniconsName, label: 'Total Yield',       value: actualYield   ? `${actualYield} kg`   : '—' },
-                { icon: 'star-outline'      as IoniconsName, label: 'Kalidad ng Bigas',  value: grainQuality  || '—' },
-                { icon: 'construct-outline' as IoniconsName, label: 'Paraan ng Pag-ani', value: harvestMethod || '—' },
+                { icon: 'star-outline'      as IoniconsName, label: 'Grain Quality',     value: grainQuality  || '—' },
+                { icon: 'construct-outline' as IoniconsName, label: 'Harvest Method',    value: harvestMethod || '—' },
               ]).map((row, i, arr) => (
                 <View key={row.label} style={[s.listRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

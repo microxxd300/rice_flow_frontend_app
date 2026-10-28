@@ -11,6 +11,7 @@ import { useAppStore } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { Skeleton } from '@/components/Skeleton';
 import { useTranslation } from '@/i18n/useTranslation';
+import { seasonLabel } from '@/utils/formatting';
 
 type Nav = StackNavigationProp<any>;
 
@@ -49,7 +50,7 @@ export const ReportsScreen: React.FC = () => {
   const farmsCount = farms.length;
   const headerFarm = (selectedFarm as any)?.name ?? '—';
   const headerSub  = activeCycle
-    ? `${headerFarm} · ${activeCycle.season ?? ''} ${activeCycle.year ?? ''}`.trim()
+    ? `${headerFarm} · ${seasonLabel(activeCycle)}`
     : `${headerFarm} · ${tr.reportsNoCycle}`;
 
   useEffect(() => {
@@ -76,7 +77,7 @@ export const ReportsScreen: React.FC = () => {
             history.push({
               id:          String(cycle.id),
               farmName:    farms.find((f: any) => f.id === cycle.farm)?.name ?? '—',
-              season:      `${cycle.season ?? ''} ${cycle.year ?? ''}`.trim() || '—',
+              season:      seasonLabel(cycle) || '—',
               datePlanted: cycle.planting_date ?? '—',
               yieldValue:  yieldTHa,
               varietyName: cycle.variety_name ?? '—',

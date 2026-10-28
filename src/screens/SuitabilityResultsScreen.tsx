@@ -350,7 +350,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 activeOpacity={0.85}
               >
                 <Text style={[s.saveBtnText, !isTop && s.saveBtnTextGhost]}>
-                  {isTop ? 'Use this variety' : 'See details'}
+                  {isTop ? 'Use this variety' : 'Use this instead'}
                 </Text>
               </TouchableOpacity>
 

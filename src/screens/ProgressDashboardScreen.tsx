@@ -20,6 +20,7 @@ import { apiProgress, apiGuides, apiWeather, apiPredictions, apiScan } from '@/s
 import { useAppStore } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
+import { seasonLabel } from '@/utils/formatting';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -103,7 +104,7 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
         {expectedYield != null && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF7ED', borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 9, borderWidth: 1, borderColor: '#FDE68A' }}>
             <Ionicons name="trending-up" size={11} color="#D97706" />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>{expectedYield}t</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>{expectedYield}t expected</Text>
           </View>
         )}
       </View>
@@ -111,18 +112,18 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
       <Svg width={width} height={svgH}>
         <Defs>
           <LinearGradient id="emptyGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor="#059669" stopOpacity={0.10} />
-            <Stop offset="100%" stopColor="#059669" stopOpacity={0} />
+            <Stop offset="0%" stopColor="#9CA3AF" stopOpacity={0.10} />
+            <Stop offset="100%" stopColor="#9CA3AF" stopOpacity={0} />
           </LinearGradient>
         </Defs>
         {/* baseline */}
         <Line x1={pad.l} y1={baseY} x2={pad.l + cW} y2={baseY} stroke="#E5E7EB" strokeWidth={1} />
         {/* faint guide area under the curve */}
         <Path d={`${dPath} L ${pad.l + cW},${baseY} L ${pad.l},${baseY} Z`} fill="url(#emptyGrad)" />
-        {/* the animated ghost line */}
+        {/* the animated ghost line — grey so it reads as a placeholder, not as real yields */}
         <AnimatedPath
           d={dPath}
-          stroke="#059669"
+          stroke="#D1D5DB"
           strokeWidth={2}
           fill="none"
           strokeLinecap="round"
@@ -130,11 +131,11 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
           strokeDashoffset={dashOffset as any}
         />
         {/* end dot pinned at zero */}
-        <Circle cx={pad.l + cW} cy={baseY} r={3} fill="#059669" opacity={0.5} />
+        <Circle cx={pad.l + cW} cy={baseY} r={3} fill="#9CA3AF" opacity={0.5} />
       </Svg>
 
       <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4, textAlign: 'center' }}>
-        Wala pang naitalang ani — magrekord ng iyong unang ani.
+        No harvest recorded yet. Record your first harvest to see your yield history.
       </Text>
       <TouchableOpacity
         onPress={onRecord}
@@ -271,12 +272,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 logDate:       l.log_date,
                 growthStage:   Object.keys(STAGE_NO).find(k => STAGE_NO[k] === no) ?? '',
                 observedIssue: ISSUE_FROM_API[l.issue_type] ?? 'None',
+                severity:      String(l.severity ?? '').replace(/^./, (ch: string) => ch.toUpperCase()),
                 actionTaken:   l.action_taken,
                 notes:         l.observation,
               };
             });
             // Merge backend logs with existing local logs (dedupe by id), persist. The local copy
-            // wins for fields the server does not store (severity, Drought vs Flood).
+            // wins so Drought vs Flood (both "weather" on the server) is kept on this phone.
             const existing = useAppStore.getState().progressLogs;
             const merged = [
               ...normalized.map((n: any) => ({ ...n, ...existing.find((e: any) => e.id === n.id) })),
@@ -404,7 +406,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const harvestLabel    = harvestDate ? `${MONTHS_SHORT[harvestDate.getMonth()]} ${harvestDate.getDate()}` : 'Oct 9';
   const activeStage     = (() => {
     const i = Math.min(CROP_STAGES.length - 1, Math.floor((cyclePct / 100) * CROP_STAGES.length));
-    return CROP_STAGES[i]?.stage ?? 'Mag-uhay';
+    return CROP_STAGES[i]?.stage ?? 'Panicle Initiation';
   })();
 
   // Health score from recent issue-tagged logs — severity-weighted
@@ -493,9 +495,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         for (const c of cycles) {
           try {
             const y = await apiProgress.getYield(c.id);
-            const tons = y.data?.total_yield_tons ?? y.data?.yield_tons;
-            if (tons != null) {
-              out.push({ season: `${c.season ?? ''} ${c.year ?? ''}`.trim(), yieldTons: +tons });
+            // The yield record carries kilograms (same field the Reports screen reads)
+            const kg = y.data?.net_yield_kg;
+            if (kg != null) {
+              out.push({ season: seasonLabel(c), yieldTons: +(kg / 1000).toFixed(1) });
             }
           } catch {}
         }
@@ -506,11 +509,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   }, [selectedFarmId]);
 
   const CAT_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    planting:        { label: 'Pagtatanim', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
-    fertilizer:      { label: 'Pataba',     color: '#D97706', bg: '#FFF7ED', border: '#FDE68A' },
-    pest_prevention: { label: 'Pag-aalaga', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
-    irrigation:      { label: 'Tubig',      color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-    harvesting:      { label: 'Pag-aani',   color: '#B45309', bg: '#FFFBEB', border: '#FCD34D' },
+    planting:        { label: 'Planting',   color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
+    fertilizer:      { label: 'Fertilizer', color: '#D97706', bg: '#FFF7ED', border: '#FDE68A' },
+    pest_prevention: { label: 'Pest Care',  color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
+    irrigation:      { label: 'Irrigation', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+    harvesting:      { label: 'Harvesting', color: '#B45309', bg: '#FFFBEB', border: '#FCD34D' },
   };
 
   const handleSaveLog = async () => {
@@ -532,6 +535,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         log_date:     logDate,
         growth_stage: growthStages.find((g: any) => g.stage_no === STAGE_NO[logStage])?.id ?? null,
         issue_type:   issueIsReal ? (ISSUE_TO_API[issueClean] ?? 'other') : '',
+        severity:     issueIsReal ? (logSeverity || 'Low').toLowerCase() : '',
         action_taken: issueIsReal ? logAction.trim() : '',
         observation:  logNotes.trim() || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check',
       });
@@ -562,19 +566,19 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       let label    = '';
       let icon     = 'document-text-outline';
       if (/peste|insekto|pesticide|brown ?spot|blast|sheath|disease|sakit/i.test(text)) {
-        category = 'pest_prevention'; label = 'Pag-aalaga sa Peste'; icon = 'shield-checkmark-outline';
+        category = 'pest_prevention'; label = 'Pest Prevention'; icon = 'shield-checkmark-outline';
       } else if (/dilaw|yellow|nutrient|nitrogen|potassium|pataba|fertilizer/i.test(text)) {
-        category = 'fertilizer';      label = 'Pataba';              icon = 'flask-outline';
+        category = 'fertilizer';      label = 'Fertilizer';          icon = 'flask-outline';
       } else if (/water|flood|baha|tubig|drain|patubig|tagtuyot|\btuyot\b|drought/i.test(text)) {
-        category = 'irrigation';      label = 'Patubig';             icon = 'water-outline';
+        category = 'irrigation';      label = 'Irrigation';          icon = 'water-outline';
       } else if (/harvest|anihan|panicle|grain|\bani\b/i.test(text)) {
-        category = 'harvesting';      label = 'Pag-aani';            icon = 'basket-outline';
+        category = 'harvesting';      label = 'Harvesting';          icon = 'basket-outline';
       }
       useAppStore.getState().addNotification({
-        title: label ? `Tingnan ang gabay sa ${label}` : 'Naitala ang inyong log',
+        title: label ? `Check the ${label} guide` : 'Field log saved',
         body:  label
-          ? `Base sa inyong log, tingnan ang gabay sa ${label}.`
-          : 'Naitala ang inyong pagsusuri sa bukid.',
+          ? `Based on your log, check the ${label} guide.`
+          : 'Your field observation was recorded.',
         category, icon,
       });
 
@@ -662,7 +666,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.progressHeader}</Text>
             <Text style={s.headerSub}>
               {currentCycle
-                ? `${String(currentCycle.season ?? '').replace(/^./, (c: string) => c.toUpperCase())} Season ${currentCycle.year ?? ''}`
+                ? seasonLabel(currentCycle).replace(' ', ' Season ')
                 : 'No active cycle'}
             </Text>
           </View>
@@ -778,7 +782,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   {[
                     { val: cycleLoading ? null : (hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : '—'), lbl: tr.cycCurrent,        valColor: '#111827' },
                     { val: cycleLoading ? null : `${cyclePct}%`,                                              lbl: tr.cycDone,           valColor: '#059669' },
-                    { val: cycleLoading ? null : (hasRealCycle ? harvestLabel : '—'),                          lbl: tr.cycExpectedYield,  valColor: '#111827' },
+                    { val: cycleLoading ? null : (hasRealCycle ? harvestLabel : '—'),                          lbl: tr.progressExpected,  valColor: '#111827' },
                   ].map((c, i, arr) => (
                     <React.Fragment key={c.lbl}>
                       <View style={{ flex: 1, alignItems: 'center' }}>
@@ -873,7 +877,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{tr.progressYieldHistory}</Text>
                       <View style={s.predBadge}>
                         <Ionicons name="trending-up" size={11} color="#D97706" />
-                        <Text style={s.predBadgeText}>{expectedYield}t</Text>
+                        <Text style={s.predBadgeText}>{expectedYield}t expected</Text>
                       </View>
                     </View>
 
@@ -924,8 +928,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                     <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
                       {[
-                        { color: '#D97706', label: 'Pinakabago', dot: true },
-                        { color: '#1F6B3F', label: 'Nakaraang Season', dot: true },
+                        { color: '#D97706', label: 'Latest', dot: true },
+                        { color: '#1F6B3F', label: 'Past seasons', dot: true },
                         { color: '#FCD34D', label: `Avg ${avg}t`, dot: false },
                       ].map(l => (
                         <View key={l.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -948,7 +952,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 return (
                   <View style={[s.card, { padding: 0, overflow: 'hidden', marginBottom: 12 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.3 }}>SUSUNOD NA GAWAIN</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.3 }}>NEXT TASKS</Text>
                       <TouchableOpacity onPress={() => setShowAddLog(true)} style={s.todoLogBtn} activeOpacity={0.8}>
                         <Ionicons name="add" size={13} color="#059669" />
                         <Text style={s.todoLogBtnText}>{tr.homeAddLog}</Text>
@@ -1008,7 +1012,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 </View>
                 <Text style={s.logEmptyTitle}>{tr.progressNoLogsTitle}</Text>
                 <Text style={s.logEmptySub}>
-                  Mag-log ng iyong unang obserbasyon{'\n'}sa bukid upang magsimula.
+                  Log your first field observation{'\n'}to get started.
                 </Text>
               </View>
             )}
@@ -1271,9 +1275,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   };
                 }).filter(b => b.total > 0);
 
-                const totalSteps = buckets.reduce((sum, b) => sum + b.total, 0);
-                const totalDone  = buckets.reduce((sum, b) => sum + b.doneCt, 0);
-                const adherence  = totalSteps > 0 ? Math.round((totalDone / totalSteps) * 100) : 0;
+                // Score only the steps that are due by today, so steps months ahead don't
+                // pull the score down (all steps checked so far = 100%)
+                const dueSteps   = steps.filter(s => (s.daysAfterPlanting ?? 0) < CURRENT_DAY);
+                const dueDone    = dueSteps.filter(s => checkedIds.has(String(s.id))).length;
+                const adherence  = dueSteps.length > 0 ? Math.round((dueDone / dueSteps.length) * 100) : 100;
                 const badge =
                   adherence >= 80 ? { label: tr.adhBadgeOnTrack, color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' }
                   : adherence >= 50 ? { label: tr.adhBadgeImprove, color: '#D97706', bg: '#FFF7ED', border: '#FDE68A' }
@@ -1368,7 +1374,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {[
                 { icon: 'home-outline' as const,     label: (selectedFarm as any)?.name ?? '—' },
                 { icon: 'calendar-outline' as const, label: hasRealCycle ? `Day ${CURRENT_DAY}` : 'No active cycle' },
-                { icon: 'sunny-outline' as const,    label: currentCycle ? `${currentCycle.season ?? ''} ${currentCycle.year ?? ''}`.trim() : '—' },
+                { icon: 'sunny-outline' as const,    label: currentCycle ? seasonLabel(currentCycle) : '—' },
               ].map(c => (
                 <View key={c.label} style={s.contextChip}>
                   <Ionicons name={c.icon} size={12} color="#6B7280" />
@@ -1405,7 +1411,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   >
                     <Ionicons name="leaf-outline" size={16} color="#9CA3AF" />
                     <Text style={[s.mInput, { color: logStage ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logStage || 'Pumili ng yugto...'}
+                      {logStage || 'Select a stage...'}
                     </Text>
                     <Ionicons name={openStage ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
                   </TouchableOpacity>
@@ -1438,7 +1444,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   >
                     <Ionicons name="warning-outline" size={16} color="#9CA3AF" />
                     <Text style={[s.mInput, { color: logIssue ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logIssue || 'Pumili ng isyu...'}
+                      {logIssue || 'Select an issue...'}
                     </Text>
                     <Ionicons name={openIssue ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
                   </TouchableOpacity>

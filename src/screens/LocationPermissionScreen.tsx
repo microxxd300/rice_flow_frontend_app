@@ -44,6 +44,14 @@ export const LocationPermissionScreen: React.FC = () => {
         perm = await Location.requestForegroundPermissionsAsync();
       }
       if (perm.status !== 'granted') {
+        // The phone no longer shows the prompt, so "Try again" can only point to Settings
+        if (blocked && !perm.canAskAgain) {
+          Alert.alert(
+            'Location is turned off',
+            'Your phone won\'t ask again. Turn on Location for RiceFlow in Settings.',
+            [{ text: 'Cancel', style: 'cancel' }, { text: 'Open Settings', onPress: () => Linking.openSettings() }]
+          );
+        }
         setBlocked(true);
         return;
       }

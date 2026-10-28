@@ -22,8 +22,9 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
   const farmName     = farmData.farmName     || 'My Farm';
   const barangay     = farmData.barangay     || '—';
   const municipality = farmData.municipality || '—';
-  const rsi          = rec.rsiScore          ?? 83.5;
-  const varName      = variety.name          || 'NSIC Rc160';
+  // Neutral placeholders if the screen is restored without its params — never sample values
+  const rsi          = rec.rsiScore          ?? '—';
+  const varName      = variety.name          || '—';
 
   const setSetupProgress = useAppStore(s => s.setSetupProgress);
   useEffect(() => {
