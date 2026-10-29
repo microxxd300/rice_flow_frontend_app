@@ -205,10 +205,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       await authRegister(data);
-      set({ isLoading: false });
-      // After register, caller navigates to Login — no auto-login here
     } catch (error) {
       set({ isLoading: false });
+      throw error;
+    }
+    // Signed in straight away, so a new farmer goes on to farm setup instead of
+    // typing the same email and password again on the login screen
+    try {
+      await useAuthStore.getState().login(data.email, data.password);
+    } catch (error: any) {
+      error.loginAfterRegister = true;   // the account itself was created
       throw error;
     }
   },

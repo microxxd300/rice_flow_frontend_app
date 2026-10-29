@@ -329,6 +329,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   // the saved checklist when the language matches, and regenerates when it
   // doesn't — so this costs a Gemini call only on an actual language change.
   const fetchedRecIdRef = useRef<string | null>(null);
+  const hasGuide = !!latestGuide;
   const [genError,  setGenError]  = useState(false);
   const [retryTick, setRetryTick] = useState(0);
   const [translating, setTranslating] = useState(false);
@@ -338,8 +339,9 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
       return;
     }
     const fetchKey = `${recId}:${language}`;
-    if (fetchedRecIdRef.current === fetchKey) {
-      // Already generated for this recommendation + language — don't hammer it
+    if (fetchedRecIdRef.current === fetchKey && hasGuide) {
+      // Already generated for this recommendation + language — don't hammer it.
+      // Without a guide (cache cleared) it is requested again; the server returns the saved one.
       return;
     }
     // Anything after the first fetch of this mount is a refresh (language
@@ -383,7 +385,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
         setGenError(true);
       })
       .finally(() => setTranslating(false));
-  }, [recId, retryTick, language]);
+  }, [recId, retryTick, language, hasGuide]);
 
   // ── No real guide yet: loading / generating / empty — NEVER mock steps ──────
   // A farm that was never scanned has no recommendation, so no guide exists.
