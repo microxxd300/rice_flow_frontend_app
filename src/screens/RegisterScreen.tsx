@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, TextInput as RNTextInput, TouchableOpacity, Modal, Pressable, FlatList,
+  Platform, ScrollView, TextInput as RNTextInput, TouchableOpacity, Modal, Pressable, FlatList, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -97,8 +97,14 @@ export const RegisterScreen: React.FC = () => {
         municipality: municipality.trim(),
         province:     province.trim(),
       });
-      navigation.navigateDeprecated('Login' as never);
+      // register() also signs in; the navigator then opens farm setup
     } catch (err: any) {
+      if (err?.loginAfterRegister) {
+        // Account exists, but signing in failed (e.g. the connection dropped): log in by hand
+        Alert.alert('Account created', 'Please log in with your new email and password.');
+        navigation.navigateDeprecated('Login' as never);
+        return;
+      }
       const data   = err?.response?.data;
       const status = err?.response?.status;
       const first  = (v: any) => (Array.isArray(v) ? String(v[0]) : String(v));

@@ -145,26 +145,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const [dataBusy,   setDataBusy]   = useState(false);
   const [dataStatus, setDataStatus] = useState<string | null>(null);
 
+  // The selected farm's farms list, season logs and latest recommendation from the server
+  const reloadFromServer = async () => {
+    const st = useAppStore.getState();
+    const farmsRes = await apiFarms.list();
+    st.setFarms(farmsRes.data);
+    const farmId = st.selectedFarmId;
+    if (!farmId) return;
+    // Same loading as the Progress screen: the season's logs in the app's shape
+    try {
+      const { logs } = await fetchActiveCycleLogs(farmId);
+      st.setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs));
+    } catch {}
+    try {
+      const recs = (await apiRecommendations.history(farmId)).data ?? [];
+      if (recs.length) st.setLatestRecommendation(recs.reduce((x, y) => ((y.id ?? 0) > (x.id ?? 0) ? y : x)));
+    } catch {}
+  };
+
   const refreshFromServer = async () => {
     if (dataBusy) return;
     setDataBusy(true);
     setDataStatus(tr.dataRefreshing);
     try {
-      const st = useAppStore.getState();
-      const farmsRes = await apiFarms.list();
-      st.setFarms(farmsRes.data);
-      const farmId = st.selectedFarmId;
-      if (farmId) {
-        // Same loading as the Progress screen: the selected farm's season logs in the app's shape
-        try {
-          const { logs } = await fetchActiveCycleLogs(farmId);
-          st.setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs));
-        } catch {}
-        try {
-          const recs = (await apiRecommendations.history(farmId)).data ?? [];
-          if (recs.length) st.setLatestRecommendation(recs.reduce((x, y) => ((y.id ?? 0) > (x.id ?? 0) ? y : x)));
-        } catch {}
-      }
+      await reloadFromServer();
       setDataStatus(tr.dataRefreshed);
     } catch {
       setDataStatus(tr.dataRefreshFailed);
@@ -192,6 +196,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       st.setProgressLogs([]);
       st.hydrateGuideSteps([]);
       st.hydrateNotifications([]);
+      // Fill the screens again from the server, which still has everything; offline
+      // they stay empty until the next refresh
+      await reloadFromServer().catch(() => {});
       setDataStatus(tr.dataCleared);
     } finally {
       setDataBusy(false);

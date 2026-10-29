@@ -138,15 +138,6 @@ export const LoginScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Demo helper — small text-only link */}
-          <TouchableOpacity
-            style={s.demoBtn}
-            onPress={() => { setUsername('demo'); setPassword('demo1234'); }}
-            activeOpacity={0.7}
-          >
-            <Text style={s.demoBtnText}>Use demo account</Text>
-          </TouchableOpacity>
-
         </ScrollView>
 
       </KeyboardAvoidingView>
@@ -242,8 +233,6 @@ const s = StyleSheet.create({
   registerText: { fontSize: 13, color: '#6B7280' },
   registerLink: { fontSize: 13, fontWeight: '700', color: '#059669' },
 
-  demoBtn:     { alignSelf: 'center', marginTop: 18, paddingVertical: 6 },
-  demoBtnText: { fontSize: 12, color: '#9CA3AF', textDecorationLine: 'underline' },
 
   errorBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8,

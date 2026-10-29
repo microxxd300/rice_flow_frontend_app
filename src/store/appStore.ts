@@ -27,6 +27,7 @@ interface AppState {
   latestGuide: any | null;    // Gemini-generated planting guide (app-shaped steps)
   notifications: AppNotification[];
   pendingGuideCategory: string | null;   // category for the Planting Guide screen to open
+  entryTab: string | null;   // tab to open when setup finishes (kept here: the navigator remounts)
   progressLogs: any[];
   activeCycle: any | null;
   completedGuideSteps: string[];   // step IDs marked done by farmer in PlantingGuide
@@ -50,6 +51,7 @@ interface AppState {
   markAllNotificationsRead: () => void;
   hydrateNotifications:     (list: AppNotification[]) => void;
   setPendingGuideCategory:  (cat: string | null) => void;
+  setEntryTab:              (tab: string | null) => void;
   setProgressLogs:          (logs: any[]) => void;
   addProgressLog:           (log: any) => void;
   hydrateProgressLogs:      (logs: any[]) => void;
@@ -74,6 +76,7 @@ export const useAppStore = create<AppState>((set) => ({
   latestGuide:          null,
   notifications:        [],
   pendingGuideCategory: null,
+  entryTab:             null,
   progressLogs:         [],
   activeCycle:          null,
   completedGuideSteps:  [],
@@ -213,6 +216,7 @@ export const useAppStore = create<AppState>((set) => ({
   hydrateNotifications: (list) => set({ notifications: list.slice(0, 3) }),
 
   setPendingGuideCategory: (cat) => set({ pendingGuideCategory: cat }),
+  setEntryTab: (tab) => set({ entryTab: tab }),
 
   setProgressLogs: (logs) => {
     // Only logs in the app's shape; raw server rows rendered as blank rows with duplicate keys
@@ -258,7 +262,7 @@ export const useAppStore = create<AppState>((set) => ({
     user: null, farms: [], farmsLoaded: false, selectedFarmId: null, setupComplete: false,
     setupStep: null, setupData: {},
     latestRecommendation: null, latestGuide: null,
-    notifications: [], pendingGuideCategory: null,
+    notifications: [], pendingGuideCategory: null, entryTab: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
     notificationsEnabled: true, weatherAlertsEnabled: true,
   }),

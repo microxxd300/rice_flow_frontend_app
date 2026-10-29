@@ -35,7 +35,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Kailangan ng RiceFlow ang inyong lokasyon para matukoy ang inyong bukid sa mapa."
+          "locationWhenInUsePermission": "RiceFlow uses your location to put your farm on the map and recommend rice varieties for it."
         }
       ],
       "expo-splash-screen",

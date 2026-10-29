@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { AppNavigator } from './AppNavigator';
 import { SetupNavigator } from './SetupNavigator';
@@ -11,7 +11,10 @@ export const RootNavigator: React.FC = () => {
   const farmsLoaded   = useAppStore(state => state.farmsLoaded);
   const setupComplete = useAppStore(state => state.setupComplete);
   const setSetupComplete = useAppStore(state => state.setSetupComplete);
-  const [initialTab, setInitialTab] = useState<string | undefined>(undefined);
+  // In the store, not local state: finishing setup re-keys the NavigationContainer
+  // (providers.tsx), which remounts this component and would drop local state
+  const initialTab = useAppStore(state => state.entryTab) ?? undefined;
+  const setEntryTab = useAppStore(state => state.setEntryTab);
 
   // Stable across renders. Passed down into SetupNavigator, where a changing
   // identity would remount the screen the user is currently looking at.
@@ -20,9 +23,9 @@ export const RootNavigator: React.FC = () => {
   }, [setSetupComplete]);
 
   const handleGoToGuide = useCallback(() => {
-    setInitialTab('PlantingTab');
+    setEntryTab('PlantingTab');
     setSetupComplete(true);
-  }, [setSetupComplete]);
+  }, [setEntryTab, setSetupComplete]);
 
   if (!isAuthenticated) {
     return <AuthNavigator />;
