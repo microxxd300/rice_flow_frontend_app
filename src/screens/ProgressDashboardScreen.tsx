@@ -21,6 +21,7 @@ import { useAppStore } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
 import { seasonLabel } from '@/utils/formatting';
+import { ISSUE_TO_API, STAGE_NO, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -45,21 +46,7 @@ const GROWTH_STAGES = [
   'Panicle Initiation', 'Heading', 'Grain Filling',
 ];
 
-// The backend keeps its own stage list (GrowthStage.stage_no) and issue choices;
-// these map the app's labels onto them so a saved log is accepted by the server.
-const STAGE_NO: Record<string, number> = {
-  'Land Prep & Planting': 1, 'Early Growth': 2, 'Tillering': 3, 'Stem Elongation': 4,
-  'Panicle Initiation': 5, 'Heading': 6, 'Grain Filling': 7,
-};
-
 const ISSUE_OPTIONS = ['None', 'Insect', 'Disease', 'Drought', 'Flood', 'Other'];
-
-const ISSUE_TO_API: Record<string, string> = {
-  Insect: 'pest', Disease: 'disease', Drought: 'weather', Flood: 'weather', Other: 'other',
-};
-const ISSUE_FROM_API: Record<string, string> = {
-  pest: 'Insect', disease: 'Disease', weather: 'Weather', nutrient: 'Nutrient', other: 'Other',
-};
 
 
 // ── Animated empty-state for Kasaysayan ng Ani ──
@@ -248,43 +235,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   useEffect(() => {
     const load = async () => {
       try {
-        const farmId = selectedFarmId;
-        const [cyclesRes, stagesRes] = await Promise.all([
-          apiProgress.listCycles(farmId),
-          apiProgress.growthStages().catch(() => ({ data: [] as any[] })),
-        ]);
-        setGrowthStages(stagesRes.data);
-        const cycles = cyclesRes.data;
-        if (cycles.length > 0) {
-          const active = cycles.find((c: any) => c.status === 'active') ?? cycles[0];
-          setCurrentCycle(active);
-          useAppStore.getState().setActiveCycle(active);
-
-          const logsRes = await apiProgress.listLogs(active.id);
-          if (logsRes.data.length > 0) {
-            // Server log shape → the app's log shape (stage id and issue choice back to labels)
-            const stageNoById = new Map(stagesRes.data.map((g: any) => [g.id, g.stage_no]));
-            const normalized = logsRes.data.map((l: any) => {
-              const no = stageNoById.get(l.growth_stage);
-              return {
-                id:            String(l.id),
-                cycleId:       String(l.farm_cycle),
-                logDate:       l.log_date,
-                growthStage:   Object.keys(STAGE_NO).find(k => STAGE_NO[k] === no) ?? '',
-                observedIssue: ISSUE_FROM_API[l.issue_type] ?? 'None',
-                severity:      String(l.severity ?? '').replace(/^./, (ch: string) => ch.toUpperCase()),
-                actionTaken:   l.action_taken,
-                notes:         l.observation,
-              };
-            });
-            // Merge backend logs with existing local logs (dedupe by id), persist. The local copy
-            // wins so Drought vs Flood (both "weather" on the server) is kept on this phone.
-            const existing = useAppStore.getState().progressLogs;
-            const merged = [
-              ...normalized.map((n: any) => ({ ...n, ...existing.find((e: any) => e.id === n.id) })),
-              ...existing.filter((e: any) => !normalized.some((n: any) => n.id === e.id)),
-            ];
-            useAppStore.getState().setProgressLogs(merged);
+        const { cycle, stages, logs } = await fetchActiveCycleLogs(selectedFarmId);
+        setGrowthStages(stages);
+        if (cycle) {
+          setCurrentCycle(cycle);
+          useAppStore.getState().setActiveCycle(cycle);
+          if (logs.length > 0) {
+            useAppStore.getState().setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs));
           }
         }
       } catch {}

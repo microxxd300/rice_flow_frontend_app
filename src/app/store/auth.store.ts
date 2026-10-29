@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
-import { authLogin, authRegister, apiFarms } from '@/services/apiService';
+import { authLogin, authRegister, authProfile, apiFarms } from '@/services/apiService';
 import { apiClient } from '@/services/api';
 import { tokenStorage } from '@/services/tokenStorage';
 import { useAppStore } from '@/store/appStore';
@@ -252,6 +252,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
         // Set authenticated immediately so app doesn't block on farms fetch
         set({ user: cleanUser, isAuthenticated: true, isLoading: false });
+        // Only the name and email are stored on the phone; the rest of the profile
+        // (barangay, municipality, province) comes from the server
+        authProfile().then(res => useAppStore.getState().setUser(res.data)).catch(() => {});
         // Load farms in background, decide setup state, then mark loaded —
         // RootNavigator waits for farmsLoaded, so the setup flag is ready by then
         apiFarms.list()

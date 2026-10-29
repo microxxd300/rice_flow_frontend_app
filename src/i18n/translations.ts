@@ -68,20 +68,20 @@ const t = {
     profileLogout:   'Mag-logout',
     profileLargeText:'Madaling Basahin',
     profileLargeTextDesc: 'Pinapalaki ang lahat ng teksto para mas madaling basahin',
-    profilePushNotif:'Mga Push Notification',
-    profilePushNotifDesc: 'Tumanggap ng mga alerto at paalala mula sa app',
-    profileWeather:  'Babala ng Panahon',
-    profileWeatherDesc: 'Makatanggap ng babala tungkol sa ulan at baha',
+    profilePushNotif:'Mga Abiso sa App',
+    profilePushNotifDesc: 'Ipakita ang mga alerto at paalala sa notification bell',
+    profileWeather:  'Paalala sa Tubig',
+    profileWeatherDesc: 'Ipakita ang paalala tungkol sa tubig, pagpapatuyo at baha',
     profileLanguage: 'Wika',
     profilePrivacy:  'Pribasidad',
     profileData:     'Data',
     profileHelp:     'Tulong at Suporta',
     profileUserGuide:'Gabay sa Paggamit',
-    profileAbout:    'Tungkol sa Rice-flow',
+    profileAbout:    'Tungkol sa RiceFlow',
     profileTerms:    'Mga Tuntunin at Kundisyon',
 
     /* ── Privacy ─────────────────────────────────────────────────────────── */
-    privIntro: 'Simple lang ang Rice-flow: ang kinokolekta lang namin ay ang kailangan para makapagrekomenda ng klase ng palay para sa inyong bukid.',
+    privIntro: 'Simple lang ang RiceFlow: ang kinokolekta lang namin ay ang kailangan para makapagrekomenda ng klase ng palay para sa inyong bukid.',
     privH1: 'Ano ang kinokolekta namin',
     privB1: 'Ang lokasyong itinuturo ninyo sa bawat bukid, ang detalye ng bukid (pangalan, laki, lupa at pinagkukunan ng tubig), ang mga tala at ani na inilalagay ninyo, at ang detalye ng account (pangalan, email, barangay).',
     privH2: 'Paano ito ginagamit',
@@ -89,9 +89,9 @@ const t = {
     privH3: 'Paggamit ng lokasyon',
     privB3: 'Binabasa lang ang GPS kapag nagtuturo kayo ng bukid o pinindot ang locate button. Hindi sinusubaybayan ng app ang lokasyon ninyo sa likod-likod.',
     privH4: 'Pagbabahagi',
-    privB4: 'Hindi ibinebenta ang datos ninyo at hindi ibinibigay sa mga advertiser. Ang lagay ng panahon at pangalan ng lugar ay kinukuha sa pampublikong serbisyo (Open-Meteo, OpenStreetMap) gamit ang koordinado lamang — hindi ang pangalan o account ninyo.',
+    privB4: 'Hindi ibinebenta ang datos ninyo at hindi ibinibigay sa mga advertiser. Para gumana, may ipinapadala ang app sa ibang serbisyo: ang koordinado ng bukid sa Open-Meteo (panahon), ISRIC SoilGrids (lupa) at OpenStreetMap (pangalan ng lugar), at ang kalagayan ng bukid, klase ng palay at tala sa bukid sa Google Gemini, na gumagawa ng inyong gabay sa pagtatanim. Hindi kailanman ipinapadala sa kanila ang inyong pangalan at email.',
     privH5: 'Kontrol ninyo',
-    privB5: 'Puwede ninyong baguhin o alisin ang bukid anumang oras. Ang pag-log out ay nagbubura ng kopyang nakaimbak sa teleponong ito.',
+    privB5: 'Puwede ninyong baguhin ang inyong profile sa app. Para burahin ang bukid o ang account, makipag-ugnayan sa RiceFlow team. Ang pag-log out ay nagbubura ng kopyang nakaimbak sa teleponong ito.',
 
     /* ── Data management ─────────────────────────────────────────────────── */
     dataIntro: 'Ang inyong mga bukid, scan, rekomendasyon, gabay at tala ay nakaimbak sa account ninyo sa server. May kopya rin sa telepono para gumana kahit mahina ang signal.',
@@ -119,9 +119,9 @@ const t = {
     helpQ4: 'Bakit nagbago ang score ko?',
     helpA4: 'Kinukuwenta ulit ang RSI tuwing may bagong environmental scan. Ang bagong datos sa ulan o panganib sa baha ay puwedeng magpataas o magpababa nito.',
     helpQ5: 'Nakalimutan ko ang password ko.',
-    helpA5: 'Mag-message sa address sa ibaba at tutulungan namin kayong i-reset ito.',
+    helpA5: 'Wala pang pag-reset ng password sa app. Hilingin sa RiceFlow team na i-reset ito para sa inyo.',
     helpContact: 'Kontak',
-    helpContactBody: 'Mag-email sa support@georice.app at ilarawan ang nangyari. Malaking tulong ang screenshot.',
+    helpContactBody: 'Para sa tanong tungkol sa pananim, magtanong sa inyong agricultural technician. Para sa problema sa app, sabihin sa RiceFlow team ang nangyari. Malaking tulong ang screenshot.',
 
     /* ── User guide ──────────────────────────────────────────────────────── */
     ugIntro: 'Limang hakbang, mula sa bakanteng bukid hanggang sa naitalang ani.',
@@ -138,9 +138,9 @@ const t = {
 
     /* ── About ───────────────────────────────────────────────────────────── */
     aboutTagline: 'Gabay sa klase ng palay gamit ang GIS para sa bukid sa Pilipinas.',
-    aboutWhat: 'Itinutugma ng Rice-flow ang klase ng palay sa mismong bukid ninyo. Pinagsasama nito ang lokasyong itinuro ninyo, ang environmental scan ng lugar na iyon, at isang modelo ng suitability para i-ranggo ang mga klase — tapos ginagawang gabay sa pagtatanim ang pinakabagay.',
+    aboutWhat: 'Itinutugma ng RiceFlow ang klase ng palay sa mismong bukid ninyo. Pinagsasama nito ang lokasyong itinuro ninyo, ang environmental scan ng lugar na iyon, at isang modelo ng suitability para i-ranggo ang mga klase — tapos ginagawang gabay sa pagtatanim ang pinakabagay.',
     aboutSources: 'Saan nanggagaling ang datos',
-    aboutSourcesBody: 'Panahon at ulan: Open-Meteo. Pangalan ng lugar at koordinado: OpenStreetMap Nominatim. Katangian ng klase ng palay: nailathalang datos ng PhilRice. Detalye ng bukid at tala sa bukid: kayo ang naglalagay.',
+    aboutSourcesBody: 'Panahon at ulan: Open-Meteo. Lupa: ISRIC SoilGrids. Pangalan ng lugar at hangganan ng Panabo City: © OpenStreetMap contributors (ODbL). Klase ng palay: nailathalang datos ng PhilRice. Modelo ng ani: ulat ng ani ng Davao del Norte Provincial Agriculture. Gabay sa pagtatanim: isinulat ng Google Gemini mula sa datos ng bukid ninyo. Detalye ng bukid at tala sa bukid: kayo ang naglalagay.',
     aboutTeam: 'Proyekto',
     aboutTeamBody: 'Ginawa bilang capstone project para sa mga magsasaka ng palay sa Panabo City, Davao del Norte.',
     aboutDisclaimer: 'Gabay lamang ang mga rekomendasyon. Kumonsulta pa rin sa inyong agricultural technician bago ang malalaking desisyon sa pagtatanim.',
@@ -148,7 +148,7 @@ const t = {
     /* ── Terms ───────────────────────────────────────────────────────────── */
     termsIntro: 'Malinaw na salita, walang nakatagong kondisyon.',
     termsH1: 'Gabay lamang',
-    termsB1: 'Nagbibigay ang Rice-flow ng gabay batay sa detalyeng inilagay ninyo at pampublikong datos sa kapaligiran. Hindi ito garantiya ng ani. Nakadepende ang aktuwal na resulta sa panahon, peste, tubig, kalidad ng gamit at pangangalaga sa pananim.',
+    termsB1: 'Nagbibigay ang RiceFlow ng gabay batay sa detalyeng inilagay ninyo at pampublikong datos sa kapaligiran. Hindi ito garantiya ng ani. Nakadepende ang aktuwal na resulta sa panahon, peste, tubig, kalidad ng gamit at pangangalaga sa pananim.',
     termsH2: 'Kumumpirma bago ang malaking desisyon',
     termsB2: 'Sa desisyong may tunay na gastos — kung anong binhi ang bibilhin, kailan tataniman ang buong bukid — kumonsulta muna sa inyong agricultural technician o sa municipal agriculture office.',
     termsH3: 'Katumpakan',
@@ -224,6 +224,10 @@ const t = {
     profileEditBarangay:    'Barangay',
     profileEditMunicipality:'Lungsod / Munisipyo',
     profileEditProvince:    'Lalawigan',
+    profileNameRequired: 'Ilagay ang inyong pangalan.',
+    profileSaveFailedTitle: 'Hindi na-save ang profile',
+    profileSaveFailed: 'Suriin ang internet at subukan muli.',
+    profileEmailHint: 'Ang email ang ginagamit ninyo sa pag-login. Para palitan ito, makipag-ugnayan sa RiceFlow team.',
     profileEditTitle:  'I-edit ang Profile',
 
     // Progress
@@ -659,20 +663,20 @@ const t = {
     profileLogout:   'Log Out',
     profileLargeText:'Easy Reading',
     profileLargeTextDesc: 'Enlarges all text for easier reading',
-    profilePushNotif:'Push Notifications',
-    profilePushNotifDesc: 'Receive alerts and reminders from the app',
-    profileWeather:  'Weather Alerts',
-    profileWeatherDesc: 'Receive alerts about rain and floods',
+    profilePushNotif:'App Notifications',
+    profilePushNotifDesc: 'Show alerts and reminders in the notification bell',
+    profileWeather:  'Water Reminders',
+    profileWeatherDesc: 'Show reminders about water, drainage and floods',
     profileLanguage: 'Language',
     profilePrivacy:  'Privacy',
     profileData:     'Data',
     profileHelp:     'Help & Support',
     profileUserGuide:'User Guide',
-    profileAbout:    'About Rice-flow',
+    profileAbout:    'About RiceFlow',
     profileTerms:    'Terms and Conditions',
 
     /* ── Privacy ─────────────────────────────────────────────────────────── */
-    privIntro: 'Rice-flow keeps this simple: we collect only what is needed to recommend a rice variety for your farm.',
+    privIntro: 'RiceFlow keeps this simple: we collect only what is needed to recommend a rice variety for your farm.',
     privH1: 'What we collect',
     privB1: 'The location you pin for each farm, your farm details (name, size, soil and water source), the field logs and harvest records you enter, and your account details (name, email, barangay).',
     privH2: 'How it is used',
@@ -680,9 +684,9 @@ const t = {
     privH3: 'Location access',
     privB3: 'Your GPS is read only when you pin a farm or tap the locate button. The app does not track your location in the background.',
     privH4: 'Sharing',
-    privB4: 'Your data is not sold and not shared with advertisers. Weather forecasts and place names are looked up from public services (Open-Meteo, OpenStreetMap) using coordinates only — never your name or account.',
+    privB4: 'Your data is not sold and not shared with advertisers. To work, the app sends some of it to outside services: farm coordinates to Open-Meteo (weather), ISRIC SoilGrids (soil) and OpenStreetMap (place names), and your farm conditions, variety and field logs to Google Gemini, which writes your planting guide. Your name and email are never sent to them.',
     privH5: 'Your control',
-    privB5: 'You can edit or remove a farm at any time. Logging out clears the cached copy on this device.',
+    privB5: 'You can update your profile in the app. To delete a farm or your account, ask the RiceFlow team. Logging out clears the cached copy on this device.',
 
     /* ── Data management ─────────────────────────────────────────────────── */
     dataIntro: 'Your farms, scans, recommendations, guides and logs are saved to your account on the server. The app also keeps a local copy so it stays usable when the signal is weak.',
@@ -710,9 +714,9 @@ const t = {
     helpQ4: 'Why did my scores change?',
     helpA4: 'Your RSI is recalculated whenever you run a new environmental scan. Updated rainfall or flood-risk readings can move the score up or down.',
     helpQ5: 'I forgot my password.',
-    helpA5: 'Contact us using the address below and we will help you reset it.',
+    helpA5: 'Password reset is not in the app yet. Ask the RiceFlow team to reset it for you.',
     helpContact: 'Contact',
-    helpContactBody: 'Email support@georice.app and describe what happened. Screenshots help.',
+    helpContactBody: 'For questions about your crop, ask your local agricultural technician. For problems with the app, tell the RiceFlow team what happened. Screenshots help.',
 
     /* ── User guide ──────────────────────────────────────────────────────── */
     ugIntro: 'Five steps, from empty field to recorded harvest.',
@@ -729,9 +733,9 @@ const t = {
 
     /* ── About ───────────────────────────────────────────────────────────── */
     aboutTagline: 'GIS-based rice variety guidance for Philippine farms.',
-    aboutWhat: 'Rice-flow matches a rice variety to your specific field. It combines the location you pin, an environmental scan of that spot, and a suitability model to rank varieties, then turns the top match into a planting guide you can follow day by day.',
+    aboutWhat: 'RiceFlow matches a rice variety to your specific field. It combines the location you pin, an environmental scan of that spot, and a suitability model to rank varieties, then turns the top match into a planting guide you can follow day by day.',
     aboutSources: 'Where the data comes from',
-    aboutSourcesBody: 'Weather and rainfall: Open-Meteo. Place names and coordinates: OpenStreetMap Nominatim. Rice variety characteristics: PhilRice published variety data. Farm details and field logs: entered by you.',
+    aboutSourcesBody: 'Weather and rainfall: Open-Meteo. Soil: ISRIC SoilGrids. Place names and the Panabo City boundary: © OpenStreetMap contributors (ODbL). Rice varieties: PhilRice published variety data. Yield model: Davao del Norte Provincial Agriculture harvest reports. Planting guides: written by Google Gemini from your farm data. Farm details and field logs: entered by you.',
     aboutTeam: 'Project',
     aboutTeamBody: 'Built as a capstone project for rice farmers in Panabo City, Davao del Norte.',
     aboutDisclaimer: 'Recommendations are advisory. Always confirm major planting decisions with your local agricultural technician.',
@@ -739,7 +743,7 @@ const t = {
     /* ── Terms ───────────────────────────────────────────────────────────── */
     termsIntro: 'Plain language, no fine print.',
     termsH1: 'Advisory only',
-    termsB1: 'Rice-flow gives guidance based on the details you enter and public environmental data. It does not guarantee a yield. Actual results depend on weather, pests, water supply, input quality and how the crop is managed.',
+    termsB1: 'RiceFlow gives guidance based on the details you enter and public environmental data. It does not guarantee a yield. Actual results depend on weather, pests, water supply, input quality and how the crop is managed.',
     termsH2: 'Confirm before big decisions',
     termsB2: 'For decisions that carry real cost — which seed to buy, when to plant a whole field — confirm with your local agricultural technician or municipal agriculture office first.',
     termsH3: 'Accuracy',
@@ -810,6 +814,10 @@ const t = {
     profileEditBarangay:    'Barangay',
     profileEditMunicipality:'City / Municipality',
     profileEditProvince:    'Province',
+    profileNameRequired: 'Enter your name.',
+    profileSaveFailedTitle: 'Profile not saved',
+    profileSaveFailed: 'Check your internet connection and try again.',
+    profileEmailHint: 'Your email is your login. To change it, ask the RiceFlow team.',
     profileEditTitle:  'Edit Profile',
 
     progressLogTitle:  'Log Progress',
@@ -1229,20 +1237,20 @@ const t = {
     profileLogout:   'Mag-logout',
     profileLargeText:'Sayon nga Basahon',
     profileLargeTextDesc: 'Gipadako ang tanan nga teksto para sayon basahon',
-    profilePushNotif:'Mga Push Notification',
-    profilePushNotifDesc: 'Makadawat og mga alerto ug pahinumdom gikan sa app',
-    profileWeather:  'Babala sa Panahon',
-    profileWeatherDesc: 'Makadawat og babala bahin sa ulan ug baha',
+    profilePushNotif:'Mga Pahibalo sa App',
+    profilePushNotifDesc: 'Ipakita ang mga alerto ug pahinumdom sa notification bell',
+    profileWeather:  'Pahinumdom sa Tubig',
+    profileWeatherDesc: 'Ipakita ang pahinumdom bahin sa tubig, pagpahubas ug baha',
     profileLanguage: 'Pinulongan',
     profilePrivacy:  'Pribasidad',
     profileData:     'Data',
     profileHelp:     'Tabang ug Suporta',
     profileUserGuide:'Giya sa Paggamit',
-    profileAbout:    'Mahitungod sa Rice-flow',
+    profileAbout:    'Mahitungod sa RiceFlow',
     profileTerms:    'Mga Kondisyon',
 
     /* ── Privacy ─────────────────────────────────────────────────────────── */
-    privIntro: 'Simple ra ang Rice-flow: among gikuha lang ang gikinahanglan aron makarekomenda og klase sa humay para sa inyong uma.',
+    privIntro: 'Simple ra ang RiceFlow: among gikuha lang ang gikinahanglan aron makarekomenda og klase sa humay para sa inyong uma.',
     privH1: 'Unsa among gikuha',
     privB1: 'Ang lokasyon nga inyong gitudlo sa matag uma, ang detalye sa uma (ngalan, gidak-on, yuta ug tinubdan sa tubig), ang mga rekord ug ani nga inyong gisulod, ug ang detalye sa account (ngalan, email, barangay).',
     privH2: 'Giunsa kini paggamit',
@@ -1250,9 +1258,9 @@ const t = {
     privH3: 'Paggamit sa lokasyon',
     privB3: 'Ang GPS gibasa lang kung magtudlo mo og uma o mopislit sa locate button. Wala gisubay sa app ang inyong lokasyon sa likod.',
     privH4: 'Pagpaambit',
-    privB4: 'Wala gibaligya ang inyong datos ug wala gihatag sa mga advertiser. Ang panahon ug ngalan sa lugar gikuha sa publikong serbisyo (Open-Meteo, OpenStreetMap) gamit ang koordinado lang — dili ang inyong ngalan o account.',
+    privB4: 'Wala gibaligya ang inyong datos ug wala gihatag sa mga advertiser. Aron molihok, ang app nagpadala og pipila niini sa ubang serbisyo: ang koordinado sa uma ngadto sa Open-Meteo (panahon), ISRIC SoilGrids (yuta) ug OpenStreetMap (ngalan sa lugar), ug ang kahimtang sa uma, klase sa humay ug rekord sa uma ngadto sa Google Gemini, nga maoy nagsulat sa inyong giya sa pagtanom. Ang inyong ngalan ug email dili gyud ipadala kanila.',
     privH5: 'Inyong kontrol',
-    privB5: 'Mahimo ninyong usbon o tangtangon ang uma bisan kanus-a. Ang pag-log out mopapas sa kopya niining telepono.',
+    privB5: 'Mahimo ninyong usbon ang inyong profile sa app. Aron papason ang uma o ang account, sultihi ang RiceFlow team. Ang pag-log out mopapas sa kopya niining telepono.',
 
     /* ── Data management ─────────────────────────────────────────────────── */
     dataIntro: 'Ang inyong mga uma, scan, rekomendasyon, giya ug rekord gitipigan sa inyong account sa server. Adunay usab kopya sa telepono aron magamit bisan huyang ang signal.',
@@ -1280,9 +1288,9 @@ const t = {
     helpQ4: 'Ngano nausab ang akong score?',
     helpA4: 'Gikwenta pag-usab ang RSI matag adunay bag-ong environmental scan. Ang bag-ong datos sa ulan o peligro sa baha makapataas o makapaubos niini.',
     helpQ5: 'Nakalimtan nako akong password.',
-    helpA5: 'Padalhi kami sa address sa ubos ug tabangan namo mo nga ma-reset kini.',
+    helpA5: 'Wala pay pag-reset sa password sa app. Hangyoa ang RiceFlow team nga i-reset kini para kaninyo.',
     helpContact: 'Kontak',
-    helpContactBody: 'Mag-email sa support@georice.app ug isaysay ang nahitabo. Dakong tabang ang screenshot.',
+    helpContactBody: 'Para sa pangutana bahin sa tanom, pangutan-a ang inyong agricultural technician. Para sa problema sa app, sultihi ang RiceFlow team kung unsa ang nahitabo. Dakong tabang ang screenshot.',
 
     /* ── User guide ──────────────────────────────────────────────────────── */
     ugIntro: 'Lima ka lakang, gikan sa walay sulod nga uma hangtod sa narekord nga ani.',
@@ -1299,9 +1307,9 @@ const t = {
 
     /* ── About ───────────────────────────────────────────────────────────── */
     aboutTagline: 'Giya sa klase sa humay gamit ang GIS para sa uma sa Pilipinas.',
-    aboutWhat: 'Gitugma sa Rice-flow ang klase sa humay sa inyong mismong uma. Gihiusa niini ang lokasyon nga inyong gitudlo, ang environmental scan niadtong lugara, ug usa ka modelo sa suitability aron i-ranggo ang mga klase — dayon gihimo nga giya sa pagtanum ang labing haom.',
+    aboutWhat: 'Gitugma sa RiceFlow ang klase sa humay sa inyong mismong uma. Gihiusa niini ang lokasyon nga inyong gitudlo, ang environmental scan niadtong lugara, ug usa ka modelo sa suitability aron i-ranggo ang mga klase — dayon gihimo nga giya sa pagtanum ang labing haom.',
     aboutSources: 'Asa gikan ang datos',
-    aboutSourcesBody: 'Panahon ug ulan: Open-Meteo. Ngalan sa lugar ug koordinado: OpenStreetMap Nominatim. Kinaiya sa klase sa humay: gipatik nga datos sa PhilRice. Detalye sa uma ug rekord: kamo ang nagsulod.',
+    aboutSourcesBody: 'Panahon ug ulan: Open-Meteo. Yuta: ISRIC SoilGrids. Ngalan sa lugar ug utlanan sa Panabo City: © OpenStreetMap contributors (ODbL). Klase sa humay: gipatik nga datos sa PhilRice. Modelo sa ani: report sa ani sa Davao del Norte Provincial Agriculture. Giya sa pagtanom: gisulat sa Google Gemini gikan sa datos sa inyong uma. Detalye sa uma ug rekord: kamo ang nagsulod.',
     aboutTeam: 'Proyekto',
     aboutTeamBody: 'Gihimo isip capstone project para sa mga mag-uuma og humay sa Panabo City, Davao del Norte.',
     aboutDisclaimer: 'Giya lamang ang mga rekomendasyon. Pangutan-a gihapon ang inyong agricultural technician sa dili pa maghimo og dagkong desisyon sa pagtanum.',
@@ -1309,7 +1317,7 @@ const t = {
     /* ── Terms ───────────────────────────────────────────────────────────── */
     termsIntro: 'Klaro nga pulong, walay tinago nga kondisyon.',
     termsH1: 'Giya lamang',
-    termsB1: 'Naghatag ang Rice-flow og giya base sa detalye nga inyong gisulod ug publikong datos sa palibot. Dili kini garantiya sa ani. Ang tinuod nga resulta nagdepende sa panahon, peste, tubig, kalidad sa gamit ug pag-atiman sa tanum.',
+    termsB1: 'Naghatag ang RiceFlow og giya base sa detalye nga inyong gisulod ug publikong datos sa palibot. Dili kini garantiya sa ani. Ang tinuod nga resulta nagdepende sa panahon, peste, tubig, kalidad sa gamit ug pag-atiman sa tanum.',
     termsH2: 'Kumpirmaha sa dili pa ang dagkong desisyon',
     termsB2: 'Sa desisyon nga adunay tinuod nga gasto — unsang binhi ang paliton, kanus-a tamnan ang tibuok uma — pangutan-a una ang inyong agricultural technician o ang municipal agriculture office.',
     termsH3: 'Katukma',
@@ -1380,6 +1388,10 @@ const t = {
     profileEditBarangay:    'Barangay',
     profileEditMunicipality:'Syudad / Munisipyo',
     profileEditProvince:    'Probinsya',
+    profileNameRequired: 'Isulat ang inyong ngalan.',
+    profileSaveFailedTitle: 'Wala na-save ang profile',
+    profileSaveFailed: 'Susiha ang internet ug sulayi pag-usab.',
+    profileEmailHint: 'Ang email mao ang inyong login. Aron usbon kini, sultihi ang RiceFlow team.',
     profileEditTitle:  'I-edit ang Profile',
 
     progressLogTitle:  'Mag-log og Progreso',

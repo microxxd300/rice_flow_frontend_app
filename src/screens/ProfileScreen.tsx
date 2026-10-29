@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Switch, Modal, TextInput,
-  KeyboardAvoidingView, Platform, Image,
+  KeyboardAvoidingView, Platform, Image, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -16,7 +16,8 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { dedupeName } from '@/utils/formatting';
-import { apiFarms, apiProgress } from '@/services/apiService';
+import { apiFarms, apiRecommendations, authUpdateProfile } from '@/services/apiService';
+import { fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
 
 const LogoImage = require('../assets/icons/logo_for_rice-flow.png');
 
@@ -25,14 +26,6 @@ interface ProfileScreenProps {
 }
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
-
-interface ProfileOverrides {
-  name?: string;
-  email?: string;
-  barangay?: string;
-  municipality?: string;
-  province?: string;
-}
 
 // Menu entries that open a readable content sheet rather than a form.
 const CONTENT_MODALS = ['privacy', 'dataManagement', 'help', 'userGuide', 'about', 'terms'];
@@ -60,34 +53,28 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const { language, setLanguage } = useLanguageStore();
   const tr = useTranslation();
 
-  // Locally-persisted profile overrides (no PATCH endpoint on backend yet — survives restart on device)
-  const [overrides, setOverrides] = useState<ProfileOverrides>({});
-  useEffect(() => {
-    storage.getItem<ProfileOverrides>(STORAGE_KEYS.PROFILE_OVERRIDES).then(v => {
-      if (v) setOverrides(v);
-    });
-  }, []);
+  // Profile edits used to be kept only on this phone; drop any left over so the
+  // server profile is what shows
+  useEffect(() => { storage.removeItem(STORAGE_KEYS.PROFILE_OVERRIDES).catch(() => {}); }, []);
 
-  // Resolved values: overrides > authUser > profileUser > mock.
+  // Resolved values: authUser > profileUser.
   // Run through dedupeName to undo the legacy "Juan Juan" register-flow bug.
   const profileFirst  = (profileUser as any)?.first_name ?? '';
   const profileLast   = (profileUser as any)?.last_name  ?? '';
   const profileFull   = profileLast && profileLast !== profileFirst
     ? `${profileFirst} ${profileLast}`.trim()
     : profileFirst;
-  const resolvedName  = overrides.name
-    ?? dedupeName(authUser?.name)
+  const resolvedName  = dedupeName(authUser?.name)
     ?? profileFull
     ?? '';
   const displayName   = resolvedName && resolvedName.trim() ? resolvedName : 'Farmer';
-  const displayEmail  = overrides.email ?? authUser?.email ?? (profileUser as any)?.email ?? '';
-  const displayBaran  = overrides.barangay     ?? (profileUser as any)?.barangay     ?? '';
-  const displayMunic  = overrides.municipality ?? (profileUser as any)?.municipality ?? '';
-  const displayProv   = overrides.province     ?? (profileUser as any)?.province     ?? '';
+  const displayEmail  = authUser?.email ?? (profileUser as any)?.email ?? '';
+  const displayBaran  = (profileUser as any)?.barangay     ?? '';
+  const displayMunic  = (profileUser as any)?.municipality ?? '';
+  const displayProv   = (profileUser as any)?.province     ?? '';
 
   const [activeModal,      setActiveModal]      = useState<string | null>(null);
   const [editName,         setEditName]         = useState('');
-  const [editEmail,        setEditEmail]        = useState('');
   const [editBarangay,     setEditBarangay]     = useState('');
   const [editMunicipality, setEditMunicipality] = useState('');
   const [editProvince,     setEditProvince]     = useState('');
@@ -108,24 +95,43 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
   const openEdit = () => {
     setEditName(displayName);
-    setEditEmail(displayEmail);
     setEditBarangay(displayBaran);
     setEditMunicipality(displayMunic);
     setEditProvince(displayProv);
     setActiveModal('editProfile');
   };
 
+  const [savingProfile, setSavingProfile] = useState(false);
   const saveEdit = async () => {
-    const next: ProfileOverrides = {
-      name:         editName.trim()         || undefined,
-      email:        editEmail.trim()        || undefined,
-      barangay:     editBarangay.trim()     || undefined,
-      municipality: editMunicipality.trim() || undefined,
-      province:     editProvince.trim()     || undefined,
-    };
-    setOverrides(next);
-    await storage.setItem(STORAGE_KEYS.PROFILE_OVERRIDES, next);
-    setActiveModal(null);
+    if (savingProfile) return;
+    const name = editName.trim();
+    if (!name) {
+      Alert.alert(tr.profileEditName, tr.profileNameRequired);
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      // Saved on the account so it shows on every phone. The whole name goes in
+      // first_name: splitting "Juan Dela Cruz" into first/last would guess wrong.
+      const res = await authUpdateProfile({
+        first_name:   name,
+        last_name:    '',
+        barangay:     editBarangay.trim(),
+        municipality: editMunicipality.trim(),
+        province:     editProvince.trim(),
+      });
+      useAppStore.getState().setUser(res.data);
+      if (authUser) {
+        const nextUser = { ...authUser, name };
+        useAuthStore.getState().setUser(nextUser);
+        await storage.setItem(STORAGE_KEYS.USER, nextUser);
+      }
+      setActiveModal(null);
+    } catch {
+      Alert.alert(tr.profileSaveFailedTitle, tr.profileSaveFailed);
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -144,15 +150,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
     setDataBusy(true);
     setDataStatus(tr.dataRefreshing);
     try {
+      const st = useAppStore.getState();
       const farmsRes = await apiFarms.list();
-      useAppStore.getState().setFarms(farmsRes.data);
-      // Field logs are best-effort: a farm with no cycle yet simply has none.
-      try {
-        const logsRes = await apiProgress.listLogs();
-        if (Array.isArray(logsRes.data)) {
-          useAppStore.getState().setProgressLogs(logsRes.data);
-        }
-      } catch {}
+      st.setFarms(farmsRes.data);
+      const farmId = st.selectedFarmId;
+      if (farmId) {
+        // Same loading as the Progress screen: the selected farm's season logs in the app's shape
+        try {
+          const { logs } = await fetchActiveCycleLogs(farmId);
+          st.setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs));
+        } catch {}
+        try {
+          const recs = (await apiRecommendations.history(farmId)).data ?? [];
+          if (recs.length) st.setLatestRecommendation(recs.reduce((x, y) => ((y.id ?? 0) > (x.id ?? 0) ? y : x)));
+        } catch {}
+      }
       setDataStatus(tr.dataRefreshed);
     } catch {
       setDataStatus(tr.dataRefreshFailed);
@@ -344,8 +356,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
         {/* Version */}
         <View style={s.versionCard}>
-          <Image source={LogoImage} style={{ width: 32, height: 32 }} resizeMode="contain" />
-          <Text style={s.versionName}>Rice-flow · GeoRice Advisor</Text>
+          {/* The wordmark sits in the middle of a wide transparent canvas; trim its empty margins */}
+          <Image source={LogoImage} style={{ width: 192, height: 128, marginVertical: -36 }} resizeMode="contain" />
           <Text style={s.versionNum}>{tr.profileVersion.replace('{v}', '1.0.0')}</Text>
         </View>
 
@@ -374,9 +386,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                     <Ionicons name="close" size={18} color="#6B7280" />
                   </TouchableOpacity>
                 </View>
+                <View style={s.mFieldWrap}>
+                  <Text style={s.mFieldLabel}>{tr.profileEditEmail}</Text>
+                  <View style={[s.mInput, { backgroundColor: '#F3F4F6' }]}>
+                    <Text style={[s.mInputText, { color: '#6B7280' }]}>{displayEmail || '—'}</Text>
+                  </View>
+                  <Text style={s.mFieldHint}>{tr.profileEmailHint}</Text>
+                </View>
                 {([
                   { label: tr.profileEditName,         value: editName,         set: setEditName },
-                  { label: tr.profileEditEmail,        value: editEmail,        set: setEditEmail },
                   { label: tr.profileEditBarangay,     value: editBarangay,     set: setEditBarangay },
                   { label: tr.profileEditMunicipality, value: editMunicipality, set: setEditMunicipality },
                   { label: tr.profileEditProvince,     value: editProvince,     set: setEditProvince },
@@ -398,7 +416,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                   <TouchableOpacity style={s.mCancelBtn} onPress={() => setActiveModal(null)} activeOpacity={0.7}>
                     <Text style={s.mCancelBtnText}>{tr.cancel}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={s.mSaveBtn} onPress={saveEdit} activeOpacity={0.85}>
+                  <TouchableOpacity
+                    style={[s.mSaveBtn, savingProfile && { opacity: 0.6 }]}
+                    onPress={saveEdit}
+                    disabled={savingProfile}
+                    activeOpacity={0.85}
+                  >
                     <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                     <Text style={s.mSaveBtnText}>{tr.save}</Text>
                   </TouchableOpacity>
@@ -547,8 +570,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                   {activeModal === 'about' && (
                     <>
                       <View style={s.aboutHead}>
-                        <Image source={LogoImage} style={{ width: 44, height: 44 }} resizeMode="contain" />
-                        <Text style={[s.aboutName, T && { fontSize: 18 }]}>Rice-flow · GeoRice Advisor</Text>
+                        <Image source={LogoImage} style={{ width: 168, height: 112, marginVertical: -30 }} resizeMode="contain" />
+                        <Text style={[s.aboutName, T && { fontSize: 18 }]}>RiceFlow</Text>
                         <Text style={[s.aboutVer, T && { fontSize: 14 }]}>
                           {tr.profileVersion.replace('{v}', '1.0.0')}
                         </Text>
@@ -663,7 +686,6 @@ const s = StyleSheet.create({
   versionCard: {
     alignItems: 'center', paddingVertical: 22, marginTop: 24, gap: 4,
   },
-  versionName: { fontSize: 13, fontWeight: '600', color: '#6B7280', marginTop: 6 },
   versionNum:  { fontSize: 11, color: '#9CA3AF' },
 
   /* Logout — ghost style */
@@ -687,6 +709,7 @@ const s = StyleSheet.create({
 
   mFieldWrap:  { marginBottom: 14 },
   mFieldLabel: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6 },
+  mFieldHint:  { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
   mInput:      { flexDirection: 'row', alignItems: 'center', gap: 10, height: 50, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
   mInputText:  { flex: 1, fontSize: 14, color: '#111827' },
 

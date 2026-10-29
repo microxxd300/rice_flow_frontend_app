@@ -3,6 +3,7 @@ import { Vibration } from 'react-native';
 import type { UserProfile, Farm, Recommendation } from '@/services/apiService';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
+import { isAppLog } from '@/utils/progressLogs';
 
 export interface AppNotification {
   id:        string;
@@ -214,15 +215,17 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingGuideCategory: (cat) => set({ pendingGuideCategory: cat }),
 
   setProgressLogs: (logs) => {
-    set({ progressLogs: logs });
-    storage.setItem(STORAGE_KEYS.PROGRESS_LOGS, logs).catch(() => {});
+    // Only logs in the app's shape; raw server rows rendered as blank rows with duplicate keys
+    const clean = logs.filter(isAppLog);
+    set({ progressLogs: clean });
+    storage.setItem(STORAGE_KEYS.PROGRESS_LOGS, clean).catch(() => {});
   },
   addProgressLog: (log) => {
     const list = [log, ...useAppStore.getState().progressLogs].slice(0, 200);
     set({ progressLogs: list });
     storage.setItem(STORAGE_KEYS.PROGRESS_LOGS, list).catch(() => {});
   },
-  hydrateProgressLogs: (logs) => set({ progressLogs: logs }),
+  hydrateProgressLogs: (logs) => set({ progressLogs: logs.filter(isAppLog) }),
   setActiveCycle:          cycle => set({ activeCycle: cycle }),
 
   toggleGuideStepDone: (stepId) => {
