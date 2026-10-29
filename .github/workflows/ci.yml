@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   mobile:
+    # Keep this name: main's branch protection requires a check called exactly this.
+    # The job also runs lint and tests.
     name: Mobile app (install, type-check)
     runs-on: ubuntu-latest
     steps:
@@ -21,3 +23,8 @@ jobs:
       - run: npm ci
       - name: Type-check
         run: npm run type-check
+      # Fails on errors only; the existing warnings are a backlog
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test -- --ci
