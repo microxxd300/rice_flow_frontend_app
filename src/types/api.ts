@@ -1,6 +1,4 @@
-import { ApiError, ApiResponse } from './common';
-
-export type { ApiError, ApiResponse };
+import type { ApiError } from './common';
 
 // Shape of the errors thrown by services/api.ts (fetch-based client)
 export type ApiErrorType = Error & { response?: { status: number; data: ApiError } };

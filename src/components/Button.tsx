@@ -89,6 +89,8 @@ export const Button = React.forwardRef<React.ComponentRef<typeof View>, ButtonPr
     return (
       <TouchableOpacity
         ref={ref}
+        // Screen readers announce it as a button
+        accessibilityRole="button"
         disabled={disabled || isLoading}
         onPress={onPress}
         activeOpacity={0.8}

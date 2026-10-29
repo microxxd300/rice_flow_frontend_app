@@ -1,28 +1,13 @@
 module.exports = {
   displayName: 'rice-flow',
-  testEnvironment: 'node',
-  preset: 'react-native',
+  // Expo's preset: babel-preset-expo transform, React Native mocks, and the
+  // transformIgnorePatterns for Expo/React Native packages
+  preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
-  testMatch: [
-    '**/__tests__/**/*.[jt]s?(x)',
-    '**/?(*.)+(spec|test).[jt]s?(x)',
-  ],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
+  // Only *.test / *.spec files, so __tests__/setup.ts isn't run as a suite
+  testMatch: ['**/?(*.)+(spec|test).[jt]s?(x)'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@/app': '<rootDir>/src/app',
-    '^@/features': '<rootDir>/src/features',
-    '^@/components': '<rootDir>/src/components',
-    '^@/services': '<rootDir>/src/services',
-    '^@/theme': '<rootDir>/src/theme',
-    '^@/hooks': '<rootDir>/src/hooks',
-    '^@/utils': '<rootDir>/src/utils',
-    '^@/constants': '<rootDir>/src/constants',
-    '^@/types': '<rootDir>/src/types',
-    '^@/config': '<rootDir>/src/config',
-  },
-  transform: {
-    '^.+\\.[jt]sx?$': ['ts-jest'],
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
