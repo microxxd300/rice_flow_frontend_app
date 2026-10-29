@@ -138,6 +138,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           ecosystem:         farm?.ecosystem,
           maturity_days:     recVariety?.maturity_days,
           variety_avg_yield: recVariety?.avg_yield_t_ha,
+          farm_id:           farm?.id,
+          variety_id:        (activeCycle as any)?.variety ?? recVariety?.id,
+          season:            (activeCycle as any)?.season,
         });
         setPredictedYield(predRes.data.predicted_yield_t_ha);
         setModelUsed(predRes.data.model_used);

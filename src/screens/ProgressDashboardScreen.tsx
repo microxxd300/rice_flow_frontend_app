@@ -460,6 +460,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           ecosystem:         farmRow?.ecosystem,
           maturity_days:     variety?.maturity_days,
           variety_avg_yield: variety?.avg_yield_t_ha,
+          farm_id:           farmId,
+          variety_id:        currentCycle?.variety ?? variety?.id,
+          season:            currentCycle?.season,
         });
         const tons = +(res.data.predicted_yield_t_ha * farmArea).toFixed(1);
         setPredictedYield(tons);
@@ -467,7 +470,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         setPredR2(res.data.r2_score);
       } catch {}
     })();
-  }, [selectedFarmId, variety, farmArea]);
+  }, [selectedFarmId, variety, farmArea, currentCycle?.id]);
 
   // Gemini-generated guide steps for this farm (none until a guide exists)
   const guideSteps = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];

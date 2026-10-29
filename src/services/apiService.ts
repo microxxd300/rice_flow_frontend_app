@@ -176,6 +176,9 @@ export const apiWeather = {
   // Live current weather + 3-day forecast for the farm's coords (via Open-Meteo through our backend)
   current: (lat: number, lng: number) =>
     apiClient.get<WeatherResponse>(`environmental/weather/?lat=${lat}&lng=${lng}`),
+  // Average rain per month (mm, Jan..Dec) over the last 3 years at the farm, for the planting calendar
+  monthlyRainfall: (lat: number, lng: number) =>
+    apiClient.get<{ months: number[]; years: string }>(`environmental/monthly-rainfall/?lat=${lat}&lng=${lng}`),
 };
 
 // ── Recommendations ────────────────────────────────────────────────────────
@@ -234,6 +237,10 @@ export interface YieldPredictRequest {
   ecosystem?: string;
   maturity_days?: number;
   variety_avg_yield?: number;
+  // The real-harvest model reads barangay, ecosystem and seed type from these
+  farm_id?: number;
+  variety_id?: number;
+  season?: string;
 }
 
 export const apiPredictions = {
