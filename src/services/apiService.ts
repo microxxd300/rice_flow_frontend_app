@@ -125,6 +125,11 @@ export const authRegister = (data: RegisterRequest) =>
 export const authProfile = () =>
   apiClient.get<UserProfile>(API_ROUTES.auth.profile);
 
+// Name and location; the email is the login and is not changed here
+export const authUpdateProfile = (data: Partial<Pick<UserProfile,
+  'first_name' | 'last_name' | 'barangay' | 'municipality' | 'province'>>) =>
+  apiClient.patch<UserProfile>(API_ROUTES.auth.profile, data);
+
 // ── Farms ──────────────────────────────────────────────────────────────────
 
 export const apiFarms = {
