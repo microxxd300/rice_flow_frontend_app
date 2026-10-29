@@ -8,7 +8,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { mockPlantingGuides } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { apiGuides, apiRecommendations } from '@/services/apiService';
+import { apiGuides, apiRecommendations, apiScan, apiWeather } from '@/services/apiService';
+import { plantingCalendar } from '@/utils/plantingCalendar';
 import { useAppStore } from '@/store/appStore';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -16,12 +17,26 @@ import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Skeleton } from '@/components/Skeleton';
 
+// Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
+// farm's own monthly rainfall loads, or when the phone is offline.
+const PANABO_MONTHLY_RAIN = [332, 206, 197, 201, 361, 377, 249, 278, 262, 269, 243, 281];
+
+// Colors for the current-month alert under the calendar (same as the month legend)
+const ALERT_TONE: Record<string, { bg: string; border: string; fg: string; icon: 'warning' | 'information-circle' | 'checkmark-circle' }> = {
+  danger:  { bg: '#FEF2F2', border: '#FECACA', fg: '#DC2626', icon: 'warning' },
+  caution: { bg: '#FFF7ED', border: '#FDE68A', fg: '#D97706', icon: 'information-circle' },
+  safe:    { bg: '#ECFDF5', border: '#A7F3D0', fg: '#059669', icon: 'checkmark-circle' },
+};
+
 /**
- * Build the "Angkop na Buwan sa Pagtatanim" calendar from the chosen variety's
- * preferred season and the Davao Region (Type IV) rainfall climatology.
+ * Build the "Best months to plant" calendar from the farm's monthly rainfall, its
+ * ecosystem and flood risk, and the variety's season and maturity (see plantingCalendar).
  * Returns the same shape the screen already renders.
  */
-function buildClimateCalendar(variety: any, tr: any) {
+function buildClimateCalendar(
+  variety: any, tr: any,
+  farm: { monthlyRain?: number[] | null; ecosystem?: string; floodRisk?: string },
+) {
   const labels      = [
     tr.monShortJan2, tr.monShortFeb2, tr.monShortMar2, tr.monShortApr2,
     tr.monShortMay2, tr.monShortJun2, tr.monShortJul2, tr.monShortAug2,
@@ -32,49 +47,35 @@ function buildClimateCalendar(variety: any, tr: any) {
     tr.monFullMay, tr.monFullJun, tr.monFullJul, tr.monFullAug,
     tr.monFullSep, tr.monFullOct, tr.monFullNov, tr.monFullDec,
   ];
-  // Climatological monthly rainfall (mm) for Davao del Norte / Panabo (PAGASA Type IV)
-  const rainfall    = [110, 85, 95, 105, 145, 195, 215, 200, 175, 165, 135, 125];
+  const rain = farm.monthlyRain?.length === 12 ? farm.monthlyRain : PANABO_MONTHLY_RAIN;
 
-  const seasonRaw = (variety?.season || '').toLowerCase();
-  const allSeason = seasonRaw.includes('/') || (seasonRaw.includes('wet') && seasonRaw.includes('dry'));
-  const isWet     = !allSeason && seasonRaw.includes('wet');
-  const isDry     = !allSeason && seasonRaw.includes('dry');
-
-  const now = new Date();
-  const currentIdx = now.getMonth();
-
-  const months = labels.map((label, i) => {
-    const rain = rainfall[i];
-    let suit = 80;
-    if (rain >= 200)      suit -= 35;   // very heavy rain — flood risk
-    else if (rain >= 160) suit -= 18;
-    else if (rain >= 130) suit -= 8;
-
-    // Variety season preference bonus
-    if (isWet && i >= 4 && i <= 9)              suit += 12;
-    if (isDry && (i <= 3 || i >= 10))           suit += 12;
-    if (allSeason)                              suit += 4;
-
-    suit = Math.max(15, Math.min(100, suit));
-    const status: 'safe' | 'caution' | 'danger' =
-      suit >= 75 ? 'safe' : suit >= 50 ? 'caution' : 'danger';
-    return { label, rainfall: rain, status, suitability: suit };
+  const cal = plantingCalendar(rain, {
+    ecosystem:     farm.ecosystem || variety?.ecosystem,
+    floodRisk:     farm.floodRisk,
+    varietySeason: variety?.season,
+    maturityDays:  variety?.maturity_days,
   });
+  const months = cal.map((m, i) => ({
+    label: labels[i], rainfall: m.rainfall, status: m.status, reason: m.reason,
+  }));
 
+  const currentIdx    = new Date().getMonth();
   const currentMonth  = fullMonths[currentIdx];
-  const currentStatus = months[currentIdx].status;
+  const current       = cal[currentIdx];
   const bestMonths    = months
     .map((m, i) => (m.status === 'safe' ? fullMonths[i] : null))
     .filter((x): x is string => !!x);
 
   const varName = variety?.common_name || 'rice';
+  const drought = current.reason === 'drought';
   const alert =
-    currentStatus === 'danger'
-      ? { level: 'danger',  title: tr.climateAlertDanger,
-          message: tr.climateMsgDanger.replace('{month}', currentMonth) }
-      : currentStatus === 'caution'
+    current.status === 'danger'
+      ? { level: 'danger',
+          title:   drought ? tr.climateAlertDrought : tr.climateAlertDanger,
+          message: (drought ? tr.climateMsgDrought : tr.climateMsgDanger).replace('{month}', currentMonth) }
+      : current.status === 'caution'
       ? { level: 'caution', title: tr.climateAlertCaution,
-          message: tr.climateMsgCaution.replace('{month}', currentMonth) }
+          message: (drought ? tr.climateMsgDrought : tr.climateMsgCaution).replace('{month}', currentMonth) }
       : { level: 'safe',    title: tr.climateAlertSafe,
           message: tr.climateMsgSafe.replace('{month}', currentMonth).replace('{variety}', varName) };
 
@@ -201,9 +202,27 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   // Data-driven "Angkop na Buwan sa Pagtatanim" — built from the chosen variety's
   // preferred season, Davao Type IV climate pattern, and today's date.
   const topVariety = (useAppStore.getState().latestRecommendation as any)?.results?.[0]?.variety;
-  const climate = useMemo(() => buildClimateCalendar(topVariety, tr), [
-    topVariety?.season, topVariety?.common_name, tr,
-  ]);
+  // The farm's own monthly rainfall and flood risk (loaded below); Panabo averages until then
+  const [monthlyRain, setMonthlyRain] = useState<number[] | null>(null);
+  const [floodRisk,   setFloodRisk]   = useState<string | undefined>(undefined);
+  const calendarFarm = useSelectedFarm() as any;
+  const climate = useMemo(() => buildClimateCalendar(topVariety, tr, {
+    monthlyRain, floodRisk, ecosystem: calendarFarm?.ecosystem,
+  }), [topVariety?.season, topVariety?.common_name, topVariety?.maturity_days, tr,
+       monthlyRain, floodRisk, calendarFarm?.ecosystem]);
+
+  useEffect(() => {
+    const lat = calendarFarm?.latitude, lng = calendarFarm?.longitude;
+    if (lat == null || lng == null) return;
+    let cancelled = false;
+    apiWeather.monthlyRainfall(Number(lat), Number(lng))
+      .then(res => { if (!cancelled) setMonthlyRain(res.data.months); })
+      .catch(() => {});   // keep the Panabo averages
+    apiScan.history(calendarFarm.id)
+      .then(res => { if (!cancelled) setFloodRisk((res.data ?? [])[0]?.flood_risk); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [calendarFarm?.id, calendarFarm?.latitude, calendarFarm?.longitude]);
 
   const toggle = async (id: string) => {
     const numericId = parseInt(id, 10);
@@ -508,18 +527,18 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
           {/* Alert warning strip */}
           {climate.alert.level && (
             <View style={[s.alertStrip, {
-              backgroundColor: climate.alert.level === 'danger' ? '#FEF2F2' : '#FFF7ED',
-              borderColor:     climate.alert.level === 'danger' ? '#FECACA' : '#FDE68A',
+              backgroundColor: ALERT_TONE[climate.alert.level].bg,
+              borderColor:     ALERT_TONE[climate.alert.level].border,
             }]}>
               <Ionicons
-                name={climate.alert.level === 'danger' ? 'warning' : 'information-circle'}
+                name={ALERT_TONE[climate.alert.level].icon}
                 size={14}
-                color={climate.alert.level === 'danger' ? '#DC2626' : '#D97706'}
+                color={ALERT_TONE[climate.alert.level].fg}
                 style={{ marginTop: 1, flexShrink: 0 }}
               />
               <View style={{ flex: 1 }}>
                 <Text style={[s.alertStripTitle, {
-                  color: climate.alert.level === 'danger' ? '#DC2626' : '#D97706',
+                  color: ALERT_TONE[climate.alert.level].fg,
                 }, T && { fontSize: 13 }]}>
                   {climate.alert.title}
                 </Text>
