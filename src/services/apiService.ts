@@ -258,11 +258,13 @@ export const apiAI = {
     message: string,
     history?: { role: string; text: string }[],
     language?: 'en' | 'fil' | 'ceb',
+    farm?: number | null,   // the selected farm: answers use its crop, soil and logs
   ) =>
     apiClient.post<{ reply: string; language?: string }>(API_ROUTES.ai.chat, {
       message,
       history: history ?? [],
       language: language ?? 'en',
+      farm: farm ?? null,
     }),
 };
 

@@ -168,6 +168,7 @@ const t = {
     aiTitle:       'AI na Katulong',
     aiPlaceholder: 'Magtanong tungkol sa palay...',
     aiUnavailable: 'Hindi maabot ang AI ngayon. Subukan muli mamaya.',
+    aiDailyLimit:  'Naabot mo na ang limit ng tanong ngayong araw. Puwede ka ulit magtanong bukas.',
     aiSend:        'Ipadala',
 
     // Suitability Results
@@ -762,6 +763,7 @@ const t = {
     aiTitle:       'AI Assistant',
     aiPlaceholder: 'Ask about rice farming...',
     aiUnavailable: "The AI can't be reached right now. Please try again in a minute.",
+    aiDailyLimit:  "You've reached today's question limit. You can ask again tomorrow.",
     aiSend:        'Send',
 
     suitTitle:    'Results',
@@ -1337,6 +1339,7 @@ const t = {
     aiTitle:       'AI nga Katabang',
     aiPlaceholder: 'Mangutana bahin sa humay...',
     aiUnavailable: 'Dili maabot ang AI karon. Sulayi pag-usab unya.',
+    aiDailyLimit:  'Naabot na nimo ang limit sa pangutana karong adlawa. Pwede ka mangutana pag-usab ugma.',
     aiSend:        'Ipadala',
 
     suitTitle:    'Mga Resulta',

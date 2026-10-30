@@ -8,6 +8,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { apiAI } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
+import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 
@@ -212,6 +213,7 @@ export const AIChatScreen: React.FC = () => {
   const tabClearance = Math.max(bottomInset, 8) + 12 + 62 + 16;
 
   const language = useLanguageStore(s => s.language);
+  const selectedFarmId = useAppStore(s => s.selectedFarmId);
   const tr = useTranslation();
 
   const HISTORY_GROUPS = [
@@ -269,12 +271,13 @@ export const AIChatScreen: React.FC = () => {
     const history = messages.slice(-6).map(m => ({ role: m.role === 'user' ? 'user' : 'model', text: m.text }));
 
     try {
-      const res   = await apiAI.chat(trimmed, history, language);
+      const res   = await apiAI.chat(trimmed, history, language, selectedFarmId);
       const reply = res.data.reply;
       setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: reply, time: nowTime() }]);
-    } catch {
+    } catch (err: any) {
       // Say so, never a canned answer: it would read as AI advice for a question nobody answered
-      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: tr.aiUnavailable, time: nowTime() }]);
+      const text = err?.response?.status === 429 ? tr.aiDailyLimit : tr.aiUnavailable;
+      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text, time: nowTime() }]);
     } finally {
       setIsTyping(false);
       scrollToBottom();
