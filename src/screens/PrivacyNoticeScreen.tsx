@@ -31,7 +31,11 @@ const SECTIONS: { title: string; items: string[] }[] = [
       'You.',
       'RiceFlow administrators and agriculturists, who can see registered farms on a map.',
       'Your farm\'s map location (without your name) is sent to SoilGrids and Open-Meteo to get soil and weather data.',
-      'Messages to the AI assistant are sent to Google Gemini to get an answer.',
+      'Messages to the AI assistant are sent to Google Gemini with facts about your selected farm '
+        + '(size, barangay, soil, rice variety, crop stage, field logs and weather), so the answer fits '
+        + 'your farm. Your name, email and farm name are not sent.',
+      'RiceFlow uses the free plan of Google Gemini, so Google may use what is sent to it to improve '
+        + 'its services. Do not type personal details (like phone numbers) in the AI chat.',
       'We do not sell your information or use it for ads.',
     ],
   },
