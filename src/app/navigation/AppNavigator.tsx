@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -8,6 +8,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors } from '@/theme';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 import { useGuideReminders, useReminderTap } from '@/hooks/useGuideReminders';
+import { useSelectedFarm } from '@/hooks/useSelectedFarm';
+import { fetchActiveCycleLogs } from '@/utils/progressLogs';
 import {
   HomeDashboardScreen,
   GISFarmPinningScreen,
@@ -159,6 +161,12 @@ const MainTabs: React.FC<{ route?: any; navigation?: any }> = ({ route, navigati
   // date, and a tapped reminder opens the Planting tab
   useGuideReminders();
   useReminderTap(useCallback(() => navigation?.navigate('MainTabs', { screen: 'PlantingTab' }), [navigation]));
+  // Load the Progress tab's data while the farmer is on Home, so its first visit
+  // opens with data instead of skeletons
+  const farmId = useSelectedFarm()?.id;
+  useEffect(() => {
+    if (farmId != null) fetchActiveCycleLogs(farmId).catch(() => {});
+  }, [farmId]);
   return (
     <Tab.Navigator
       tabBar={(props) => <CustomTabBar {...props} />}

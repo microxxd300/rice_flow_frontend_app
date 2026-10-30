@@ -21,7 +21,7 @@ import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
 import { seasonLabel } from '@/utils/formatting';
-import { ISSUE_TO_API, STAGE_NO, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
+import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -211,8 +211,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // Source of truth = persisted store.progressLogs; backend logs merged on mount. Mock only as fallback.
   const storeLogs = useAppStore(s => s.progressLogs);
   const localLogs = storeLogs;
+  const selectedFarm = useSelectedFarm();
+  const selectedFarmId = selectedFarm?.id;
+  // Loaded before in this session (or preloaded when the app opened): shown at once and
+  // refreshed quietly, so the tab does not flash skeletons on every visit
+  const cached = cachedActiveCycleLogs(selectedFarmId);
   // Real active cycle only (null until loaded or when there is none) — never a sample cycle
-  const [currentCycle, setCurrentCycle] = useState<any>(null);
+  const [currentCycle, setCurrentCycle] = useState<any>(cached?.cycle ?? null);
   const [logStage,     setLogStage]     = useState('');
   const [logDate,      setLogDate]      = useState(new Date().toISOString().split('T')[0]);
   const [logIssue,     setLogIssue]     = useState('');
@@ -221,15 +226,14 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const [logNotes,     setLogNotes]     = useState('');
   const [openStage,    setOpenStage]    = useState(false);
   const [openIssue,    setOpenIssue]    = useState(false);
-  const [growthStages, setGrowthStages] = useState<any[]>([]);
+  const [growthStages, setGrowthStages] = useState<any[]>(cached?.stages ?? []);
   const [savingLog,    setSavingLog]    = useState(false);
 
   const hasIssue = logIssue && logIssue !== 'None';
 
   const { activeCycle, farms } = useAppStore();
-  const selectedFarm = useSelectedFarm();
-  const selectedFarmId = selectedFarm?.id;
-  const [cycleLoading, setCycleLoading] = useState(true);
+  // Skeletons only when there is nothing to show yet
+  const [cycleLoading, setCycleLoading] = useState(!cached);
 
   // Load real cycles and logs on mount AND whenever the selected farm changes
   useEffect(() => {
@@ -247,7 +251,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       } catch {}
       finally { setCycleLoading(false); }
     };
-    setCycleLoading(true);
+    const known = cachedActiveCycleLogs(selectedFarmId);
+    if (known) {
+      setCurrentCycle(known.cycle);
+      setGrowthStages(known.stages);
+    }
+    setCycleLoading(!known);
     load();
   }, [selectedFarmId]);
 

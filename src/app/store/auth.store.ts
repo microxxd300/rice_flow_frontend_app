@@ -7,6 +7,7 @@ import { tokenStorage } from '@/services/tokenStorage';
 import { useAppStore } from '@/store/appStore';
 import { useLanguageStore } from '@/store/languageStore';
 import { cancelGuideReminders } from '@/services/guideReminderScheduler';
+import { clearCycleLogsCache } from '@/utils/progressLogs';
 
 /**
  * Restore the user's last-selected farm after the farms list loads.
@@ -130,6 +131,7 @@ async function establishSetupFlag(farmCount: number): Promise<void> {
  * next farmer would see the previous farmer's cached data.
  */
 async function clearUserData(): Promise<void> {
+  clearCycleLogsCache();
   await storage.removeItem(STORAGE_KEYS.USER);
   await storage.removeItem(STORAGE_KEYS.SETUP_COMPLETE);
   await storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS);
