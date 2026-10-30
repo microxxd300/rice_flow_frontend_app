@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -7,6 +7,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors } from '@/theme';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
+import { useGuideReminders, useReminderTap } from '@/hooks/useGuideReminders';
 import {
   HomeDashboardScreen,
   GISFarmPinningScreen,
@@ -153,19 +154,25 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
 // works — e.g. navigate('MainTabs', { screen: 'PlantingTab' }) from a pushed
 // flow screen. The starting tab comes from route params (set by initialParams).
 
-const MainTabs: React.FC<{ route?: any }> = ({ route }) => (
-  <Tab.Navigator
-    tabBar={(props) => <CustomTabBar {...props} />}
-    screenOptions={{ headerShown: false }}
-    initialRouteName={route?.params?.initialTab ?? 'HomeTab'}
-  >
-    <Tab.Screen name="HomeTab"     component={HomeStack} />
-    <Tab.Screen name="ProgressTab" component={ProgressStack} />
-    <Tab.Screen name="AITab"       component={AIStack} />
-    <Tab.Screen name="PlantingTab" component={PlantingStack} />
-    <Tab.Screen name="ProfileTab"  component={ProfileStack} />
-  </Tab.Navigator>
-);
+const MainTabs: React.FC<{ route?: any; navigation?: any }> = ({ route, navigation }) => {
+  // Mounted whenever the farmer is in the app: keeps the 7 AM guide reminders up to
+  // date, and a tapped reminder opens the Planting tab
+  useGuideReminders();
+  useReminderTap(useCallback(() => navigation?.navigate('MainTabs', { screen: 'PlantingTab' }), [navigation]));
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+      initialRouteName={route?.params?.initialTab ?? 'HomeTab'}
+    >
+      <Tab.Screen name="HomeTab"     component={HomeStack} />
+      <Tab.Screen name="ProgressTab" component={ProgressStack} />
+      <Tab.Screen name="AITab"       component={AIStack} />
+      <Tab.Screen name="PlantingTab" component={PlantingStack} />
+      <Tab.Screen name="ProfileTab"  component={ProfileStack} />
+    </Tab.Navigator>
+  );
+};
 
 /* ── App Navigator ─────────────────────────────────── */
 // Wraps MainTabs in an outer stack so full-screen flows (like Add Farm) can be

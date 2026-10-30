@@ -39,7 +39,8 @@
         }
       ],
       "expo-splash-screen",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-notifications"
     ],
     "experiments": {
       "tsconfigPaths": true

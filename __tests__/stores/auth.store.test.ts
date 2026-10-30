@@ -25,6 +25,11 @@ jest.mock('@/services/apiService', () => ({
   apiFarms:     { list: jest.fn() },
 }));
 
+// No phone in tests: logout clears the guide reminders through this
+jest.mock('@/services/guideReminderScheduler', () => ({
+  cancelGuideReminders: jest.fn(async () => {}),
+}));
+
 jest.mock('@/services/api', () => ({
   apiClient: { revokeRefreshToken: jest.fn(async () => {}) },
 }));
