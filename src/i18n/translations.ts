@@ -169,6 +169,9 @@ const t = {
     aiPlaceholder: 'Magtanong tungkol sa palay...',
     aiUnavailable: 'Hindi maabot ang AI ngayon. Subukan muli mamaya.',
     aiDailyLimit:  'Naabot mo na ang limit ng tanong ngayong araw. Puwede ka ulit magtanong bukas.',
+    reminderTitle:   'Gawain sa bukid ngayong araw',
+    reminderBody:    'Ngayon: {tasks}. Buksan ang RiceFlow para sa mga hakbang.',
+    reminderChannel: 'Paalala sa gabay sa pagtatanim',
     aiSend:        'Ipadala',
 
     // Suitability Results
@@ -764,6 +767,9 @@ const t = {
     aiPlaceholder: 'Ask about rice farming...',
     aiUnavailable: "The AI can't be reached right now. Please try again in a minute.",
     aiDailyLimit:  "You've reached today's question limit. You can ask again tomorrow.",
+    reminderTitle:   'Farm tasks for today',
+    reminderBody:    'Today: {tasks}. Open RiceFlow for the steps.',
+    reminderChannel: 'Planting guide reminders',
     aiSend:        'Send',
 
     suitTitle:    'Results',
@@ -1340,6 +1346,9 @@ const t = {
     aiPlaceholder: 'Mangutana bahin sa humay...',
     aiUnavailable: 'Dili maabot ang AI karon. Sulayi pag-usab unya.',
     aiDailyLimit:  'Naabot na nimo ang limit sa pangutana karong adlawa. Pwede ka mangutana pag-usab ugma.',
+    reminderTitle:   'Buluhaton sa uma karong adlawa',
+    reminderBody:    'Karon: {tasks}. Ablihi ang RiceFlow para sa mga lakang.',
+    reminderChannel: 'Pahinumdom sa giya sa pagtanom',
     aiSend:        'Ipadala',
 
     suitTitle:    'Mga Resulta',

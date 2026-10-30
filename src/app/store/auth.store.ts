@@ -6,6 +6,7 @@ import { apiClient } from '@/services/api';
 import { tokenStorage } from '@/services/tokenStorage';
 import { useAppStore } from '@/store/appStore';
 import { useLanguageStore } from '@/store/languageStore';
+import { cancelGuideReminders } from '@/services/guideReminderScheduler';
 
 /**
  * Restore the user's last-selected farm after the farms list loads.
@@ -225,6 +226,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       await apiClient.revokeRefreshToken();
       await tokenStorage.clear();
       await clearUserData();
+      // The tabs unmount on logout, so the reminders are cleared here: the next
+      // farmer on this phone must not get this farmer's 7 AM reminders
+      await cancelGuideReminders();
       // Back to English in memory so the next account on this device doesn't
       // inherit this user's language. Their own key stays saved for next login.
       useLanguageStore.getState().resetLanguage();
