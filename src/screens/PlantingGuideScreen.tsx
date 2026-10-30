@@ -10,7 +10,7 @@ import { mockPlantingGuides } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiGuides, apiRecommendations, apiScan, apiWeather } from '@/services/apiService';
 import { plantingCalendar } from '@/utils/plantingCalendar';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
@@ -200,15 +200,16 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
 
   const cycleDays = steps.reduce((m, s) => Math.max(m, s.daysAfterPlanting), 0);
   // Data-driven "Angkop na Buwan sa Pagtatanim" — built from the chosen variety's
-  // preferred season, Davao Type IV climate pattern, and today's date.
-  const topVariety = (useAppStore.getState().latestRecommendation as any)?.results?.[0]?.variety;
+  // preferred season, Davao Type IV climate pattern, and today's date. The guide's
+  // variety (the farmer's pick), else the top-ranked one.
+  const calendarVariety = guideVariety ?? (useAppStore.getState().latestRecommendation as any)?.results?.[0]?.variety;
   // The farm's own monthly rainfall and flood risk (loaded below); Panabo averages until then
   const [monthlyRain, setMonthlyRain] = useState<number[] | null>(null);
   const [floodRisk,   setFloodRisk]   = useState<string | undefined>(undefined);
   const calendarFarm = useSelectedFarm() as any;
-  const climate = useMemo(() => buildClimateCalendar(topVariety, tr, {
+  const climate = useMemo(() => buildClimateCalendar(calendarVariety, tr, {
     monthlyRain, floodRisk, ecosystem: calendarFarm?.ecosystem,
-  }), [topVariety?.season, topVariety?.common_name, topVariety?.maturity_days, tr,
+  }), [calendarVariety?.season, calendarVariety?.common_name, calendarVariety?.maturity_days, tr,
        monthlyRain, floodRisk, calendarFarm?.ecosystem]);
 
   useEffect(() => {
@@ -247,6 +248,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
             category:       justFinished.category,
             last_day:       justFinished.daysAfterPlanting,
             existing_count: steps.length,
+            variety:        guideVarietyId(),
             season:         (latestGuide as any)?.season ?? 'Wet Season',
             language,
             logs:           storeLogs.slice(0, 10),
@@ -352,6 +354,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
     setGenError(false);
     console.log('[GUIDE] Calling apiGuides.generate(recId=' + recId + ', logs=' + storeLogs.length + ')...');
     apiGuides.generate(recId, {
+      variety:  guideVarietyId(),
       season:   (latestGuide as any)?.season ?? 'Wet Season',
       logs:     storeLogs.slice(0, 10),
       language,
