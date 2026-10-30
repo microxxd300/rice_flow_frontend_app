@@ -44,6 +44,9 @@ function formatTime(d: Date) {
   return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
 }
 
+// Last weather per farm location in this app session (see the weather card below)
+const lastWeather = new Map<string, { current: WeatherCurrent; hourly: WeatherHour[] }>();
+
 export const HomeDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
@@ -134,19 +137,28 @@ export const HomeDashboardScreen: React.FC = () => {
   };
 
   // Live weather (current + next 8 hours) from Open-Meteo via Django
-  const [wxCurrent, setWxCurrent] = useState<WeatherCurrent | null>(null);
-  const [wxHourly,  setWxHourly]  = useState<WeatherHour[]>([]);
   // Weather for the farm being shown, not the first farm on the account
   const weatherFarm = (selectedFarm as any) ?? realFarms[0];
   const farmLat = weatherFarm?.latitude;
   const farmLng = weatherFarm?.longitude;
+  const wxKey = `${farmLat},${farmLng}`;
+  // The last weather for this farm shows at once (no skeletons) while it refreshes
+  const [wxCurrent, setWxCurrent] = useState<WeatherCurrent | null>(lastWeather.get(wxKey)?.current ?? null);
+  const [wxHourly,  setWxHourly]  = useState<WeatherHour[]>(lastWeather.get(wxKey)?.hourly ?? []);
   const fetchWeather = () => {
     if (farmLat == null || farmLng == null) return;
     apiWeather.current(farmLat, farmLng)
-      .then(res => { setWxCurrent(res.data.current); setWxHourly(res.data.hourly || []); })
+      .then(res => {
+        lastWeather.set(wxKey, { current: res.data.current, hourly: res.data.hourly || [] });
+        setWxCurrent(res.data.current); setWxHourly(res.data.hourly || []);
+      })
       .catch(() => {});
   };
   useEffect(() => {
+    // Switched farm: show that farm's last weather (or skeletons) until it loads
+    const known = lastWeather.get(wxKey);
+    setWxCurrent(known?.current ?? null);
+    setWxHourly(known?.hourly ?? []);
     fetchWeather();
     // Auto-refresh every 5 minutes (weather + clock tick happens elsewhere every minute)
     const id = setInterval(() => { fetchWeather(); setNow(new Date()); }, 5 * 60 * 1000);

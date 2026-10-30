@@ -28,6 +28,10 @@ interface HarvestRow {
   badgeStatus: 'success' | 'warning';
 }
 
+// Last report per farm in this app session: reopening Reports shows it at once and
+// refreshes quietly. Keyed by farm id, which belongs to one farmer only.
+const lastReport = new Map<number | undefined, { history: HarvestRow[]; totalYield: string; cyclesCount: number }>();
+
 export const ReportsScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
@@ -35,10 +39,11 @@ export const ReportsScreen: React.FC = () => {
   const { farms, activeCycle, latestRecommendation } = useAppStore();
   const selectedFarm = useSelectedFarm();
   const selectedFarmId = selectedFarm?.id;
-  const [harvestHistory, setHarvestHistory] = useState<HarvestRow[]>([]);
-  const [totalYield,     setTotalYield]     = useState<string>('—');
-  const [cyclesCount,    setCyclesCount]    = useState(0);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  const known = lastReport.get(selectedFarmId);
+  const [harvestHistory, setHarvestHistory] = useState<HarvestRow[]>(known?.history ?? []);
+  const [totalYield,     setTotalYield]     = useState<string>(known?.totalYield ?? '—');
+  const [cyclesCount,    setCyclesCount]    = useState(known?.cyclesCount ?? 0);
+  const [loadingHistory, setLoadingHistory] = useState(!known);
   const [activeRange,    setActiveRange]    = useState<RangeKey>('current');
 
   const RANGES: { key: RangeKey; label: string }[] = [
@@ -59,43 +64,53 @@ export const ReportsScreen: React.FC = () => {
         const farmId    = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles    = (cyclesRes.data as any[]) ?? [];
-        setCyclesCount(cycles.length);
 
+        // All seasons at once, not one after another: the wait no longer grows per season
+        const yields = await Promise.all(cycles.map(cycle =>
+          apiProgress.getYield(cycle.id).then(res => res.data).catch(() => null),   // null: no yield record yet
+        ));
         const history: HarvestRow[] = [];
         let totalKg = 0;
+        cycles.forEach((cycle, i) => {
+          const yr = yields[i];
+          if (!yr) return;
+          const netKg     = yr.net_yield_kg ?? 0;
+          const areaHa    = yr.area_harvested_ha ?? 1;
+          const yieldTHa  = (netKg / 1000 / areaHa).toFixed(2);
+          totalKg += netKg;
 
-        for (const cycle of cycles) {
-          try {
-            const yieldRes  = await apiProgress.getYield(cycle.id);
-            const yr        = yieldRes.data;
-            const netKg     = yr.net_yield_kg ?? 0;
-            const areaHa    = yr.area_harvested_ha ?? 1;
-            const yieldTHa  = (netKg / 1000 / areaHa).toFixed(2);
-            totalKg += netKg;
+          const isExcellent = parseFloat(yieldTHa) >= 5;
+          history.push({
+            id:          String(cycle.id),
+            farmName:    farms.find((f: any) => f.id === cycle.farm)?.name ?? '—',
+            season:      seasonLabel(cycle) || '—',
+            datePlanted: cycle.planting_date ?? '—',
+            yieldValue:  yieldTHa,
+            varietyName: cycle.variety_name ?? '—',
+            badge:       isExcellent ? tr.reportsBadgeExcellent : tr.reportsBadgeGood,
+            badgeStatus: isExcellent ? 'success' : 'warning',
+          });
+        });
 
-            const isExcellent = parseFloat(yieldTHa) >= 5;
-            history.push({
-              id:          String(cycle.id),
-              farmName:    farms.find((f: any) => f.id === cycle.farm)?.name ?? '—',
-              season:      seasonLabel(cycle) || '—',
-              datePlanted: cycle.planting_date ?? '—',
-              yieldValue:  yieldTHa,
-              varietyName: cycle.variety_name ?? '—',
-              badge:       isExcellent ? tr.reportsBadgeExcellent : tr.reportsBadgeGood,
-              badgeStatus: isExcellent ? 'success' : 'warning',
-            });
-          } catch { /* this cycle has no yield record yet */ }
-        }
-
+        // A farm with no harvests shows a dash, not the previous farm's total
+        const total = history.length > 0 ? `${(totalKg / 1000).toFixed(1)} T` : '—';
+        lastReport.set(farmId, { history, totalYield: total, cyclesCount: cycles.length });
+        setCyclesCount(cycles.length);
         setHarvestHistory(history);
-        if (history.length > 0) setTotalYield(`${(totalKg / 1000).toFixed(1)} T`);
+        setTotalYield(total);
       } catch {
         setHarvestHistory([]);
       } finally {
         setLoadingHistory(false);
       }
     };
-    setLoadingHistory(true);
+    const saved = lastReport.get(selectedFarmId);
+    if (saved) {
+      setHarvestHistory(saved.history);
+      setTotalYield(saved.totalYield);
+      setCyclesCount(saved.cyclesCount);
+    }
+    setLoadingHistory(!saved);
     load();
   }, [selectedFarmId]);
 

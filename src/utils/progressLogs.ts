@@ -54,8 +54,13 @@ export function mergeLogs(server: any[], existing: any[]): any[] {
   ];
 }
 
+type CycleLogs = { cycle: any; stages: any[]; logs: any[] };
+// Last result per farm for this app session, so the Progress tab opens with it at
+// once (and refreshes quietly) instead of showing skeletons on every visit
+const lastByFarm = new Map<number | undefined, CycleLogs>();
+
 /** The farm's active (else latest) cycle, the stage list, and that cycle's logs in the app's shape. */
-export async function fetchActiveCycleLogs(farmId?: number) {
+export async function fetchActiveCycleLogs(farmId?: number): Promise<CycleLogs> {
   const [cyclesRes, stagesRes] = await Promise.all([
     apiProgress.listCycles(farmId),
     apiProgress.growthStages().catch(() => ({ data: [] as any[] })),
@@ -63,5 +68,17 @@ export async function fetchActiveCycleLogs(farmId?: number) {
   const cycles = cyclesRes.data;
   const cycle  = cycles.find((c: any) => c.status === 'active') ?? cycles[0] ?? null;
   const rows   = cycle ? (await apiProgress.listLogs(cycle.id)).data : [];
-  return { cycle, stages: stagesRes.data, logs: normalizeServerLogs(rows, stagesRes.data) };
+  const result = { cycle, stages: stagesRes.data, logs: normalizeServerLogs(rows, stagesRes.data) };
+  lastByFarm.set(farmId, result);
+  return result;
+}
+
+/** The last fetchActiveCycleLogs result for this farm in this session, if any. */
+export function cachedActiveCycleLogs(farmId?: number): CycleLogs | undefined {
+  return lastByFarm.get(farmId);
+}
+
+/** Drop the remembered results, e.g. on logout so the next farmer never sees them. */
+export function clearCycleLogsCache(): void {
+  lastByFarm.clear();
 }
