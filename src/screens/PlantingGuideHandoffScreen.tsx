@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { apiGuides } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
 import { goBackFromStep } from '@/utils/navigation';
@@ -38,8 +38,11 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
 
   const generateGuide = async () => {
     if (!recId) return;
+    // Stored before leaving: the Planting tab requests the guide too, and must ask for this
+    // variety. The server's rank can differ from the order shown, so never assume rank 1.
+    if (variety.id) useAppStore.getState().setPickedVariety({ recId, varietyId: variety.id });
     try {
-      const res = await apiGuides.generate(recId, { season: 'Wet Season', language });
+      const res = await apiGuides.generate(recId, { variety: guideVarietyId(), season: 'Wet Season', language });
       setLatestGuide(res.data);
       useAppStore.getState().addNotification({
         title: 'Your planting guide is ready',

@@ -119,6 +119,7 @@ interface DisplayRec {
   fitExplanation?: string;   // per-farm "why it fits" (from backend)
   description?: string;      // variety narrative (from backend)
   variety: {
+    id: number;
     name: string;
     maturityDays: number;
     floodTolerance: string;
@@ -137,6 +138,7 @@ function buildFromReal(rec: Recommendation): DisplayRec[] {
     fitExplanation: (r as any).fit_explanation || '',
     description: (r.variety as any).ai_description || '',
     variety: {
+      id: r.variety.id,
       name: r.variety.common_name,
       maturityDays: r.variety.maturity_days,
       floodTolerance: r.variety.submergence_tolerance,

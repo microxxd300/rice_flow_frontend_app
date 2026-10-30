@@ -28,6 +28,7 @@ interface AppState {
   notifications: AppNotification[];
   pendingGuideCategory: string | null;   // category for the Planting Guide screen to open
   entryTab: string | null;   // tab to open when setup finishes (kept here: the navigator remounts)
+  pickedVariety: { recId: number; varietyId: number } | null;   // set the moment the farmer taps a variety
   progressLogs: any[];
   activeCycle: any | null;
   completedGuideSteps: string[];   // step IDs marked done by farmer in PlantingGuide
@@ -52,6 +53,7 @@ interface AppState {
   hydrateNotifications:     (list: AppNotification[]) => void;
   setPendingGuideCategory:  (cat: string | null) => void;
   setEntryTab:              (tab: string | null) => void;
+  setPickedVariety:         (pick: { recId: number; varietyId: number } | null) => void;
   setProgressLogs:          (logs: any[]) => void;
   addProgressLog:           (log: any) => void;
   hydrateProgressLogs:      (logs: any[]) => void;
@@ -77,6 +79,7 @@ export const useAppStore = create<AppState>((set) => ({
   notifications:        [],
   pendingGuideCategory: null,
   entryTab:             null,
+  pickedVariety:        null,
   progressLogs:         [],
   activeCycle:          null,
   completedGuideSteps:  [],
@@ -217,6 +220,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   setPendingGuideCategory: (cat) => set({ pendingGuideCategory: cat }),
   setEntryTab: (tab) => set({ entryTab: tab }),
+  setPickedVariety: (pick) => set({ pickedVariety: pick }),
 
   setProgressLogs: (logs) => {
     // Only logs in the app's shape; raw server rows rendered as blank rows with duplicate keys
@@ -262,8 +266,24 @@ export const useAppStore = create<AppState>((set) => ({
     user: null, farms: [], farmsLoaded: false, selectedFarmId: null, setupComplete: false,
     setupStep: null, setupData: {},
     latestRecommendation: null, latestGuide: null,
-    notifications: [], pendingGuideCategory: null, entryTab: null,
+    notifications: [], pendingGuideCategory: null, entryTab: null, pickedVariety: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
     notificationsEnabled: true, weatherAlertsEnabled: true,
   }),
 }));
+
+/**
+ * The variety the guide is for, sent with guide requests so a refresh keeps the variety
+ * the farmer picked ("Use this instead") instead of switching back to the top-ranked one:
+ * the pick just made for this recommendation, else the variety of this farm's guide.
+ * Undefined when neither applies; the server then uses the farm's earlier pick.
+ */
+export function guideVarietyId(): number | undefined {
+  const { latestGuide, latestRecommendation: rec, pickedVariety } = useAppStore.getState();
+  if (!rec) return undefined;
+  if (pickedVariety?.recId === rec.id) return pickedVariety.varietyId;
+  // The previous farm's guide can still be on screen right after a new scan
+  if (latestGuide?.farm !== rec.farm) return undefined;
+  const id = latestGuide?.variety;
+  return rec.results?.some(r => r.variety.id === id) ? id : undefined;
+}

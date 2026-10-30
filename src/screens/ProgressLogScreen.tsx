@@ -10,7 +10,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiProgress, apiGuides } from '@/services/apiService';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -143,6 +143,7 @@ export const ProgressLogScreen: React.FC<ProgressLogScreenProps> = ({ onSaveLog 
       const recId = useAppStore.getState().latestRecommendation?.id;
       if (recId) {
         apiGuides.generate(recId, {
+          variety:  guideVarietyId(),
           season:   useAppStore.getState().latestGuide?.season ?? 'Wet Season',
           logs:     useAppStore.getState().progressLogs.slice(0, 10),
           language: useLanguageStore.getState().language,

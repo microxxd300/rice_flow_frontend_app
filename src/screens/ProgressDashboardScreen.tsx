@@ -17,7 +17,7 @@ import { Button } from '../components';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiGuides, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
-import { useAppStore } from '@/store/appStore';
+import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useLanguageStore } from '@/store/languageStore';
 import { seasonLabel } from '@/utils/formatting';
@@ -546,6 +546,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       const recId = useAppStore.getState().latestRecommendation?.id;
       if (recId) {
         apiGuides.generate(recId, {
+          variety:  guideVarietyId(),
           season:   useAppStore.getState().latestGuide?.season ?? 'Wet Season',
           logs:     useAppStore.getState().progressLogs.slice(0, 10),
           language: useLanguageStore.getState().language,
