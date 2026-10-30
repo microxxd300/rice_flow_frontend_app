@@ -2,14 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet,
   TouchableOpacity, TextInput, ScrollView,
-  KeyboardAvoidingView, Platform, Animated, Pressable, Keyboard,
+  KeyboardAvoidingView, Platform, Animated, Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { mockPlantingQA } from '../data/mockData';
 import { apiAI } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
+import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -57,13 +57,6 @@ function nowTime() {
   return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
 }
 
-function matchResponse(input: string): string {
-  const lower = input.toLowerCase();
-  for (const qa of mockPlantingQA) {
-    if (qa.keywords.some(k => lower.includes(k))) return qa.answer;
-  }
-  return "That's a great question! For best results, consult your local DA extension officer or check the NSIC Rc160 technical guide. Is there anything specific about fertilizer, pests, water, or harvest timing I can help with?";
-}
 
 function InlineText({ text, baseStyle }: { text: string; baseStyle?: object }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
@@ -236,13 +229,8 @@ export const AIChatScreen: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
-  // Track keyboard so we can collapse the tab-bar clearance when typing
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardOpen(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardOpen(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
+  // The tab bar hides while typing, so its clearance collapses then
+  const keyboardOpen = useKeyboardOpen();
   const inputPaddingBottom = keyboardOpen ? 10 : tabClearance;
 
   const drawerX   = useRef(new Animated.Value(-300)).current;
@@ -285,9 +273,8 @@ export const AIChatScreen: React.FC = () => {
       const reply = res.data.reply;
       setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: reply, time: nowTime() }]);
     } catch {
-      // Fallback to local keyword match if API fails
-      const fallback = matchResponse(trimmed);
-      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: fallback, time: nowTime() }]);
+      // Say so, never a canned answer: it would read as AI advice for a question nobody answered
+      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: tr.aiUnavailable, time: nowTime() }]);
     } finally {
       setIsTyping(false);
       scrollToBottom();

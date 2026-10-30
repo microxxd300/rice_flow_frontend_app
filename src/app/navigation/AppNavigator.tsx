@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { colors } from '@/theme';
+import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 import {
   HomeDashboardScreen,
   GISFarmPinningScreen,
@@ -89,6 +90,8 @@ const ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }> = 
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
+  const keyboardOpen = useKeyboardOpen();
+  if (keyboardOpen) return null;   // otherwise it can cover the field being typed in
   return (
     <View style={[tb.wrapper, { bottom: Math.max(insets.bottom, 8) + 12 }]} pointerEvents="box-none">
       <View style={tb.pill}>
