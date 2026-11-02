@@ -103,6 +103,7 @@ export interface EnvironmentalScan {
   farm: number;
   soil_ph: number;
   soil_texture: string;
+  soil_series?: string;        // BSWM soil series at the pin, e.g. "Cabangan clay loam"
   organic_matter: number;
   drainage: string;
   avg_temperature: number;
