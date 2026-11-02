@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   TouchableOpacity, Switch, Modal, TextInput,
-  KeyboardAvoidingView, Platform, Image, Alert,
+  KeyboardAvoidingView, Platform, Image, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -18,6 +18,7 @@ import { STORAGE_KEYS } from '@/constants/api';
 import { dedupeName } from '@/utils/formatting';
 import { apiFarms, apiRecommendations, authUpdateProfile } from '@/services/apiService';
 import { fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
+import { loadGuide, guideNeedsTranslation } from '@/services/guideLoader';
 
 const LogoImage = require('../assets/icons/logo_for_rice-flow.png');
 
@@ -74,6 +75,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
   const displayProv   = (profileUser as any)?.province     ?? '';
 
   const [activeModal,      setActiveModal]      = useState<string | null>(null);
+  // Language change in progress: a veil covers the app until the planting guide is
+  // translated, so the Planting tab opens ready instead of loading
+  const [switchingLang,    setSwitchingLang]    = useState(false);
+
+  const changeLanguage = async (lang: Language) => {
+    if (lang === language || switchingLang) return;
+    const recId = (useAppStore.getState().latestRecommendation as any)?.id;
+    const translateGuide = !!recId && guideNeedsTranslation(lang);
+    setSwitchingLang(translateGuide);
+    try {
+      await setLanguage(lang);
+      // A failure is fine here: the Planting tab retries when it opens
+      if (translateGuide) await loadGuide(recId, lang).catch(() => {});
+    } finally {
+      setSwitchingLang(false);
+    }
+  };
   const [editName,         setEditName]         = useState('');
   const [editBarangay,     setEditBarangay]     = useState('');
   const [editMunicipality, setEditMunicipality] = useState('');
@@ -451,7 +469,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                     <TouchableOpacity
                       key={lang}
                       style={[s.mSelChip, language === lang && s.mSelChipActive]}
-                      onPress={() => setLanguage(lang)}
+                      onPress={() => changeLanguage(lang)}
                       activeOpacity={0.7}
                     >
                       {language === lang && <Ionicons name="checkmark" size={13} color="#059669" />}
@@ -619,12 +637,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Language change veil: stays up while the planting guide is translated */}
+      <Modal visible={switchingLang} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={s.veil}>
+          <View style={s.veilCard}>
+            <ActivityIndicator size="large" color="#059669" />
+            <Text style={s.veilTitle}>{tr.langSwitchingTitle}</Text>
+            <Text style={s.veilBody}>{tr.langSwitchingBody}</Text>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F9F8' },
+  veil:      { flex: 1, backgroundColor: 'rgba(17,24,39,0.55)', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  veilCard:  { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 20, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center', gap: 12 },
+  veilTitle: { fontSize: 17, fontWeight: '700', color: '#111827', textAlign: 'center' },
+  veilBody:  { fontSize: 14, color: '#6B7280', lineHeight: 20, textAlign: 'center' },
   scroll:    { paddingHorizontal: 20, paddingBottom: 48 },
 
   /* Header */
