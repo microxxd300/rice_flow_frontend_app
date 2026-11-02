@@ -1,5 +1,6 @@
 import { apiClient } from './api';
 import { API_ROUTES } from '@/config/api';
+import type { FarmerNotice } from '@/utils/farmerNotices';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -266,6 +267,14 @@ export const apiAI = {
       language: language ?? 'en',
       farm: farm ?? null,
     }),
+};
+
+// ── Admin notices ──────────────────────────────────────────────────────────
+
+export const apiActivity = {
+  // Notices about the admin's changes to this farmer's farms, cycles or planted variety
+  notices: (after?: number) =>
+    apiClient.get<FarmerNotice[]>(`${API_ROUTES.activity.notices}${after ? `?after=${after}` : ''}`),
 };
 
 // ── Progress ───────────────────────────────────────────────────────────────

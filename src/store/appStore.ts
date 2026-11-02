@@ -11,6 +11,7 @@ export interface AppNotification {
   body:      string;
   category?: string;          // optional Planting Guide category to deep-link to
   icon?:     string;          // Ionicons name (default chosen by category)
+  notice?:   { kind: string; params: Record<string, string | number> };  // admin notice, worded by the bell
   createdAt: number;          // ms epoch
   read:      boolean;
 }

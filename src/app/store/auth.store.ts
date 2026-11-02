@@ -136,6 +136,7 @@ async function clearUserData(): Promise<void> {
   await storage.removeItem(STORAGE_KEYS.SETUP_COMPLETE);
   await storage.removeItem(STORAGE_KEYS.SETUP_PROGRESS);
   await storage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+  await storage.removeItem(STORAGE_KEYS.LAST_NOTICE_ID);
   await storage.removeItem(STORAGE_KEYS.PROGRESS_LOGS);
   await storage.removeItem(STORAGE_KEYS.LATEST_REC);
   await storage.removeItem(STORAGE_KEYS.LATEST_GUIDE);
