@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAppStore, type AppNotification } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { noticeMessage } from '@/utils/farmerNotices';
+import { relTime } from '@/utils/relativeTime';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -28,19 +29,6 @@ const CATEGORY_COLOR: Record<string, { fg: string; bg: string }> = {
   harvesting:      { fg: '#B45309', bg: '#FFFBEB' },
 };
 const DEFAULT_COLOR = { fg: '#059669', bg: '#F0FDF4' };
-
-function relTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const m = Math.floor(diff / 60000);
-  if (m < 1)  return 'Ngayon lang';
-  if (m < 60) return `${m} minuto na`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h} oras na`;
-  const d = Math.floor(h / 24);
-  if (d === 1) return 'Kahapon';
-  if (d < 7)   return `${d} araw na`;
-  return new Date(ms).toLocaleDateString();
-}
 
 interface NotificationBellProps {
   color?: string;
@@ -84,7 +72,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
 
             <View style={s.header}>
               <View style={s.headerTitleRow}>
-                <Text style={s.headerTitle}>Mga Notipikasyon</Text>
+                <Text style={s.headerTitle}>{tr.notifTitle}</Text>
                 {unread > 0 && (
                   <View style={s.headerCount}>
                     <Text style={s.headerCountText}>{unread > 9 ? '9+' : unread}</Text>
@@ -93,7 +81,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
               </View>
               {notifications.length > 0 && unread > 0 && (
                 <TouchableOpacity onPress={markAllNotificationsRead} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={s.headerAction}>Markahan lahat</Text>
+                  <Text style={s.headerAction}>{tr.notifMarkAll}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -101,7 +89,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
             {notifications.length === 0 ? (
               <View style={s.empty}>
                 <Ionicons name="notifications-off-outline" size={32} color="#D1D5DB" />
-                <Text style={s.emptyText}>Walang notipikasyon</Text>
+                <Text style={s.emptyText}>{tr.notifEmpty}</Text>
               </View>
             ) : (
               <FlatList
@@ -127,7 +115,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
                       <View style={{ flex: 1 }}>
                         <Text style={[s.itemTitle, !item.read && s.itemTitleUnread]} numberOfLines={1}>{text.title}</Text>
                         <Text style={s.itemBody} numberOfLines={2}>{text.body}</Text>
-                        <Text style={s.itemTime}>{relTime(item.createdAt)}</Text>
+                        <Text style={s.itemTime}>{relTime(item.createdAt, tr)}</Text>
                       </View>
                       {!item.read && <View style={[s.unreadDot, { backgroundColor: tone.fg }]} />}
                     </TouchableOpacity>
