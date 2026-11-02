@@ -144,7 +144,10 @@ export const EnvironmentalScannerScreen: React.FC = () => {
   const elevM     = num(scan?.elevation_m);
   const soilPh    = num(scan?.soil_ph);
   const sampling  = (scan as any)?.soil_sampling as SoilSampling | undefined;
+  // The texture comes from BSWM's soil survey when the farm is on its map; pH from SoilGrids
+  const soilSeries = scan?.soil_series || '';
   const soilSub   = [
+    soilSeries || null,
     soilPh != null ? `pH ${soilPh}` : null,
     sampling && sampling.points > 1 ? `${sampling.points} ${tr.envSoilPoints}` : null,
   ].filter(Boolean).join(' · ') || '—';
@@ -274,7 +277,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
         {state === 'done' && scan && (
           <>
             {[
-              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilSub,   source: 'SoilGrids' },
+              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilSub,   source: soilSeries ? 'BSWM' : 'SoilGrids' },
               { icon: 'rainy-outline'       as IoniconsName, label: tr.envRainPerYear, value: rainMm != null ? `${Math.round(rainMm).toLocaleString()} mm` : '—', sub: tr.envAnnualAvg,        source: 'Open-Meteo' },
               { icon: 'trending-up-outline' as IoniconsName, label: tr.envElevation,   value: elevM != null ? `${Math.round(elevM)} m` : '—',        sub: tr.envLowland,                            source: 'Open-Meteo' },
             ].map(item => (
@@ -340,7 +343,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
 
             <View style={s.metaCard}>
               <Ionicons name="time-outline" size={13} color="#D1D5DB" />
-              <Text style={s.metaText}>{tr.envScannedOn.replace('{date}', scannedAt).replace('{src}', 'SoilGrids · Open-Meteo')}</Text>
+              <Text style={s.metaText}>{tr.envScannedOn.replace('{date}', scannedAt).replace('{src}', soilSeries ? 'BSWM · SoilGrids · Open-Meteo' : 'SoilGrids · Open-Meteo')}</Text>
             </View>
 
             {/* CTA — only once a real recommendation exists for this scan */}
