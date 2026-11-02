@@ -9,6 +9,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { mockPlantingGuides } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiGuides, apiRecommendations, apiScan, apiWeather } from '@/services/apiService';
+import { loadGuide } from '@/services/guideLoader';
 import { plantingCalendar } from '@/utils/plantingCalendar';
 import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { useLanguageStore } from '@/store/languageStore';
@@ -321,7 +322,6 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   // an infinite Gemini-call loop that blows past the free-tier 20 req/min limit
   // and gives us a 429 → fallback to template.
   const recId          = latestRec?.id;
-  const setLatestGuide = useAppStore(s => s.setLatestGuide);
   const storeLogs      = useAppStore(s => s.progressLogs);
   // Track which recommendation we've generated a guide for. Regenerates when
   // the recId changes (e.g. after switching to a different farm), but never
@@ -352,34 +352,12 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
     fetchedRecIdRef.current = fetchKey;
     setTranslating(isRefresh);
     setGenError(false);
-    console.log('[GUIDE] Calling apiGuides.generate(recId=' + recId + ', logs=' + storeLogs.length + ')...');
-    apiGuides.generate(recId, {
-      variety:  guideVarietyId(),
-      season:   (latestGuide as any)?.season ?? 'Wet Season',
-      logs:     storeLogs.slice(0, 10),
-      language,
-    })
-      .then(res => {
-        console.log('[GUIDE] Generate response — source:', (res.data as any)?.source, 'steps:', res.data?.steps?.length ?? 0);
-        setLatestGuide(res.data);
-        // Restore check-offs from the server rows (survives reinstall / other
-        // devices). Union with local so an offline check made just before this
-        // response isn't lost.
-        const serverDone = ((res.data?.steps ?? []) as any[])
-          .filter(st => st.is_completed)
-          .map(st => String(st.id));
-        // A regenerated guide (language switch) has brand-new step rows, so the
-        // locally-stored ids are stale — the server is authoritative and we
-        // replace. A SAVED guide is the same rows, so union keeps an offline
-        // check made just before this response.
-        const regenerated = (res.data as any)?.source !== 'SAVED';
-        if (regenerated) {
-          useAppStore.getState().hydrateGuideSteps(serverDone);
-        } else if (serverDone.length > 0) {
-          const local = useAppStore.getState().completedGuideSteps;
-          const union = Array.from(new Set([...local, ...serverDone]));
-          useAppStore.getState().hydrateGuideSteps(union);
-        }
+    console.log('[GUIDE] Loading guide (recId=' + recId + ', logs=' + storeLogs.length + ')...');
+    // Shared with the language switch in Profile: if it is already loading this
+    // guide, this waits for that request instead of making a second Gemini call
+    loadGuide(recId, language)
+      .then(data => {
+        console.log('[GUIDE] Generate response — source:', data?.source, 'steps:', data?.steps?.length ?? 0);
       })
       .catch(err => {
         console.error('[GUIDE] Generate failed:', err?.message || err, err?.response?.data);

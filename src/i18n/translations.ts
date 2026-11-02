@@ -162,6 +162,8 @@ const t = {
 
     // Language modal
     langModalTitle: 'Wika at Rehiyon',
+    langSwitchingTitle: 'Pinapalitan ang wika…',
+    langSwitchingBody:  'Isinasalin ang inyong gabay sa pagtatanim. Maaaring umabot ito nang hanggang isang minuto.',
     langModalBody:  'Piliin ang inyong gustong wika para sa app.',
 
     // AI Chat
@@ -769,6 +771,8 @@ const t = {
     profileRole:     'Farmer · Philippines',
 
     langModalTitle: 'Language & Region',
+    langSwitchingTitle: 'Changing the language…',
+    langSwitchingBody:  'Translating your planting guide. This can take up to a minute.',
     langModalBody:  'Choose your preferred app language.',
 
     aiTitle:       'AI Assistant',
@@ -1356,6 +1360,8 @@ const t = {
     profileRole:     'Mag-uuma · Pilipinas',
 
     langModalTitle: 'Pinulongan ug Rehiyon',
+    langSwitchingTitle: 'Gi-usab ang pinulongan…',
+    langSwitchingBody:  'Gihubad ang inyong giya sa pagtanum. Mahimong moabot kini og hangtod usa ka minuto.',
     langModalBody:  'Pilia ang imong gusto nga pinulongan sa app.',
 
     aiTitle:       'AI nga Katabang',
