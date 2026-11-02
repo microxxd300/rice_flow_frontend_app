@@ -58,4 +58,7 @@ export const API_ROUTES = {
   ai: {
     chat: 'ai/chat/',
   },
+  activity: {
+    notices: 'activity/notices/',
+  },
 } as const;

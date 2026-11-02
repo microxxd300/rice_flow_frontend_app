@@ -5,6 +5,8 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppStore, type AppNotification } from '@/store/appStore';
+import { useTranslation } from '@/i18n/useTranslation';
+import { noticeMessage } from '@/utils/farmerNotices';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -47,6 +49,7 @@ interface NotificationBellProps {
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#059669', size = 22 }) => {
   const navigation               = useNavigation<any>();
+  const tr                       = useTranslation();
   const notifications            = useAppStore(s => s.notifications);
   const markNotificationRead     = useAppStore(s => s.markNotificationRead);
   const markAllNotificationsRead = useAppStore(s => s.markAllNotificationsRead);
@@ -110,6 +113,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
                     || (item.category ? CATEGORY_ICON[item.category] : undefined)
                     || 'notifications-outline';
                   const tone = (item.category && CATEGORY_COLOR[item.category]) || DEFAULT_COLOR;
+                  const text = item.notice ? noticeMessage({ ...item.notice, title: item.title, body: item.body }, tr) : item;
                   return (
                     <TouchableOpacity
                       style={[s.item, !item.read && s.itemUnread]}
@@ -121,8 +125,8 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
                         <Ionicons name={icon} size={16} color={tone.fg} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.itemTitle, !item.read && s.itemTitleUnread]} numberOfLines={1}>{item.title}</Text>
-                        <Text style={s.itemBody} numberOfLines={2}>{item.body}</Text>
+                        <Text style={[s.itemTitle, !item.read && s.itemTitleUnread]} numberOfLines={1}>{text.title}</Text>
+                        <Text style={s.itemBody} numberOfLines={2}>{text.body}</Text>
                         <Text style={s.itemTime}>{relTime(item.createdAt)}</Text>
                       </View>
                       {!item.read && <View style={[s.unreadDot, { backgroundColor: tone.fg }]} />}
