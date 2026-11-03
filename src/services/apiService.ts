@@ -27,9 +27,6 @@ export interface RegisterRequest {
   password2: string;
   first_name: string;
   last_name: string;
-  barangay: string;
-  municipality: string;
-  province: string;
 }
 
 export interface LoginResponse {
@@ -63,6 +60,7 @@ export interface LocationCheck {
   land_cover: string | null;
   on_building: boolean | null;
   message: string;
+  barangay: string | null;     // from the official barangay boundaries; null outside Panabo
 }
 
 export interface RiceVarietyBrief {

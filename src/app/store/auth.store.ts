@@ -43,9 +43,6 @@ interface AuthState {
     password2: string;
     first_name: string;
     last_name: string;
-    barangay: string;
-    municipality: string;
-    province: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
   initializeAuth: () => Promise<void>;

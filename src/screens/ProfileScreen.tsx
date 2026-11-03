@@ -93,7 +93,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
     }
   };
   const [editName,         setEditName]         = useState('');
-  const [editBarangay,     setEditBarangay]     = useState('');
   const [editMunicipality, setEditMunicipality] = useState('');
   const [editProvince,     setEditProvince]     = useState('');
 
@@ -113,7 +112,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
   const openEdit = () => {
     setEditName(displayName);
-    setEditBarangay(displayBaran);
     setEditMunicipality(displayMunic);
     setEditProvince(displayProv);
     setActiveModal('editProfile');
@@ -134,7 +132,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
       const res = await authUpdateProfile({
         first_name:   name,
         last_name:    '',
-        barangay:     editBarangay.trim(),
         municipality: editMunicipality.trim(),
         province:     editProvince.trim(),
       });
@@ -420,7 +417,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                 </View>
                 {([
                   { label: tr.profileEditName,         value: editName,         set: setEditName },
-                  { label: tr.profileEditBarangay,     value: editBarangay,     set: setEditBarangay },
                   { label: tr.profileEditMunicipality, value: editMunicipality, set: setEditMunicipality },
                   { label: tr.profileEditProvince,     value: editProvince,     set: setEditProvince },
                 ] as { label: string; value: string; set: (v: string) => void }[]).map(f => (

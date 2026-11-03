@@ -122,40 +122,13 @@ export const GISFarmPinningScreen: React.FC = () => {
     }
   };
 
-  // Reverse-geocode the selected farm's coordinates so the displayed location is
-  // the REAL address (from OpenStreetMap), not whatever was typed at registration.
-  const [resolved, setResolved] = useState<{ barangay?: string; municipality?: string; province?: string }>({});
-  useEffect(() => {
-    const lat = num(selectedFarm?.latitude);
-    const lng = num(selectedFarm?.longitude);
-    if (lat == null || lng == null) { setResolved({}); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,
-          { headers: { 'User-Agent': 'rice-flow-app/1.0 (capstone)' } },
-        );
-        const a = (await r.json())?.address ?? {};
-        if (cancelled) return;
-        setResolved({
-          barangay:     a.suburb || a.village || a.neighbourhood || a.quarter || a.hamlet || undefined,
-          municipality: a.city   || a.town    || a.municipality  || a.county || undefined,
-          province:     a.province || a.state || undefined,
-        });
-      } catch { /* keep stored fallback */ }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedFarm?.id, selectedFarm?.latitude, selectedFarm?.longitude]);
 
-  // Map-resolved values take precedence; the farm's stored values are the fallback
-  const dispBarangay     = resolved.barangay     || selectedFarm?.barangay     || '—';
-  const dispMunicipality = resolved.municipality || '';
-  const dispProvince     = resolved.province     || '';
+  // The saved barangay comes from the farm pin (server-side, official boundaries);
+  // RiceFlow is for Panabo City only, so the city and province are fixed
+  const dispBarangay     = selectedFarm?.barangay || '—';
+  const dispMunicipality = 'Panabo City';
+  const dispProvince     = 'Davao del Norte';
   const dispLocation     = [dispBarangay, dispMunicipality, dispProvince].filter(Boolean).join(', ');
-  const isResolved       = Boolean(resolved.barangay || resolved.municipality);
-  const storedMismatch   = selectedFarm?.barangay && resolved.barangay
-    && selectedFarm.barangay.toLowerCase() !== resolved.barangay.toLowerCase();
 
   // Latest environmental scan for the selected farm — drives the Kalagayan card
   const [latestScan, setLatestScan] = useState<EnvironmentalScan | null>(null);
@@ -197,29 +170,6 @@ export const GISFarmPinningScreen: React.FC = () => {
     } finally { setRescanning(false); }
   };
 
-  // Auto-fix: if the stored barangay clearly doesn't match the pin's real location,
-  // silently push the resolved barangay to the backend and refresh the store.
-  const [fixing, setFixing] = useState(false);
-  useEffect(() => {
-    if (!storedMismatch || !resolved.barangay || !selectedFarm?.id || fixing) return;
-    let cancelled = false;
-    setFixing(true);
-    (async () => {
-      try {
-        await apiFarms.update(selectedFarm.id, { barangay: resolved.barangay });
-        if (cancelled) return;
-        const res = await apiFarms.list();
-        useAppStore.getState().setFarms(res.data);
-        useAppStore.getState().addNotification({
-          title: 'Location updated',
-          body:  `Barangay corrected to ${resolved.barangay}`,
-          icon:  'checkmark-circle-outline',
-        });
-      } catch { /* keep banner; user can retry by re-selecting */ }
-      finally { if (!cancelled) setFixing(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [storedMismatch, resolved.barangay, selectedFarm?.id]);
 
   return (
     <SafeAreaView style={s.root}>
@@ -428,17 +378,6 @@ export const GISFarmPinningScreen: React.FC = () => {
                 </View>
               </View>
 
-              {/* Auto-fix hint — shows briefly while we update, then disappears */}
-              {storedMismatch && (
-                <View style={s.locHint}>
-                  <Ionicons name={fixing ? 'sync' : 'information-circle'} size={14} color="#D97706" />
-                  <Text style={s.locHintText} numberOfLines={2}>
-                    {fixing
-                      ? `Inaayos ang barangay base sa lokasyon ng pin…`
-                      : `Iba ang nakatalang barangay (${selectedFarm.barangay}). Ina-update sa: ${resolved.barangay}.`}
-                  </Text>
-                </View>
-              )}
 
               {[
                 { icon: 'location-outline'    as const, label: tr.gisBarangay,  value: dispBarangay },
