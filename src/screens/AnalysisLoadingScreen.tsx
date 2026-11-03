@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { apiFarms, apiScan, apiRecommendations } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
-import { useTranslation } from '@/i18n/useTranslation';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -24,7 +23,23 @@ const STEPS: { label: string; icon: IoniconsName }[] = [
 // Each step min display time (ms) — API may be slower, we wait for both
 const STEP_DURATION = 900;
 // After this long the screen says the soil and weather check can take up to a minute
-const SLOW_AFTER_MS = 12000;
+const SLOW_AFTER_S = 12;
+// While the server works on the last step the bar keeps creeping toward this, never 100 %
+const WAIT_CAP = 0.97;
+const WAIT_EASE_S = 15;      // how quickly it creeps (time constant, seconds)
+// The steps advance on a timer, so the last one is reached this many seconds in
+const LAST_STEP_AT_S = ((STEPS.length - 1) * STEP_DURATION) / 1000;
+
+// The farm setup screens are in English, so this one is too
+const TEXT = {
+  errorTitle:   'We could not finish the analysis',
+  networkError: 'RiceFlow could not be reached. Check your internet connection and try again.',
+  genericError: 'Something went wrong while checking your farm. Please try again.',
+  keepOpen:     'Please keep the app open.',
+  slow:         'Checking soil and weather can take up to a minute.',
+  tryAgain:     'Try again',
+  back:         'Back',
+};
 
 /** A failed request with no answer from the server (offline, dropped, timed out). */
 const isNetworkError = (err: any) =>
@@ -35,13 +50,15 @@ export const AnalysisLoadingScreen: React.FC = () => {
   const route      = useRoute<any>();
   const farmData   = route.params?.farmData ?? {};
 
-  const tr = useTranslation();
   const [completedCount, setCompletedCount] = useState(0);
   const [apiDone, setApiDone] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
-  const [slow,    setSlow]    = useState(false);
+  const [elapsed, setElapsed] = useState(0);     // seconds since this attempt started
   const [attempt, setAttempt] = useState(0);     // bumped by "Try again"
   const ringPulse = useRef(new Animated.Value(1)).current;
+  const [progress] = useState(() => new Animated.Value(0));  // 0..1, drives the bar width
+  const [shine]    = useState(() => new Animated.Value(0));  // 0..1, sweeps across the bar
+  const [trackWidth, setTrackWidth] = useState(0);
 
   // API results stored in refs to avoid stale closures
   const recommendationRef = useRef<any>(null);
@@ -130,7 +147,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
         // The farm was removed above, so "Try again" starts cleanly; stay on this screen
         failed = true;
         console.warn(`[ANALYSIS] failed at ${step}:`, err?.response?.data ?? err?.message ?? err);
-        setError(isNetworkError(err) ? tr.analysisNetworkError : tr.analysisGenericError);
+        setError(isNetworkError(err) ? TEXT.networkError : TEXT.genericError);
       } finally {
         if (!failed) {
           apiDoneRef.current = true;
@@ -142,11 +159,23 @@ export const AnalysisLoadingScreen: React.FC = () => {
     run();
   }, [attempt]);
 
-  // Say it can take a while if the server is slow (SoilGrids can take most of a minute)
+  // Seconds counter: shows the farmer the app is still working (stops on an answer)
   useEffect(() => {
-    const t = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
-    return () => clearTimeout(t);
-  }, [attempt]);
+    if (apiDone || error) return;
+    const start = Date.now() - elapsed * 1000;
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restart only per attempt or when it ends
+  }, [attempt, apiDone, error]);
+
+  // A shine sweeps across the bar the whole time, so it never looks frozen
+  useEffect(() => {
+    const loop = Animated.loop(Animated.timing(shine, {
+      toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true,
+    }));
+    loop.start();
+    return () => loop.stop();
+  }, [shine]);
 
   // Advance one step at a time. The last step stays active until the server has
   // answered, so the screen never says "complete" while it is still waiting.
@@ -166,7 +195,8 @@ export const AnalysisLoadingScreen: React.FC = () => {
     apiDoneRef.current = false;
     animDoneRef.current = false;
     setApiDone(false);
-    setSlow(false);
+    setElapsed(0);
+    progress.setValue(0);
     setError(null);
     setCompletedCount(0);
     setAttempt(a => a + 1);
@@ -183,8 +213,23 @@ export const AnalysisLoadingScreen: React.FC = () => {
   }, []);
 
   const isDone   = completedCount >= STEPS.length;
-  const pct      = Math.round((Math.min(completedCount, STEPS.length) / STEPS.length) * 100);
   const activeLabel = STEPS[Math.min(completedCount, STEPS.length - 1)].label;
+
+  // Steps fill the bar; while the server works on the last one it keeps creeping
+  // toward WAIT_CAP (slower and slower), and jumps to full once the answer is in
+  const waiting = completedCount === STEPS.length - 1 && !apiDone;
+  const stepFraction = Math.min(completedCount, STEPS.length) / STEPS.length;
+  const waitSeconds  = waiting ? Math.max(0, elapsed - LAST_STEP_AT_S) : 0;
+  const fraction = waiting
+    ? stepFraction + (WAIT_CAP - stepFraction) * (1 - Math.exp(-waitSeconds / WAIT_EASE_S))
+    : stepFraction;
+  useEffect(() => {
+    Animated.timing(progress, {
+      toValue: fraction, duration: 900, easing: Easing.out(Easing.quad), useNativeDriver: false,
+    }).start();
+  }, [fraction, progress]);
+  const barWidth = progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const shineX   = shine.interpolate({ inputRange: [0, 1], outputRange: [-80, Math.max(trackWidth, 80)] });
 
   if (error) {
     return (
@@ -193,14 +238,14 @@ export const AnalysisLoadingScreen: React.FC = () => {
           <View style={[s.hero, { backgroundColor: '#FEF2F2' }]}>
             <Ionicons name="alert-circle-outline" size={28} color="#DC2626" />
           </View>
-          <Text style={s.title}>{tr.analysisErrorTitle}</Text>
+          <Text style={s.title}>{TEXT.errorTitle}</Text>
           <Text style={s.subtitle}>{error}</Text>
           <TouchableOpacity style={s.primaryBtn} onPress={tryAgain} activeOpacity={0.85}>
             <Ionicons name="refresh" size={16} color="#FFFFFF" />
-            <Text style={s.primaryBtnText}>{tr.analysisTryAgain}</Text>
+            <Text style={s.primaryBtnText}>{TEXT.tryAgain}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-            <Text style={s.secondaryBtnText}>{tr.back}</Text>
+            <Text style={s.secondaryBtnText}>{TEXT.back}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -220,18 +265,33 @@ export const AnalysisLoadingScreen: React.FC = () => {
           {isDone ? 'Analysis complete' : 'Analyzing your farm'}
         </Text>
         <Text style={s.subtitle}>
-          {isDone
-            ? 'Your recommendations are ready.'
-            : slow ? tr.analysisSlow : activeLabel + '…'}
+          {isDone ? 'Your recommendations are ready.' : activeLabel + '…'}
         </Text>
 
-        {/* Overall progress — one thin bar + "n / N" count */}
+        {/* Overall progress: a bar that keeps moving (creeps + shine), the seconds so
+            far, and the "n / N" step count */}
         <View style={s.progressWrap}>
-          <View style={s.progressTrack}>
-            <View style={[s.progressFill, { width: `${pct}%` }]} />
+          <View style={s.progressTrack} onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}>
+            <Animated.View style={[s.progressFill, { width: barWidth }]}>
+              {!isDone && (
+                <Animated.View style={[s.progressShine, { transform: [{ translateX: shineX }] }]} />
+              )}
+            </Animated.View>
           </View>
-          <Text style={s.progressCount}>{Math.min(completedCount, STEPS.length)} / {STEPS.length}</Text>
+          <View style={s.progressMeta}>
+            <Text style={s.progressCount}>{isDone ? '' : `${elapsed} s`}</Text>
+            <Text style={s.progressCount}>{Math.min(completedCount, STEPS.length)} / {STEPS.length}</Text>
+          </View>
         </View>
+
+        {!isDone && (
+          <View style={s.keepOpen}>
+            <Ionicons name="hourglass-outline" size={14} color="#047857" />
+            <Text style={s.keepOpenText}>
+              {TEXT.keepOpen}{elapsed >= SLOW_AFTER_S ? ` ${TEXT.slow}` : ''}
+            </Text>
+          </View>
+        )}
 
         {/* Step list — flat hairline rows */}
         <View style={s.steps}>
@@ -255,7 +315,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
                 {done
                   ? <Ionicons name="checkmark-circle" size={15} color="#059669" />
                   : active
-                    ? <View style={s.activeDot} />
+                    ? <ActivityIndicator size="small" color="#059669" style={s.stepSpinner} />
                     : <View style={s.pendingDot} />
                 }
               </View>
@@ -288,14 +348,20 @@ const s = StyleSheet.create({
   /* Overall progress */
   progressWrap: { width: '100%', marginBottom: 24 },
   progressTrack: {
-    height: 4, borderRadius: 2,
-    backgroundColor: '#F3F4F6', overflow: 'hidden',
+    height: 8, borderRadius: 4,
+    backgroundColor: '#ECFDF5', overflow: 'hidden',
   },
-  progressFill: { height: '100%', backgroundColor: '#059669', borderRadius: 2 },
-  progressCount: {
-    fontSize: 11, fontWeight: '600', color: '#9CA3AF',
-    textAlign: 'right', marginTop: 6,
+  progressFill:  { height: '100%', backgroundColor: '#059669', borderRadius: 4, overflow: 'hidden' },
+  progressShine: { position: 'absolute', top: 0, bottom: 0, width: 80, backgroundColor: 'rgba(255,255,255,0.45)' },
+  progressMeta:  { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  progressCount: { fontSize: 11, fontWeight: '600', color: '#9CA3AF' },
+
+  keepOpen: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, alignSelf: 'stretch',
+    backgroundColor: '#ECFDF5', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 20,
   },
+  keepOpenText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#047857', fontWeight: '600' },
 
   /* Step list — flat */
   steps: { width: '100%' },
@@ -318,6 +384,6 @@ const s = StyleSheet.create({
   secondaryBtn:     { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 14, marginTop: 8 },
   secondaryBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
 
-  activeDot:  { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#059669' },
+  stepSpinner: { transform: [{ scale: 0.8 }] },
   pendingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#E5E7EB' },
 });

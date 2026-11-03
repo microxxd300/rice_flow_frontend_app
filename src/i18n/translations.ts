@@ -162,11 +162,6 @@ const t = {
 
     // Language modal
     langModalTitle: 'Wika at Rehiyon',
-    analysisErrorTitle:   'Hindi natapos ang pagsusuri',
-    analysisNetworkError: 'Hindi maabot ang RiceFlow. Tingnan ang inyong internet at subukan ulit.',
-    analysisGenericError: 'May nangyaring mali habang sinusuri ang inyong bukid. Pakisubukan ulit.',
-    analysisSlow:         'Ginagawa pa. Ang pagsuri sa lupa at panahon ay maaaring umabot nang isang minuto.',
-    analysisTryAgain:     'Subukan ulit',
     notifTitle:     'Mga Notipikasyon',
     notifMarkAll:   'Markahan lahat',
     notifEmpty:     'Walang notipikasyon',
@@ -784,11 +779,6 @@ const t = {
     profileRole:     'Farmer · Philippines',
 
     langModalTitle: 'Language & Region',
-    analysisErrorTitle:   'We could not finish the analysis',
-    analysisNetworkError: 'RiceFlow could not be reached. Check your internet connection and try again.',
-    analysisGenericError: 'Something went wrong while checking your farm. Please try again.',
-    analysisSlow:         'Still working. Checking soil and weather can take up to a minute.',
-    analysisTryAgain:     'Try again',
     notifTitle:     'Notifications',
     notifMarkAll:   'Mark all read',
     notifEmpty:     'No notifications',
@@ -1386,11 +1376,6 @@ const t = {
     profileRole:     'Mag-uuma · Pilipinas',
 
     langModalTitle: 'Pinulongan ug Rehiyon',
-    analysisErrorTitle:   'Wala mahuman ang pagsusi',
-    analysisNetworkError: 'Dili maabot ang RiceFlow. Susiha ang inyong internet ug sulayi pag-usab.',
-    analysisGenericError: 'Naay sayop samtang gisusi ang inyong uma. Palihug sulayi pag-usab.',
-    analysisSlow:         'Nagtrabaho pa. Ang pagsusi sa yuta ug panahon mahimong moabot og usa ka minuto.',
-    analysisTryAgain:     'Sulayi pag-usab',
     notifTitle:     'Mga Notification',
     notifMarkAll:   'Markahi tanan',
     notifEmpty:     'Walay notification',
