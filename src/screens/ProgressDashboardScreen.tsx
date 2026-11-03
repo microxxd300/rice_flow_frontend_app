@@ -16,7 +16,9 @@ import { Button } from '../components';
 
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
-import { apiProgress, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
+import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
+import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
+import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
@@ -485,16 +487,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     useAppStore.getState().setPendingLogStep(null);
   }, [pendingLogStep]);
 
-  // Live temperature for the metric tile (from Open-Meteo via Django)
-  const [liveTemp, setLiveTemp] = useState<number | null>(null);
-  const farmLat = (selectedFarm as any)?.latitude;
-  const farmLng = (selectedFarm as any)?.longitude;
-  useEffect(() => {
-    if (farmLat == null || farmLng == null) return;
-    apiWeather.current(farmLat, farmLng)
-      .then(res => setLiveTemp(Math.round(res.data.current.temperature)))
-      .catch(() => {});
-  }, [farmLat, farmLng]);
+  // Live temperature for the metric tile, from the app's shared forecast (useFarmForecast)
+  const forecast = useAppStore(s => s.forecast);
+  const liveTemp = forecast && forecast.key === farmKey(selectedFarm) && forecast.data.current?.temperature != null
+    ? Math.round(forecast.data.current.temperature) : null;
+  // What the weather means for the step this log finishes
+  const { adviceFor } = useStepWeather();
+  const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
 
   // Real seasonal yields — one record per cycle that has a saved yield
   const [realYields, setRealYields] = useState<{ season: string; yieldTons: number }[]>([]);
@@ -1411,6 +1410,18 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   </View>
                 </TouchableOpacity>
               )}
+              {logWeather && (
+                <View style={[s.logWeather, logWeather.level === 'stop' && s.logWeatherStop]}>
+                  <Ionicons
+                    name={logWeather.level === 'stop' ? 'warning' : 'rainy-outline'}
+                    size={15}
+                    color={logWeather.level === 'stop' ? '#B91C1C' : '#92400E'}
+                  />
+                  <Text style={[s.logWeatherText, logWeather.level === 'stop' && { color: '#B91C1C' }, T && { fontSize: 14 }]}>
+                    {(tr as any)[ADVICE_TEXT[logWeather.code]]}
+                  </Text>
+                </View>
+              )}
 
               {/* Petsa ng Tala */}
               <View style={s.mFieldWrap}>
@@ -1597,6 +1608,12 @@ const s = StyleSheet.create({
   stepCheckOn:     { backgroundColor: '#059669', borderColor: '#059669' },
   stepToggleLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500' },
   stepToggleTitle: { fontSize: 13, color: '#111827', fontWeight: '700', marginTop: 2 },
+  logWeather: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: -6, marginBottom: 16,
+    borderWidth: 1, borderColor: '#FDE68A', backgroundColor: '#FFF7ED', borderRadius: 10, padding: 10,
+  },
+  logWeatherStop: { borderColor: '#FECACA', backgroundColor: '#FEF2F2' },
+  logWeatherText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: '#92400E', fontWeight: '600' },
   scroll: { paddingHorizontal: 24, paddingBottom: 110 },
 
   header: {

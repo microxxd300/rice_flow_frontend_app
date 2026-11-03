@@ -4,24 +4,37 @@ import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { planGuideReminders } from '@/utils/guideReminders';
 import { syncGuideReminders } from '@/services/guideReminderScheduler';
+import { useStepWeather } from '@/hooks/useFarmForecast';
+import { guideSteps } from '@/utils/guideSteps';
+import { ADVICE_TEXT } from '@/utils/stepWeather';
 
 /**
  * Keeps the phone's 7 AM planting-guide reminders in step with the guide: rebuilt when
- * the guide changes, a step is ticked, the language changes or notifications are
- * switched off in Profile.
+ * the guide changes, a step is logged, the language changes, notifications are
+ * switched off in Profile, or the weather advice for a coming step changes (a reminder
+ * then says, for example, to hold the fertilizer because heavy rain is coming).
  */
 export function useGuideReminders(): void {
   const guide     = useAppStore(s => s.latestGuide);
   const completed = useAppStore(s => s.completedGuideSteps);
   const enabled   = useAppStore(s => s.notificationsEnabled);
   const tr        = useTranslation();
+  const { adviceFor } = useStepWeather();
+
+  const byId = new Map(guideSteps(guide).map(st => [st.id, st]));
+  const reminders = (enabled ? planGuideReminders(guide, completed) : []).map(r => {
+    const advice = r.stepIds.map(id => adviceFor(byId.get(id))).find(a => !!a);
+    return advice ? { ...r, note: (tr as any)[ADVICE_TEXT[advice.code]] as string } : r;
+  });
+  // As text, so a new forecast every 10 minutes reschedules nothing unless a note changed
+  const plan = JSON.stringify(reminders);
 
   useEffect(() => {
-    const reminders = enabled ? planGuideReminders(guide, completed) : [];
-    void syncGuideReminders(reminders, {
+    const planned = (JSON.parse(plan) as any[]).map(r => ({ ...r, date: new Date(r.date) }));
+    void syncGuideReminders(planned, {
       title: tr.reminderTitle, body: tr.reminderBody, channel: tr.reminderChannel,
     });
-  }, [guide, completed, enabled, tr]);
+  }, [plan, tr]);
 }
 
 /** Calls open() once for each reminder the farmer taps, including the one that launched the app. */

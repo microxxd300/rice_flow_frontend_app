@@ -9,6 +9,7 @@ import { colors } from '@/theme';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 import { useGuideReminders, useReminderTap } from '@/hooks/useGuideReminders';
 import { useFarmerNotices } from '@/hooks/useFarmerNotices';
+import { useFarmForecast, useStepWeatherAlert } from '@/hooks/useFarmForecast';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { fetchActiveCycleLogs } from '@/utils/progressLogs';
 import {
@@ -164,6 +165,9 @@ const MainTabs: React.FC<{ route?: any; navigation?: any }> = ({ route, navigati
   useReminderTap(useCallback(() => navigation?.navigate('MainTabs', { screen: 'PlantingTab' }), [navigation]));
   // The admin's notices (a removed farm or cycle, an updated variety) go into the bell
   useFarmerNotices();
+  // One forecast for the whole app, kept fresh; a step the weather rules out goes into the bell
+  useFarmForecast();
+  useStepWeatherAlert();
   // Load the Progress tab's data while the farmer is on Home, so its first visit
   // opens with data instead of skeletons
   const farmId = useSelectedFarm()?.id;

@@ -173,9 +173,21 @@ export interface WeatherHour {
   rainfall_mm:  number;
   rain_prob:    number;
 }
+// Rain and wind ahead of now, for the planting guide's weather advice (utils/stepWeather)
+export interface WeatherOutlook {
+  rain_mm_6h:       number;
+  rain_prob_6h:     number;
+  rain_mm_24h:      number;
+  rain_prob_24h:    number;
+  rain_mm_48h:      number;
+  rain_prob_48h:    number;
+  wind_kph_max_12h: number;
+}
 export interface WeatherResponse {
-  current: WeatherCurrent;
-  hourly:  WeatherHour[];
+  current:     WeatherCurrent;
+  hourly:      WeatherHour[];
+  outlook?:    WeatherOutlook;
+  fetched_at?: string | null;   // when the server got this forecast from Open-Meteo
 }
 
 export const apiWeather = {
