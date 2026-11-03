@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert,
@@ -16,10 +16,10 @@ import { Button } from '../components';
 
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
-import { apiProgress, apiGuides, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
-import { useAppStore, guideVarietyId } from '@/store/appStore';
+import { apiProgress, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
+import { useAppStore } from '@/store/appStore';
+import { guideSteps, guideProgress } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
-import { useLanguageStore } from '@/store/languageStore';
 import { seasonLabel } from '@/utils/formatting';
 import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
 
@@ -228,6 +228,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const [openIssue,    setOpenIssue]    = useState(false);
   const [growthStages, setGrowthStages] = useState<any[]>(cached?.stages ?? []);
   const [savingLog,    setSavingLog]    = useState(false);
+  // The guide step this log finishes: opened from "Log this step" (on), or the current step (off)
+  const [logStep,      setLogStep]      = useState<string | null>(null);
+  const [finishesStep, setFinishesStep] = useState(false);
 
   const hasIssue = logIssue && logIssue !== 'None';
 
@@ -438,8 +441,31 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     })();
   }, [selectedFarmId, variety, farmArea, currentCycle?.id]);
 
-  // Gemini-generated guide steps for this farm (none until a guide exists)
-  const guideSteps = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
+  // The PalayCheck guide, one step at a time (same rule as the Planting tab and Home)
+  const completedSteps = useAppStore(s => s.completedGuideSteps);
+  const guideList      = guideSteps(latestGuide);
+  const guideNow       = guideProgress(guideList, completedSteps);
+  const logStepTarget  = guideList.find(st => st.id === (logStep ?? guideNow.current?.id));
+
+  // "Log this step" opens the form for one step; a closed form forgets it
+  const openLogFor = (stepId: string) => {
+    setLogStep(stepId);
+    setFinishesStep(true);
+    setShowAddLog(true);
+  };
+  const closeLog = () => {
+    setShowAddLog(false);
+    setLogStep(null);
+    setFinishesStep(false);
+  };
+  // Sent from the Planting tab or Home's Upcoming Tasks
+  const pendingLogStep = useAppStore(s => s.pendingLogStep);
+  useEffect(() => {
+    if (!pendingLogStep) return;
+    setSelectedTab('logs');
+    openLogFor(pendingLogStep);
+    useAppStore.getState().setPendingLogStep(null);
+  }, [pendingLogStep]);
 
   // Live temperature for the metric tile (from Open-Meteo via Django)
   const [liveTemp, setLiveTemp] = useState<number | null>(null);
@@ -493,6 +519,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     const issueClean = logIssue.trim();
     const issueIsReal = !!issueClean && issueClean !== 'Wala' && issueClean !== 'None';
+    const doneStep    = finishesStep && logStepTarget && !isNaN(Number(logStepTarget.id)) ? logStepTarget : null;
 
     // Save to the server first; the log only shows in the app once the server has it.
     // Notes are required by the server, so a log without notes falls back to its stage/issue.
@@ -506,7 +533,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         issue_type:   issueIsReal ? (ISSUE_TO_API[issueClean] ?? 'other') : '',
         severity:     issueIsReal ? (logSeverity || 'Low').toLowerCase() : '',
         action_taken: issueIsReal ? logAction.trim() : '',
-        observation:  logNotes.trim() || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check',
+        observation:  logNotes.trim() || doneStep?.title
+                      || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check',
+        guide_step:   doneStep ? Number(doneStep.id) : null,
       });
       saved = res.data;
     } catch {
@@ -527,6 +556,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       notes:         logNotes.trim(),
     };
     useAppStore.getState().addProgressLog(newLog);
+    // The server marked the step done with the log; the guide moves on to the next step
+    if (doneStep) useAppStore.getState().markGuideStepDone(doneStep.id);
 
     // In-app notification (always fires) with deep-link to the relevant guide category
     {
@@ -550,22 +581,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           : 'Your field observation was recorded.',
         category, icon,
       });
-
-      // Silent background refresh of the planting guide using all recent logs.
-      const recId = useAppStore.getState().latestRecommendation?.id;
-      if (recId) {
-        apiGuides.generate(recId, {
-          variety:  guideVarietyId(),
-          season:   useAppStore.getState().latestGuide?.season ?? 'Wet Season',
-          logs:     useAppStore.getState().progressLogs.slice(0, 10),
-          language: useLanguageStore.getState().language,
-        })
-          .then(res => useAppStore.getState().setLatestGuide(res.data))
-          .catch(() => {});
-      }
     }
     setLogIssue(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
-    setLogStage(''); setShowAddLog(false);
+    setLogStage(''); closeLog();
   };
 
   // Format ISO date → "Jun 15" (short month + day)
@@ -914,10 +932,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
               {/* Card 4: Todo list */}
               {(() => {
-                const todos = guideSteps
-                  .filter((s: any) => s.daysAfterPlanting >= CURRENT_DAY)
-                  .sort((a: any, b: any) => a.daysAfterPlanting - b.daysAfterPlanting)
-                  .slice(0, 4);
+                const todos = [guideNow.current, ...guideNow.next].filter(st => !!st).slice(0, 4) as typeof guideList;
                 if (!todos.length) return null;
                 return (
                   <View style={[s.card, { padding: 0, overflow: 'hidden', marginBottom: 12 }]}>
@@ -928,18 +943,24 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         <Text style={s.todoLogBtnText}>{tr.homeAddLog}</Text>
                       </TouchableOpacity>
                     </View>
-                    {todos.map((step: any, i: number) => {
+                    {todos.map((step, i) => {
                       const cat    = CAT_CONFIG[step.category] ?? CAT_CONFIG.planting;
                       const isNext = i === 0;
                       return (
-                        <View key={step.id} style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: i < todos.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}>
+                        <TouchableOpacity
+                          key={step.id}
+                          onPress={() => openLogFor(step.id)}
+                          activeOpacity={0.75}
+                          style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: i < todos.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}
+                        >
                           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isNext ? cat.color : '#D1D5DB', marginTop: 5 }} />
                           <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: T ? 13 : 12, color: isNext ? '#111827' : '#9CA3AF', lineHeight: 19, fontWeight: isNext ? '500' : '400' }}>
-                              {step.instruction}
+                            <Text style={{ fontSize: T ? 13 : 12, color: isNext ? '#111827' : '#9CA3AF', lineHeight: 19, fontWeight: isNext ? '600' : '400' }}>
+                              {step.title}
                             </Text>
                           </View>
-                        </View>
+                          <Ionicons name="chevron-forward" size={14} color="#D1D5DB" style={{ marginTop: 3 }} />
+                        </TouchableOpacity>
                       );
                     })}
                   </View>
@@ -1325,9 +1346,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       </ScrollView>
 
       {/* ADD LOG MODAL */}
-      <Modal visible={showAddLog} transparent animationType="slide" onRequestClose={() => setShowAddLog(false)}>
+      <Modal visible={showAddLog} transparent animationType="slide" onRequestClose={closeLog}>
         <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={() => setShowAddLog(false)} />
+          <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={closeLog} />
           <View style={s.modalSheet}>
             <View style={s.modalHandle} />
             <View style={s.modalHeader}>
@@ -1335,7 +1356,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 <Text style={[s.modalTitle, T && { fontSize: 19 }]}>{tr.plogModalTitle}</Text>
                 <Text style={[s.modalSub, T && { fontSize: 14 }]}>{tr.plogModalSub}</Text>
               </View>
-              <TouchableOpacity onPress={() => setShowAddLog(false)} style={s.modalCloseBtn} activeOpacity={0.75}>
+              <TouchableOpacity onPress={closeLog} style={s.modalCloseBtn} activeOpacity={0.75}>
                 <Ionicons name="close" size={20} color="#111827" />
               </TouchableOpacity>
             </View>
@@ -1354,6 +1375,23 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+              {/* Finishes a PalayCheck step: the guide moves on once this log is saved */}
+              {!!logStepTarget && (
+                <TouchableOpacity
+                  style={[s.stepToggle, finishesStep && s.stepToggleOn]}
+                  onPress={() => setFinishesStep(v => !v)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[s.stepCheck, finishesStep && s.stepCheckOn]}>
+                    {finishesStep && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.stepToggleLabel, T && { fontSize: 13 }]}>{tr.plogFinishesStep}</Text>
+                    <Text style={[s.stepToggleTitle, T && { fontSize: 15 }]} numberOfLines={2}>{logStepTarget.title}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
 
               {/* Petsa ng Tala */}
               <View style={s.mFieldWrap}>
@@ -1503,7 +1541,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               </View>
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 8 }}>
-                <TouchableOpacity style={s.mCancelBtn} onPress={() => setShowAddLog(false)} activeOpacity={0.7}>
+                <TouchableOpacity style={s.mCancelBtn} onPress={closeLog} activeOpacity={0.7}>
                   <Text style={[s.mCancelBtnText, T && { fontSize: 15 }]}>{tr.cancel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1527,6 +1565,19 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F7F9F8' },
+  stepToggle: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  stepToggleOn:    { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' },
+  stepCheck: {
+    width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#D1D5DB',
+    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
+  },
+  stepCheckOn:     { backgroundColor: '#059669', borderColor: '#059669' },
+  stepToggleLabel: { fontSize: 11, color: '#6B7280', fontWeight: '500' },
+  stepToggleTitle: { fontSize: 13, color: '#111827', fontWeight: '700', marginTop: 2 },
   scroll: { paddingHorizontal: 24, paddingBottom: 110 },
 
   header: {

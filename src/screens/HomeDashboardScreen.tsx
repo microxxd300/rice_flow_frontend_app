@@ -8,6 +8,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
+import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { apiWeather, type WeatherCurrent, type WeatherHour } from '@/services/apiService';
 import { useAuthStore } from '@/features/auth/store';
 import { Skeleton } from '@/components/Skeleton';
@@ -58,7 +59,7 @@ export const HomeDashboardScreen: React.FC = () => {
   const [showHourly,  setShowHourly]  = useState(false);
 
   const { user: authUser } = useAuthStore();
-  const { farms: realFarms, farmsLoaded, latestRecommendation, latestGuide, progressLogs } = useAppStore();
+  const { farms: realFarms, farmsLoaded, latestRecommendation, latestGuide, progressLogs, completedGuideSteps } = useAppStore();
 
   const STAGE_LABELS: Record<string, string> = {
     'Seedling':           tr.stageSeedling,
@@ -196,7 +197,8 @@ export const HomeDashboardScreen: React.FC = () => {
     logDate:       l.logDate       ?? l.log_date       ?? '',
   }));
 
-  // "Susunod na Gawain" — next 3 upcoming guide steps based on today's offset from planting start
+  // "Susunod na Gawain" — the current PalayCheck step and the two after it (same rule as the
+  // Planting tab); tapping one opens the log that finishes it
   type TaskCat = 'planting' | 'fertilizer' | 'pest_prevention' | 'irrigation' | 'harvesting';
   const TASK_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['name']; color: string; bg: string }> = {
     planting:        { icon: 'leaf-outline',             color: '#059669', bg: '#ECFDF5' },
@@ -206,31 +208,14 @@ export const HomeDashboardScreen: React.FC = () => {
     harvesting:      { icon: 'basket-outline',           color: '#B45309', bg: '#FFFBEB' },
   };
   const upcomingTasks = (() => {
-    const g: any = latestGuide;
-    if (!g || !Array.isArray(g.steps) || g.steps.length === 0) return [];
-    const startStr = g.startDate || g.start_date;
-    const start = startStr ? new Date(startStr) : new Date();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); start.setHours(0, 0, 0, 0);
-    const currentDay = Math.floor((today.getTime() - start.getTime()) / 86400000);
-    const seen = new Set<string>();
-    return g.steps
-      .filter((st: any) => (st.daysAfterPlanting ?? 0) >= currentDay)
-      // Drop any repeated step id so React list keys stay unique
-      .filter((st: any) => {
-        const key = String(st.id);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .sort((a: any, b: any) => a.daysAfterPlanting - b.daysAfterPlanting)
-      .slice(0, 3)
-      .map((st: any) => ({
-        id:     st.id,
-        title:  st.title,
-        cat:    st.category as TaskCat,
-        offset: (st.daysAfterPlanting ?? 0) - currentDay,
-      }));
+    const { current, next } = guideProgress(guideSteps(latestGuide), completedGuideSteps);
+    const currentDay = guideDay(latestGuide);
+    return [current, ...next].filter(st => !!st).slice(0, 3).map(st => ({
+      id:     st!.id,
+      title:  st!.title,
+      cat:    st!.category as TaskCat,
+      offset: st!.daysAfterPlanting - currentDay,
+    }));
   })();
   const taskDayLabel = (offset: number) =>
     offset <= 0 ? tr.homeToday
@@ -354,14 +339,14 @@ export const HomeDashboardScreen: React.FC = () => {
           <View style={s.section}>
             <View style={[s.card, { paddingTop: 14, paddingBottom: 4 }]}>
               <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeUpcomingTasks}</Text>
-              {upcomingTasks.map((t: { id?: string; title: string; cat: TaskCat; offset: number }, i: number) => {
+              {upcomingTasks.map((t, i) => {
                 const meta = TASK_META[t.cat] || TASK_META.planting;
                 return (
                   <TouchableOpacity
-                    key={t.id ?? i}
+                    key={t.id}
                     onPress={() => {
-                      useAppStore.getState().setPendingGuideCategory(t.cat);
-                      navigation.navigateDeprecated('PlantingTab');
+                      useAppStore.getState().setPendingLogStep(t.id);
+                      navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
                     }}
                     activeOpacity={0.75}
                     style={[s.taskRow, i < upcomingTasks.length - 1 && s.taskRowBorder]}

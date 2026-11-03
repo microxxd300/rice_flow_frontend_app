@@ -208,11 +208,9 @@ export const apiVarieties = {
 export const apiGuides = {
   list:       ()                       => apiClient.get<any[]>(API_ROUTES.guides.list),
   detail:     (id: number)             => apiClient.get<any>(API_ROUTES.guides.detail(id)),
-  // Regenerating a guide (new farm or language) is a Gemini call that can take up to a minute
+  // The PalayCheck guide is built on the server in a moment; the long timeout covers a server waking up
   generate:   (recId: number, data: any) =>
                                           apiClient.post<any>(API_ROUTES.guides.generate(recId), data, { timeout: 90000 }),
-  appendStep: (recId: number, data: { category: string; last_day: number; existing_count: number; variety?: number; season?: string; language?: string; logs?: any[] }) =>
-                                          apiClient.post<{ step: any }>(API_ROUTES.guides.appendStep(recId), data),
   complete:   (stepId: number, done: boolean = true) =>
                                           apiClient.patch<any>(API_ROUTES.guides.stepComplete(stepId), { is_completed: done }),
 };

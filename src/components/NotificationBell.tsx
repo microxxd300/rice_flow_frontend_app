@@ -41,7 +41,6 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
   const notifications            = useAppStore(s => s.notifications);
   const markNotificationRead     = useAppStore(s => s.markNotificationRead);
   const markAllNotificationsRead = useAppStore(s => s.markAllNotificationsRead);
-  const setPendingGuideCategory  = useAppStore(s => s.setPendingGuideCategory);
   const [open, setOpen]          = useState(false);
 
   const unread = notifications.filter(n => !n.read).length;
@@ -49,7 +48,6 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
   const onTapNotification = (n: AppNotification) => {
     markNotificationRead(n.id);
     if (n.category) {
-      setPendingGuideCategory(n.category);
       try { navigation.navigateDeprecated('PlantingTab'); } catch { /* navigator may not have this route */ }
     }
     setOpen(false);

@@ -25,14 +25,14 @@ interface AppState {
   setupStep: string | null;   // current setup screen, persisted for resume-on-reopen
   setupData: any;             // accumulated farmData for the current setup step
   latestRecommendation: Recommendation | null;
-  latestGuide: any | null;    // Gemini-generated planting guide (app-shaped steps)
+  latestGuide: any | null;    // the PalayCheck planting guide (app-shaped steps)
   notifications: AppNotification[];
-  pendingGuideCategory: string | null;   // category for the Planting Guide screen to open
+  pendingLogStep: string | null;   // guide step the Progress log form opens for ("Log this step")
   entryTab: string | null;   // tab to open when setup finishes (kept here: the navigator remounts)
   pickedVariety: { recId: number; varietyId: number } | null;   // set the moment the farmer taps a variety
   progressLogs: any[];
   activeCycle: any | null;
-  completedGuideSteps: string[];   // step IDs marked done by farmer in PlantingGuide
+  completedGuideSteps: string[];   // guide step IDs the farmer finished with a log
   notificationsEnabled: boolean;
   weatherAlertsEnabled: boolean;
 
@@ -47,19 +47,18 @@ interface AppState {
   hydrateSelectedFarm:      (id: number | null) => void;
   setLatestRecommendation:  (rec: Recommendation | null) => void;
   setLatestGuide:           (guide: any | null) => void;
-  addGuideStep:             (step: any) => void;
   addNotification:          (n: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => void;
   markNotificationRead:     (id: string) => void;
   markAllNotificationsRead: () => void;
   hydrateNotifications:     (list: AppNotification[]) => void;
-  setPendingGuideCategory:  (cat: string | null) => void;
+  setPendingLogStep:        (stepId: string | null) => void;
   setEntryTab:              (tab: string | null) => void;
   setPickedVariety:         (pick: { recId: number; varietyId: number } | null) => void;
   setProgressLogs:          (logs: any[]) => void;
   addProgressLog:           (log: any) => void;
   hydrateProgressLogs:      (logs: any[]) => void;
   setActiveCycle:           (cycle: any | null) => void;
-  toggleGuideStepDone:      (stepId: string) => void;
+  markGuideStepDone:        (stepId: string) => void;
   hydrateGuideSteps:        (stepIds: string[]) => void;
   setNotificationsEnabled:  (on: boolean) => void;
   setWeatherAlertsEnabled:  (on: boolean) => void;
@@ -78,7 +77,7 @@ export const useAppStore = create<AppState>((set) => ({
   latestRecommendation: null,
   latestGuide:          null,
   notifications:        [],
-  pendingGuideCategory: null,
+  pendingLogStep:       null,
   entryTab:             null,
   pickedVariety:        null,
   progressLogs:         [],
@@ -170,20 +169,6 @@ export const useAppStore = create<AppState>((set) => ({
     set({ latestGuide: guide });
     storage.setItem(STORAGE_KEYS.LATEST_GUIDE, guide).catch(() => {});
   },
-  addGuideStep: (step) => {
-    const state = useAppStore.getState();
-    const guide = state.latestGuide;
-    if (!guide || !step) return;
-    const existing = Array.isArray(guide.steps) ? guide.steps : [];
-    // Dedupe by id so retries don't double-insert
-    if (existing.some((s: any) => String(s.id) === String(step.id))) return;
-    const merged = [...existing, step].sort(
-      (a: any, b: any) => (a.daysAfterPlanting ?? 0) - (b.daysAfterPlanting ?? 0),
-    );
-    const next = { ...guide, steps: merged };
-    set({ latestGuide: next });
-    storage.setItem(STORAGE_KEYS.LATEST_GUIDE, next).catch(() => {});
-  },
 
   addNotification: (n) => {
     const state = useAppStore.getState();
@@ -219,7 +204,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   hydrateNotifications: (list) => set({ notifications: list.slice(0, 3) }),
 
-  setPendingGuideCategory: (cat) => set({ pendingGuideCategory: cat }),
+  setPendingLogStep: (stepId) => set({ pendingLogStep: stepId }),
   setEntryTab: (tab) => set({ entryTab: tab }),
   setPickedVariety: (pick) => set({ pickedVariety: pick }),
 
@@ -237,11 +222,10 @@ export const useAppStore = create<AppState>((set) => ({
   hydrateProgressLogs: (logs) => set({ progressLogs: logs.filter(isAppLog) }),
   setActiveCycle:          cycle => set({ activeCycle: cycle }),
 
-  toggleGuideStepDone: (stepId) => {
+  markGuideStepDone: (stepId) => {
     const current = useAppStore.getState().completedGuideSteps;
-    const next = current.includes(stepId)
-      ? current.filter(id => id !== stepId)
-      : [...current, stepId];
+    if (current.includes(stepId)) return;
+    const next = [...current, stepId];
     set({ completedGuideSteps: next });
     storage.setItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS, next).catch(() => {});
   },
@@ -267,7 +251,7 @@ export const useAppStore = create<AppState>((set) => ({
     user: null, farms: [], farmsLoaded: false, selectedFarmId: null, setupComplete: false,
     setupStep: null, setupData: {},
     latestRecommendation: null, latestGuide: null,
-    notifications: [], pendingGuideCategory: null, entryTab: null, pickedVariety: null,
+    notifications: [], pendingLogStep: null, entryTab: null, pickedVariety: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
     notificationsEnabled: true, weatherAlertsEnabled: true,
   }),

@@ -4,13 +4,12 @@ import type { Language } from '@/i18n/translations';
 
 // One request per recommendation + language at a time. The language switch in
 // Profile and the Planting screen can both ask for the same guide; the second
-// caller waits for the first request instead of starting another Gemini call.
+// caller waits for the first request instead of sending another.
 const inflight = new Map<string, Promise<any>>();
 
 /**
- * Load the planting guide for a recommendation in a language and put it in the store.
- * The server returns the saved checklist when the language matches and regenerates it
- * (Gemini, up to about a minute) when it does not.
+ * Load the PalayCheck planting guide for a recommendation in a language and put it in the
+ * store. The steps are saved on the server; the language only changes their wording.
  */
 export function loadGuide(recId: number, language: Language): Promise<any> {
   const key = `${recId}:${language}`;
@@ -21,7 +20,6 @@ export function loadGuide(recId: number, language: Language): Promise<any> {
   const request = apiGuides.generate(recId, {
     variety:  guideVarietyId(),
     season:   (state.latestGuide as any)?.season ?? 'Wet Season',
-    logs:     state.progressLogs.slice(0, 10),
     language,
   })
     .then(res => {
@@ -31,10 +29,10 @@ export function loadGuide(recId: number, language: Language): Promise<any> {
       const serverDone = ((res.data?.steps ?? []) as any[])
         .filter(st => st.is_completed)
         .map(st => String(st.id));
-      // A regenerated guide (language switch) has brand-new step rows, so the
+      // A rebuilt guide (new PalayCheck plan) has brand-new step rows, so the
       // locally-stored ids are stale — the server is authoritative and we
-      // replace. A SAVED guide is the same rows, so union keeps an offline
-      // check made just before this response.
+      // replace. A SAVED guide is the same rows, so union keeps a step
+      // logged just before this response.
       if ((res.data as any)?.source !== 'SAVED') {
         store.hydrateGuideSteps(serverDone);
       } else if (serverDone.length > 0) {
