@@ -13,6 +13,7 @@ import { plantingCalendar } from '@/utils/plantingCalendar';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { rainfedWaitAdvice } from '@/utils/seasonAdvice';
 import { useStepWeather } from '@/hooks/useFarmForecast';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -374,6 +375,7 @@ export const PlantingGuideScreen: React.FC = () => {
           const cfg     = CAT_CONFIG[current.category] ?? CAT_CONFIG.planting;
           const late    = today - current.daysAfterPlanting;
           const weather = adviceFor(current);
+          const waitForRain = rainfedWaitAdvice(calendarFarm?.ecosystem, latestGuide, current);
           return (
             <View style={[s.stepCard, { borderColor: weather ? WX_TONE[weather.level].border : cfg.border }]}>
               {/* What today's forecast means for this step (Phase 2: the guide reacts to the weather) */}
@@ -388,6 +390,15 @@ export const PlantingGuideScreen: React.FC = () => {
                       <Text style={s.wxBannerTime}>{tr.wxUpdatedAt.replace('{time}', clock(updatedAt))}</Text>
                     )}
                   </View>
+                </View>
+              )}
+              {/* Rainfed farm sowing in the drier months (Phase 3: season advice) */}
+              {waitForRain && (
+                <View style={[s.wxBanner, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                  <Ionicons name="water-outline" size={16} color="#1D4ED8" />
+                  <Text style={[s.wxBannerText, { flex: 1, color: '#1E40AF', fontWeight: '500' }, T && { fontSize: 14, lineHeight: 21 }]}>
+                    {tr.guideRainfedWait}
+                  </Text>
                 </View>
               )}
               <View style={s.chipRow}>
