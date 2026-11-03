@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, Alert } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { apiFarms, apiScan, apiRecommendations } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { useTranslation } from '@/i18n/useTranslation';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -22,13 +23,24 @@ const STEPS: { label: string; icon: IoniconsName }[] = [
 
 // Each step min display time (ms) — API may be slower, we wait for both
 const STEP_DURATION = 900;
+// After this long the screen says the soil and weather check can take up to a minute
+const SLOW_AFTER_MS = 12000;
+
+/** A failed request with no answer from the server (offline, dropped, timed out). */
+const isNetworkError = (err: any) =>
+  !err?.response && /network|fetch failed|connection|timed? ?out|abort/i.test(String(err?.message ?? err));
 
 export const AnalysisLoadingScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const route      = useRoute<any>();
   const farmData   = route.params?.farmData ?? {};
 
+  const tr = useTranslation();
   const [completedCount, setCompletedCount] = useState(0);
+  const [apiDone, setApiDone] = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+  const [slow,    setSlow]    = useState(false);
+  const [attempt, setAttempt] = useState(0);     // bumped by "Try again"
   const ringPulse = useRef(new Animated.Value(1)).current;
 
   // API results stored in refs to avoid stale closures
@@ -37,7 +49,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
   const apiDoneRef        = useRef(false);
   const animDoneRef       = useRef(false);
   const navigatedRef      = useRef(false);
-  const startedRef        = useRef(false);   // guards against creating a duplicate farm
+  const startedRef        = useRef(-1);      // attempt already started: guards against a duplicate farm
 
   const tryNavigate = () => {
     if (apiDoneRef.current && animDoneRef.current && !navigatedRef.current) {
@@ -50,13 +62,14 @@ export const AnalysisLoadingScreen: React.FC = () => {
     }
   };
 
-  // Run the real API chain once on mount. The guard prevents a second run —
+  // Run the real API chain once per attempt. The guard prevents a second run —
   // and thus a duplicate farm — if the effect re-fires (StrictMode double-invoke,
   // fast refresh, or a remount).
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    if (startedRef.current === attempt) return;
+    startedRef.current = attempt;
     const run = async () => {
+      let failed = false;
       let step = 'init';
       try {
         step = 'build payload';
@@ -114,28 +127,50 @@ export const AnalysisLoadingScreen: React.FC = () => {
           throw innerErr;
         }
       } catch (err: any) {
-        const msg = err?.response?.data
-          ? JSON.stringify(err.response.data)
-          : err?.message || String(err);
-        Alert.alert(`Failed at: ${step}`, msg);
+        // The farm was removed above, so "Try again" starts cleanly; stay on this screen
+        failed = true;
+        console.warn(`[ANALYSIS] failed at ${step}:`, err?.response?.data ?? err?.message ?? err);
+        setError(isNetworkError(err) ? tr.analysisNetworkError : tr.analysisGenericError);
       } finally {
-        apiDoneRef.current = true;
-        tryNavigate();
+        if (!failed) {
+          apiDoneRef.current = true;
+          setApiDone(true);
+          tryNavigate();
+        }
       }
     };
     run();
-  }, []);
+  }, [attempt]);
 
-  // Advance one step at a time
+  // Say it can take a while if the server is slow (SoilGrids can take most of a minute)
   useEffect(() => {
+    const t = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => clearTimeout(t);
+  }, [attempt]);
+
+  // Advance one step at a time. The last step stays active until the server has
+  // answered, so the screen never says "complete" while it is still waiting.
+  useEffect(() => {
+    if (error) return;
     if (completedCount >= STEPS.length) {
       animDoneRef.current = true;
       tryNavigate();
       return;
     }
+    if (completedCount === STEPS.length - 1 && !apiDone) return;
     const t = setTimeout(() => setCompletedCount(c => c + 1), STEP_DURATION);
     return () => clearTimeout(t);
-  }, [completedCount]);
+  }, [completedCount, apiDone, error]);
+
+  const tryAgain = () => {
+    apiDoneRef.current = false;
+    animDoneRef.current = false;
+    setApiDone(false);
+    setSlow(false);
+    setError(null);
+    setCompletedCount(0);
+    setAttempt(a => a + 1);
+  };
 
   // Continuous gentle pulse on the leaf hero
   useEffect(() => {
@@ -150,6 +185,27 @@ export const AnalysisLoadingScreen: React.FC = () => {
   const isDone   = completedCount >= STEPS.length;
   const pct      = Math.round((Math.min(completedCount, STEPS.length) / STEPS.length) * 100);
   const activeLabel = STEPS[Math.min(completedCount, STEPS.length - 1)].label;
+
+  if (error) {
+    return (
+      <SafeAreaView style={s.root}>
+        <View style={[s.body, { justifyContent: 'center' }]}>
+          <View style={[s.hero, { backgroundColor: '#FEF2F2' }]}>
+            <Ionicons name="alert-circle-outline" size={28} color="#DC2626" />
+          </View>
+          <Text style={s.title}>{tr.analysisErrorTitle}</Text>
+          <Text style={s.subtitle}>{error}</Text>
+          <TouchableOpacity style={s.primaryBtn} onPress={tryAgain} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={16} color="#FFFFFF" />
+            <Text style={s.primaryBtnText}>{tr.analysisTryAgain}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Text style={s.secondaryBtnText}>{tr.back}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={s.root}>
@@ -166,7 +222,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
         <Text style={s.subtitle}>
           {isDone
             ? 'Your recommendations are ready.'
-            : activeLabel + '…'}
+            : slow ? tr.analysisSlow : activeLabel + '…'}
         </Text>
 
         {/* Overall progress — one thin bar + "n / N" count */}
@@ -253,6 +309,14 @@ const s = StyleSheet.create({
   label:       { flex: 1, fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
   labelDone:   { color: '#374151' },
   labelActive: { color: '#111827', fontWeight: '700' },
+
+  primaryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    alignSelf: 'stretch', backgroundColor: '#059669', borderRadius: 14, paddingVertical: 15,
+  },
+  primaryBtnText:   { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  secondaryBtn:     { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 14, marginTop: 8 },
+  secondaryBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
 
   activeDot:  { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#059669' },
   pendingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#E5E7EB' },
