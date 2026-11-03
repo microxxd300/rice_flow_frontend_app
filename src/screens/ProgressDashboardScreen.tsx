@@ -18,7 +18,7 @@ import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiWeather, apiPredictions, apiScan } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
-import { guideSteps, guideProgress } from '@/utils/guideSteps';
+import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { seasonLabel } from '@/utils/formatting';
 import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
@@ -344,6 +344,16 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     return d;
   })();
   const hasRealCycle    = cycleStart !== null;
+  // Sowing still ahead: the cycle follows the guide's sowing day, which is set
+  // after seed and land preparation. Days until then, else null.
+  const daysToSowing    = (() => {
+    if (!plantingDateStr || hasRealCycle) return null;
+    const d = new Date(plantingDateStr);
+    if (isNaN(d.getTime())) return null;
+    const until = Math.ceil((d.getTime() - today.getTime()) / 86400000);
+    return until > 0 && until <= 60 ? until : null;
+  })();
+  const sowingLabel     = daysToSowing ? tr.cycSowIn.replace('{n}', String(daysToSowing)) : null;
   const CURRENT_DAY     = cycleStart
     ? Math.min(cycleDays, Math.max(1, Math.floor((today.getTime() - cycleStart.getTime()) / 86400000) + 1))
     : 1;
@@ -371,7 +381,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     tr.monShortMay, tr.monShortJun, tr.monShortJul, tr.monShortAug,
     tr.monShortSep, tr.monShortOct, tr.monShortNov, tr.monShortDec,
   ];
-  const harvestDate     = cycleStart ? new Date(cycleStart.getTime() + cycleDays * 86400000) : null;
+  // The server's date follows the variety actually planted (the farmer's pick)
+  const serverHarvest   = (currentCycle as any)?.expected_harvest_date
+    ? new Date((currentCycle as any).expected_harvest_date) : null;
+  const plannedStart    = cycleStart ?? (daysToSowing ? new Date(plantingDateStr) : null);
+  const harvestDate     = !plannedStart ? null
+    : serverHarvest && !isNaN(serverHarvest.getTime()) ? serverHarvest
+    : new Date(plannedStart.getTime() + cycleDays * 86400000);
   const harvestLabel    = harvestDate ? `${MONTHS_SHORT[harvestDate.getMonth()]} ${harvestDate.getDate()}` : 'Oct 9';
   const activeStage     = (() => {
     const i = Math.min(CROP_STAGES.length - 1, Math.floor((cyclePct / 100) * CROP_STAGES.length));
@@ -446,6 +462,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const guideList      = guideSteps(latestGuide);
   const guideNow       = guideProgress(guideList, completedSteps);
   const logStepTarget  = guideList.find(st => st.id === (logStep ?? guideNow.current?.id));
+  // Today's day of the guide (0 = sowing); a step before it is overdue
+  const guideToday     = guideDay(latestGuide);
 
   // "Log this step" opens the form for one step; a closed form forgets it
   const openLogFor = (stepId: string) => {
@@ -522,7 +540,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     const doneStep    = finishesStep && logStepTarget && !isNaN(Number(logStepTarget.id)) ? logStepTarget : null;
 
     // Save to the server first; the log only shows in the app once the server has it.
-    // Notes are required by the server, so a log without notes falls back to its stage/issue.
+    // Notes are required by the server, so a log without notes falls back to its step/stage/issue.
+    const observation = logNotes.trim() || doneStep?.title
+      || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check';
     let saved: any;
     setSavingLog(true);
     try {
@@ -533,8 +553,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         issue_type:   issueIsReal ? (ISSUE_TO_API[issueClean] ?? 'other') : '',
         severity:     issueIsReal ? (logSeverity || 'Low').toLowerCase() : '',
         action_taken: issueIsReal ? logAction.trim() : '',
-        observation:  logNotes.trim() || doneStep?.title
-                      || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check',
+        observation,
         guide_step:   doneStep ? Number(doneStep.id) : null,
       });
       saved = res.data;
@@ -553,7 +572,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       observedIssue: issueClean || 'None',
       severity:      issueIsReal ? (logSeverity || 'Low') : '',
       actionTaken:   issueIsReal ? logAction.trim() : '',
-      notes:         logNotes.trim(),
+      notes:         logNotes.trim() || doneStep?.title || '',
     };
     useAppStore.getState().addProgressLog(newLog);
     // The server marked the step done with the log; the guide moves on to the next step
@@ -768,9 +787,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {[
-                    { val: cycleLoading ? null : (hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : '—'), lbl: tr.cycCurrent,        valColor: '#111827' },
+                    { val: cycleLoading ? null : (hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : sowingLabel ?? '—'), lbl: tr.cycCurrent, valColor: '#111827' },
                     { val: cycleLoading ? null : `${cyclePct}%`,                                              lbl: tr.cycDone,           valColor: '#059669' },
-                    { val: cycleLoading ? null : (hasRealCycle ? harvestLabel : '—'),                          lbl: tr.progressExpected,  valColor: '#111827' },
+                    { val: cycleLoading ? null : (harvestDate ? harvestLabel : '—'),                           lbl: tr.progressExpected,  valColor: '#111827' },
                   ].map((c, i, arr) => (
                     <React.Fragment key={c.lbl}>
                       <View style={{ flex: 1, alignItems: 'center' }}>
@@ -1225,7 +1244,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {/* ── GABAY ── only counts steps the farmer ACTUALLY checked in the Gabay tab */}
               {(() => {
                 const steps: any[] = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
-                const checkedIds = new Set(useAppStore.getState().completedGuideSteps);
+                const checkedIds = new Set(completedSteps);
                 const CAT_LABELS: Record<string, string> = {
                   planting:        tr.catPlanting,
                   fertilizer:      tr.catFertilizer,
@@ -1236,7 +1255,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 const buckets = Object.keys(CAT_LABELS).map(cat => {
                   const inCat   = steps.filter(s => s.category === cat);
                   const done    = inCat.filter(s => checkedIds.has(String(s.id))).length;
-                  const overdue = inCat.filter(s => !checkedIds.has(String(s.id)) && (s.daysAfterPlanting ?? 0) < CURRENT_DAY).length;
+                  const overdue = inCat.filter(s => !checkedIds.has(String(s.id)) && (s.daysAfterPlanting ?? 0) < guideToday).length;
                   const next    = inCat.find(s => !checkedIds.has(String(s.id)));
                   const allDone = inCat.length > 0 && done === inCat.length;
                   return {
@@ -1268,7 +1287,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 // Score only the steps that are due by today, so steps months ahead don't
                 // pull the score down (all steps checked so far = 100%)
-                const dueSteps   = steps.filter(s => (s.daysAfterPlanting ?? 0) < CURRENT_DAY);
+                const dueSteps   = steps.filter(s => (s.daysAfterPlanting ?? 0) < guideToday);
                 const dueDone    = dueSteps.filter(s => checkedIds.has(String(s.id))).length;
                 const adherence  = dueSteps.length > 0 ? Math.round((dueDone / dueSteps.length) * 100) : 100;
                 const badge =
@@ -1364,7 +1383,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             <View style={s.modalContextRow}>
               {[
                 { icon: 'home-outline' as const,     label: (selectedFarm as any)?.name ?? '—' },
-                { icon: 'calendar-outline' as const, label: hasRealCycle ? `Day ${CURRENT_DAY}` : 'No active cycle' },
+                { icon: 'calendar-outline' as const, label: hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : sowingLabel ?? 'No active cycle' },
                 { icon: 'sunny-outline' as const,    label: currentCycle ? seasonLabel(currentCycle) : '—' },
               ].map(c => (
                 <View key={c.label} style={s.contextChip}>
