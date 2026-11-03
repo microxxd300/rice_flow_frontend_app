@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Vibration } from 'react-native';
-import type { UserProfile, Farm, Recommendation } from '@/services/apiService';
+import type { UserProfile, Farm, Recommendation, WeatherResponse } from '@/services/apiService';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { isAppLog } from '@/utils/progressLogs';
@@ -35,6 +35,9 @@ interface AppState {
   completedGuideSteps: string[];   // guide step IDs the farmer finished with a log
   notificationsEnabled: boolean;
   weatherAlertsEnabled: boolean;
+  // The selected farm's weather (key = "lat,lng", at = when the phone got it), shared by
+  // Home, the Planting card, Progress and the reminders; kept fresh by useFarmForecast
+  forecast: { key: string; data: WeatherResponse; at: number } | null;
 
   setUser:                  (user: UserProfile | null) => void;
   setFarms:                 (farms: Farm[]) => void;
@@ -52,6 +55,7 @@ interface AppState {
   markAllNotificationsRead: () => void;
   hydrateNotifications:     (list: AppNotification[]) => void;
   setPendingLogStep:        (stepId: string | null) => void;
+  setForecast:              (forecast: { key: string; data: WeatherResponse; at: number } | null) => void;
   setEntryTab:              (tab: string | null) => void;
   setPickedVariety:         (pick: { recId: number; varietyId: number } | null) => void;
   setProgressLogs:          (logs: any[]) => void;
@@ -85,6 +89,7 @@ export const useAppStore = create<AppState>((set) => ({
   completedGuideSteps:  [],
   notificationsEnabled: true,
   weatherAlertsEnabled: true,
+  forecast:             null,
 
   setUser:                 user    => set({ user }),
   setFarms:                farms   => {
@@ -205,6 +210,7 @@ export const useAppStore = create<AppState>((set) => ({
   hydrateNotifications: (list) => set({ notifications: list.slice(0, 3) }),
 
   setPendingLogStep: (stepId) => set({ pendingLogStep: stepId }),
+  setForecast: (forecast) => set({ forecast }),
   setEntryTab: (tab) => set({ entryTab: tab }),
   setPickedVariety: (pick) => set({ pickedVariety: pick }),
 
@@ -253,7 +259,7 @@ export const useAppStore = create<AppState>((set) => ({
     latestRecommendation: null, latestGuide: null,
     notifications: [], pendingLogStep: null, entryTab: null, pickedVariety: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
-    notificationsEnabled: true, weatherAlertsEnabled: true,
+    notificationsEnabled: true, weatherAlertsEnabled: true, forecast: null,
   }),
 }));
 

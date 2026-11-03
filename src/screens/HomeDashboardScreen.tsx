@@ -9,7 +9,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
-import { apiWeather, type WeatherCurrent, type WeatherHour } from '@/services/apiService';
+import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
+import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { useAuthStore } from '@/features/auth/store';
 import { Skeleton } from '@/components/Skeleton';
 import { dedupeName } from '@/utils/formatting';
@@ -44,9 +45,6 @@ function formatTime(d: Date) {
   h = h % 12 || 12;
   return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
 }
-
-// Last weather per farm location in this app session (see the weather card below)
-const lastWeather = new Map<string, { current: WeatherCurrent; hourly: WeatherHour[] }>();
 
 export const HomeDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
@@ -137,34 +135,13 @@ export const HomeDashboardScreen: React.FC = () => {
     return tr.wxFair;
   };
 
-  // Live weather (current + next 8 hours) from Open-Meteo via Django
-  // Weather for the farm being shown, not the first farm on the account
-  const weatherFarm = (selectedFarm as any) ?? realFarms[0];
-  const farmLat = weatherFarm?.latitude;
-  const farmLng = weatherFarm?.longitude;
-  const wxKey = `${farmLat},${farmLng}`;
-  // The last weather for this farm shows at once (no skeletons) while it refreshes
-  const [wxCurrent, setWxCurrent] = useState<WeatherCurrent | null>(lastWeather.get(wxKey)?.current ?? null);
-  const [wxHourly,  setWxHourly]  = useState<WeatherHour[]>(lastWeather.get(wxKey)?.hourly ?? []);
-  const fetchWeather = () => {
-    if (farmLat == null || farmLng == null) return;
-    apiWeather.current(farmLat, farmLng)
-      .then(res => {
-        lastWeather.set(wxKey, { current: res.data.current, hourly: res.data.hourly || [] });
-        setWxCurrent(res.data.current); setWxHourly(res.data.hourly || []);
-      })
-      .catch(() => {});
-  };
-  useEffect(() => {
-    // Switched farm: show that farm's last weather (or skeletons) until it loads
-    const known = lastWeather.get(wxKey);
-    setWxCurrent(known?.current ?? null);
-    setWxHourly(known?.hourly ?? []);
-    fetchWeather();
-    // Auto-refresh every 5 minutes (weather + clock tick happens elsewhere every minute)
-    const id = setInterval(() => { fetchWeather(); setNow(new Date()); }, 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [farmLat, farmLng]);
+  // Live weather (current + next 8 hours) for the farm being shown: the app's shared
+  // forecast, kept fresh by useFarmForecast. Skeletons until this farm's has loaded.
+  const forecast  = useAppStore(s => s.forecast);
+  const wxData    = forecast && forecast.key === farmKey(selectedFarm) ? forecast.data : null;
+  const wxCurrent = wxData?.current ?? null;
+  const wxHourly  = wxData?.hourly ?? [];
+  const { adviceFor } = useStepWeather();
 
   // Display values — real if loaded, sensible fallbacks otherwise
   const wxImage = codeToImage(wxCurrent?.weather_code);
@@ -215,6 +192,7 @@ export const HomeDashboardScreen: React.FC = () => {
       title:  st!.title,
       cat:    st!.category as TaskCat,
       offset: st!.daysAfterPlanting - currentDay,
+      advice: adviceFor(st),
     }));
   })();
   const taskDayLabel = (offset: number) =>
@@ -358,6 +336,17 @@ export const HomeDashboardScreen: React.FC = () => {
                     <View style={{ flex: 1 }}>
                       <Text style={[s.taskTitle, T && { fontSize: 16 }]} numberOfLines={1}>{t.title}</Text>
                       <Text style={[s.taskMeta, { color: t.offset < 0 ? '#D97706' : meta.color }]}>{taskDayLabel(t.offset)}</Text>
+                      {t.advice && (
+                        <View style={s.taskWeather}>
+                          <Ionicons name="rainy-outline" size={13} color={t.advice.level === 'stop' ? '#DC2626' : '#D97706'} />
+                          <Text
+                            style={[s.taskWeatherText, { color: t.advice.level === 'stop' ? '#B91C1C' : '#92400E' }, T && { fontSize: 13 }]}
+                            numberOfLines={2}
+                          >
+                            {(tr as any)[ADVICE_TEXT[t.advice.code]]}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
                   </TouchableOpacity>
@@ -612,6 +601,8 @@ const s = StyleSheet.create({
   },
   taskTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 2 },
   taskMeta:  { fontSize: 11.5, fontWeight: '600' },
+  taskWeather:     { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 4 },
+  taskWeatherText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '500' },
 
   /* Mga Bukid list rows */
   bukidRow: {

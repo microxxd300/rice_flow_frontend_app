@@ -73,7 +73,7 @@ export function syncGuideReminders(
         identifier: r.id,
         content: {
           title: text.title,
-          body: text.body.replace('{tasks}', r.titles.join(' · ')),
+          body: text.body.replace('{tasks}', r.titles.join(' · ')) + (r.note ? `\n${r.note}` : ''),
           data: { screen: 'PlantingTab' },
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: r.date, channelId },

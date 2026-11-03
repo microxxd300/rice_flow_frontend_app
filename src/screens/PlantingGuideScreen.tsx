@@ -12,6 +12,8 @@ import { loadGuide } from '@/services/guideLoader';
 import { plantingCalendar } from '@/utils/plantingCalendar';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
+import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { useStepWeather } from '@/hooks/useFarmForecast';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
@@ -84,6 +86,19 @@ function buildClimateCalendar(
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
+// Weather warning on the step card: stop = do not do the step now, caution = take care
+const WX_TONE = {
+  stop:    { bg: '#FEF2F2', border: '#FECACA', fg: '#B91C1C' },
+  caution: { bg: '#FFF7ED', border: '#FDE68A', fg: '#92400E' },
+};
+
+/** "2:05 PM" */
+function clock(ms: number): string {
+  const d = new Date(ms);
+  const h = d.getHours();
+  return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
 type CatConfig = {
   label: string; icon: IoniconsName;
   color: string; bg: string; border: string;
@@ -128,6 +143,8 @@ export const PlantingGuideScreen: React.FC = () => {
   const today    = guideDay(latestGuide);
   const pct      = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
   const explainOpen = !!current && explainedId === current.id;
+  // The app's shared forecast (useFarmForecast): warnings for the current step
+  const { adviceFor, updatedAt } = useStepWeather();
 
   // Data-driven "Angkop na Buwan sa Pagtatanim" — built from the chosen variety's
   // preferred season, Davao Type IV climate pattern, and today's date. The guide's
@@ -354,10 +371,25 @@ export const PlantingGuideScreen: React.FC = () => {
         </View>
 
         {current ? (() => {
-          const cfg  = CAT_CONFIG[current.category] ?? CAT_CONFIG.planting;
-          const late = today - current.daysAfterPlanting;
+          const cfg     = CAT_CONFIG[current.category] ?? CAT_CONFIG.planting;
+          const late    = today - current.daysAfterPlanting;
+          const weather = adviceFor(current);
           return (
-            <View style={[s.stepCard, { borderColor: cfg.border }]}>
+            <View style={[s.stepCard, { borderColor: weather ? WX_TONE[weather.level].border : cfg.border }]}>
+              {/* What today's forecast means for this step (Phase 2: the guide reacts to the weather) */}
+              {weather && (
+                <View style={[s.wxBanner, { backgroundColor: WX_TONE[weather.level].bg, borderColor: WX_TONE[weather.level].border }]}>
+                  <Ionicons name={weather.level === 'stop' ? 'warning' : 'rainy-outline'} size={16} color={WX_TONE[weather.level].fg} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.wxBannerText, { color: WX_TONE[weather.level].fg }, T && { fontSize: 14, lineHeight: 21 }]}>
+                      {(tr as any)[ADVICE_TEXT[weather.code]]}
+                    </Text>
+                    {updatedAt != null && (
+                      <Text style={s.wxBannerTime}>{tr.wxUpdatedAt.replace('{time}', clock(updatedAt))}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
               <View style={s.chipRow}>
                 <View style={[s.chip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
                   <Ionicons name={cfg.icon} size={13} color={cfg.color} />
@@ -575,6 +607,12 @@ const s = StyleSheet.create({
     padding: 16,
   },
   chipRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  wxBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 12,
+  },
+  wxBannerText: { fontSize: 13, lineHeight: 19, fontWeight: '600' },
+  wxBannerTime: { fontSize: 11, color: '#6B7280', marginTop: 3 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     borderWidth: 1, borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10,

@@ -12,6 +12,8 @@ export interface GuideReminder {
   id: string;        // stable per day, so rescheduling replaces instead of duplicating
   date: Date;        // when it fires
   titles: string[];  // the steps due that day
+  stepIds: string[];
+  note?: string;     // weather advice for that day's steps (added by useGuideReminders)
 }
 
 export function planGuideReminders(guide: any, completedIds: string[], now: Date = new Date()): GuideReminder[] {
@@ -22,23 +24,27 @@ export function planGuideReminders(guide: any, completedIds: string[], now: Date
 
   const done = new Set(completedIds.map(String));
   const seen = new Set<string>();
-  const byDay = new Map<number, string[]>();
+  const byDay = new Map<number, { titles: string[]; stepIds: string[] }>();
   for (const st of guide.steps) {
     const id = String(st.id);
     if (seen.has(id) || done.has(id) || st.is_completed) continue;
     seen.add(id);
     const day = Number(st.daysAfterPlanting ?? 0) || 0;
     const title = String(st.title ?? '').trim();
-    if (title) byDay.set(day, [...(byDay.get(day) ?? []), title]);
+    if (!title) continue;
+    const entry = byDay.get(day) ?? { titles: [], stepIds: [] };
+    entry.titles.push(title);
+    entry.stepIds.push(id);
+    byDay.set(day, entry);
   }
 
   return [...byDay.entries()]
-    .map(([day, titles]) => {
+    .map(([day, { titles, stepIds }]) => {
       const date = new Date(start);
       date.setDate(date.getDate() + day);
       date.setHours(REMINDER_HOUR, 0, 0, 0);
       const ymd = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-      return { id: `guide-reminder-${ymd}`, date, titles };
+      return { id: `guide-reminder-${ymd}`, date, titles, stepIds };
     })
     .filter(r => r.date.getTime() > now.getTime())
     .sort((a, b) => a.date.getTime() - b.date.getTime())
