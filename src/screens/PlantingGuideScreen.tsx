@@ -1,22 +1,21 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { mockPlantingGuides } from '../data/mockData';
 import { useAccessibility } from '../context/AccessibilityContext';
-import { apiGuides, apiRecommendations, apiScan, apiWeather } from '@/services/apiService';
+import { apiRecommendations, apiScan, apiWeather } from '@/services/apiService';
 import { loadGuide } from '@/services/guideLoader';
 import { plantingCalendar } from '@/utils/plantingCalendar';
-import { useAppStore, guideVarietyId } from '@/store/appStore';
+import { useAppStore } from '@/store/appStore';
+import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
-import { Skeleton } from '@/components/Skeleton';
 
 // Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
 // farm's own monthly rainfall loads, or when the phone is offline.
@@ -83,10 +82,6 @@ function buildClimateCalendar(
   return { location: 'Panabo City, Davao del Norte', currentMonth, alert, bestMonths, months };
 }
 
-interface PlantingGuideScreenProps {
-  onMarkComplete?: (stepId: string) => void;
-}
-
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 type CatConfig = {
@@ -94,9 +89,7 @@ type CatConfig = {
   color: string; bg: string; border: string;
 };
 
-const CATEGORY_ORDER = ['planting', 'fertilizer', 'pest_prevention', 'irrigation', 'harvesting'];
-
-export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMarkComplete }) => {
+export const PlantingGuideScreen: React.FC = () => {
   const { isLargeText } = useAccessibility();
   const T = isLargeText;
   const language = useLanguageStore(s => s.language);
@@ -110,96 +103,32 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
     harvesting:      { label: tr.guideHarvest,    icon: 'basket-outline',           color: '#B45309', bg: '#FFFBEB', border: '#FCD34D' },
   };
 
-  // Source of truth = persisted store. The Set derivation lets the existing
-  // O(1) `has`/`size` reads keep working without changing the rest of the file.
-  const completedIds  = useAppStore(s => s.completedGuideSteps);
-  const completed     = useMemo(() => new Set(completedIds), [completedIds]);
-  const [expanded,  setExpanded]  = useState<string | null>(null);
+  const completedIds = useAppStore(s => s.completedGuideSteps);
+  // The step whose explanation is open, so a new step starts with it closed
+  const [explainedId, setExplainedId] = useState<string | null>(null);
 
   const navigation = useNavigation<StackNavigationProp<any>>();
 
-  // Only a Gemini-generated (or backend-template) guide counts as real.
-  // When there is none, the screen shows a loading/empty state instead of the
-  // step list — never mock demo content, which would read as advice for a farm
-  // that was never scanned. The mock below only keeps the derived computations
-  // shape-safe until the early return kicks in.
+  // Only a real guide counts. Without one the screen shows a loading/empty state,
+  // never demo steps, which would read as advice for a farm that was never scanned.
   const latestGuide  = useAppStore(s => s.latestGuide);
   const hasRealGuide = !!(latestGuide && Array.isArray(latestGuide.steps) && latestGuide.steps.length > 0);
-  const guide        = hasRealGuide ? latestGuide : mockPlantingGuides[0];
   // The guide only stores the variety id; its name comes from the recommendation it was made from
   const recForGuide      = useAppStore(s => s.latestRecommendation) as any;
   const guideVariety     = (recForGuide?.results ?? [])
     .map((r: any) => r.variety)
     .find((v: any) => v?.id === (latestGuide as any)?.variety);
   const guideVarietyName = guideVariety?.common_name ?? '';
-  // Map backend → frontend shape and infer category from keywords when missing.
-  const inferCategory = (title: string, desc: string): string => {
-    const t = `${title} ${desc}`.toLowerCase();
-    if (/pataba|fertilizer|urea|nitrogen|nutrient|potash/.test(t))           return 'fertilizer';
-    if (/peste|insekto|pest|brown ?spot|blast|sheath|disease|sakit/.test(t)) return 'pest_prevention';
-    if (/tubig|patubig|irrigation|water|baha|flood|drain/.test(t))           return 'irrigation';
-    if (/ani|harvest|panicle|grain/.test(t))                                  return 'harvesting';
-    return 'planting';
-  };
 
-  const guideStart = (guide as any)?.start_date ? new Date((guide as any).start_date) : null;
+  // PalayCheck, one step at a time: the current step is the first one not done
+  // (the same rule as Home's Upcoming Tasks and Progress' Next Tasks)
+  const steps    = useMemo(() => guideSteps(latestGuide), [latestGuide]);
+  const progress = useMemo(() => guideProgress(steps, completedIds), [steps, completedIds]);
+  const current  = progress.current;
+  const today    = guideDay(latestGuide);
+  const pct      = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+  const explainOpen = !!current && explainedId === current.id;
 
-  const steps: {
-    id: string; stepNumber: number; title: string;
-    instruction: string; daysAfterPlanting: number; category: string;
-  }[] = (guide.steps ?? []).map((raw: any, idx: number) => {
-    const title       = String(raw.title ?? '').trim();
-    const instruction = String(raw.instruction ?? raw.description ?? '').trim();
-    const category    = raw.category && CATEGORY_ORDER.includes(raw.category)
-      ? raw.category
-      : inferCategory(title, instruction);
-
-    let dap = Number(raw.daysAfterPlanting ?? NaN);
-    if (isNaN(dap) && raw.scheduled_date && guideStart) {
-      const sd = new Date(raw.scheduled_date);
-      if (!isNaN(sd.getTime())) {
-        dap = Math.round((sd.getTime() - guideStart.getTime()) / 86400000);
-      }
-    }
-    if (isNaN(dap)) dap = 0;
-
-    return {
-      id:                String(raw.id ?? `step_${idx + 1}`),
-      stepNumber:        Number(raw.stepNumber ?? raw.step_no ?? idx + 1),
-      title,
-      instruction,
-      daysAfterPlanting: dap,
-      category,
-    };
-  });
-
-  // Group steps into the 5 category buckets.
-  // PENDING steps are shown grouped per category. COMPLETED steps disappear
-  // from the visible list (the farmer can review them in the "Done · N" archive
-  // at the bottom). When a category's step is checked, a fresh follow-up step
-  // is generated by Gemini and appended to that category's bucket.
-  const grouped = CATEGORY_ORDER.map(cat => ({
-    cat,
-    cfg: CAT_CONFIG[cat],
-    items: steps
-      .filter(s => s.category === cat && !completed.has(s.id))
-      .sort((a, b) => a.daysAfterPlanting - b.daysAfterPlanting),
-  })).filter(g => g.items.length > 0);
-
-  // Completed steps for the "Done · N" archive — most recent first
-  const doneSteps = steps
-    .filter(s => completed.has(s.id))
-    .sort((a, b) => b.daysAfterPlanting - a.daysAfterPlanting);
-
-  const done  = completed.size;
-  const total = steps.length;
-  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
-  const CYCLE_CAP = 20;
-  const cycleCapReached = total >= CYCLE_CAP;
-  const [doneOpen,   setDoneOpen]   = useState(false);
-  const [appending,  setAppending]  = useState(false);
-
-  const cycleDays = steps.reduce((m, s) => Math.max(m, s.daysAfterPlanting), 0);
   // Data-driven "Angkop na Buwan sa Pagtatanim" — built from the chosen variety's
   // preferred season, Davao Type IV climate pattern, and today's date. The guide's
   // variety (the farmer's pick), else the top-ranked one.
@@ -226,62 +155,16 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
     return () => { cancelled = true; };
   }, [calendarFarm?.id, calendarFarm?.latitude, calendarFarm?.longitude]);
 
-  const toggle = async (id: string) => {
-    const numericId = parseInt(id, 10);
-    const wasDone = completed.has(id);
-    useAppStore.getState().toggleGuideStepDone(id);
-    onMarkComplete?.(id);
-    // Steps are persisted backend rows now — sync BOTH directions so the
-    // server stays the durable source of truth (reinstall/other device).
-    if (!isNaN(numericId)) {
-      try { await apiGuides.complete(numericId, !wasDone); } catch {}
-    }
-
-    // Marking complete (and not bumping into the per-cycle cap) → ask Gemini for
-    // ONE fresh follow-up step in the same category. The new step appears at the
-    // bottom of that category's list — keeps the farmer's "things to do" alive.
-    if (!wasDone && !cycleCapReached && recId) {
-      const justFinished = steps.find(s => s.id === id);
-      if (justFinished) {
-        setAppending(true);
-        try {
-          const res = await apiGuides.appendStep(recId, {
-            category:       justFinished.category,
-            last_day:       justFinished.daysAfterPlanting,
-            existing_count: steps.length,
-            variety:        guideVarietyId(),
-            season:         (latestGuide as any)?.season ?? 'Wet Season',
-            language,
-            logs:           storeLogs.slice(0, 10),
-          });
-          const newStep = res.data?.step;
-          if (newStep) useAppStore.getState().addGuideStep(newStep);
-        } catch (err: any) {
-          console.log('[GUIDE/append] failed:', err?.message || err);
-        } finally {
-          setAppending(false);
-        }
-      }
-    }
+  // A step is finished by logging it: open the Progress log form for this step
+  const logStep = (id: string) => {
+    useAppStore.getState().setPendingLogStep(id);
+    navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
   };
 
   const dayLabel = (d: number) =>
     d < 0    ? tr.guideDayBeforePlant.replace('{n}', String(Math.abs(d)))
     : d === 0 ? tr.guideDayPlanting
     :           tr.guideDayAfter.replace('{n}', String(d));
-
-  // No category grouping — backend gives one step per growth stage, each step
-  // IS its own section. We just render the flat list in stepNumber order.
-
-  // When a notification is tapped, expand the first matching step.
-  const pendingGuideCategory    = useAppStore(s => s.pendingGuideCategory);
-  const setPendingGuideCategory = useAppStore(s => s.setPendingGuideCategory);
-  useEffect(() => {
-    if (!pendingGuideCategory) return;
-    const target = grouped.find(g => g.cat === pendingGuideCategory);
-    if (target?.items[0]) setExpanded(target.items[0].id);
-    setPendingGuideCategory(null);
-  }, [pendingGuideCategory, grouped, setPendingGuideCategory]);
 
   // Self-heal: if there's no recommendation in the store (e.g. fresh app reload
   // after an old session), fetch the latest one for the user's farm.
@@ -316,20 +199,14 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
       .finally(() => setRecChecked(true));
   }, [latestRec, selectedFarmId, setLatestRecommendation]);
 
-  // Auto-generate the guide ONCE per mount when we have a recommendation.
-  // Critical: we DO NOT depend on `latestGuide` here — otherwise calling
-  // setLatestGuide(res.data) below would trigger another effect run, creating
-  // an infinite Gemini-call loop that blows past the free-tier 20 req/min limit
-  // and gives us a 429 → fallback to template.
+  // Load the guide ONCE per mount when we have a recommendation. We DO NOT depend on
+  // `latestGuide` here, or setLatestGuide(res.data) would re-run the effect in a loop.
   const recId          = latestRec?.id;
-  const storeLogs      = useAppStore(s => s.progressLogs);
   // Track which recommendation we've generated a guide for. Regenerates when
   // the recId changes (e.g. after switching to a different farm), but never
   // loops on the same recId.
-  // Keyed on recommendation AND language: switching the app language must
-  // re-request the guide so the steps come back translated. The backend keeps
-  // the saved checklist when the language matches, and regenerates when it
-  // doesn't — so this costs a Gemini call only on an actual language change.
+  // Keyed on recommendation AND language: switching the app language re-requests
+  // the guide so the same steps come back worded in that language.
   const fetchedRecIdRef = useRef<string | null>(null);
   const hasGuide = !!latestGuide;
   const [genError,  setGenError]  = useState(false);
@@ -352,9 +229,9 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
     fetchedRecIdRef.current = fetchKey;
     setTranslating(isRefresh);
     setGenError(false);
-    console.log('[GUIDE] Loading guide (recId=' + recId + ', logs=' + storeLogs.length + ')...');
+    console.log('[GUIDE] Loading guide (recId=' + recId + ')...');
     // Shared with the language switch in Profile: if it is already loading this
-    // guide, this waits for that request instead of making a second Gemini call
+    // guide, this waits for that request instead of sending a second one
     loadGuide(recId, language)
       .then(data => {
         console.log('[GUIDE] Generate response — source:', data?.source, 'steps:', data?.steps?.length ?? 0);
@@ -372,7 +249,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
   // A farm that was never scanned has no recommendation, so no guide exists.
   // Showing demo steps here would read as real advice for the wrong farm.
   if (!hasRealGuide) {
-    const isGenerating = !!recId && !genError;   // Gemini call in flight
+    const isGenerating = !!recId && !genError;   // guide request in flight
     const isChecking   = !recId && !recChecked;  // recommendation lookup in flight
     return (
       <SafeAreaView style={s.root}>
@@ -443,7 +320,7 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
           <View>
             <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.guideScreenTitle}</Text>
             <Text style={s.headerSub}>
-              {[(guide as any).season ?? 'Wet Season', guideVarietyName].filter(Boolean).join(' · ')}
+              {[(latestGuide as any).season ?? 'Wet Season', guideVarietyName].filter(Boolean).join(' · ')}
             </Text>
           </View>
         </View>
@@ -463,8 +340,97 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
           </View>
         )}
 
+        {/* The current PalayCheck step — the only step shown. Logging it moves the guide on. */}
+        <View style={s.stepHead}>
+          <Text style={[s.stepOf, T && { fontSize: 13 }]}>
+            {tr.guideStepOf
+              .replace('{n}', String(Math.min(progress.done + 1, progress.total)))
+              .replace('{total}', String(progress.total))}
+          </Text>
+          <Text style={s.stepPct}>{pct}%</Text>
+        </View>
+        <View style={s.progBg}>
+          <View style={[s.progFill, { width: `${pct}%` }]} />
+        </View>
+
+        {current ? (() => {
+          const cfg  = CAT_CONFIG[current.category] ?? CAT_CONFIG.planting;
+          const late = today - current.daysAfterPlanting;
+          return (
+            <View style={[s.stepCard, { borderColor: cfg.border }]}>
+              <View style={s.chipRow}>
+                <View style={[s.chip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+                  <Ionicons name={cfg.icon} size={13} color={cfg.color} />
+                  <Text style={[s.chipText, { color: cfg.color }]}>{cfg.label}</Text>
+                </View>
+                {current.keyCheck != null && (
+                  <View style={s.keyCheck}>
+                    <Text style={s.keyCheckText}>{tr.guideKeyCheck.replace('{n}', String(current.keyCheck))}</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={[s.stepTitle, T && { fontSize: 19 }]}>{current.title}</Text>
+              <Text style={[s.stepDay, late > 0 && { color: '#D97706' }, T && { fontSize: 13 }]}>
+                {dayLabel(current.daysAfterPlanting)}
+                {late > 0 ? ` · ${tr.guideLate.replace('{n}', String(late))}` : ''}
+              </Text>
+              <Text style={[s.stepBody, T && { fontSize: 15, lineHeight: 23 }]}>{current.instruction}</Text>
+
+              {/* Pre-written explanation (reviewed text, in the Settings language) — not AI */}
+              {!!current.explanation && (
+                <>
+                  <TouchableOpacity style={s.explainBtn} onPress={() => setExplainedId(explainOpen ? null : current.id)} activeOpacity={0.75}>
+                    <Ionicons name={explainOpen ? 'chevron-up' : 'bulb-outline'} size={15} color="#2563EB" />
+                    <Text style={[s.explainBtnText, T && { fontSize: 14 }]}>
+                      {explainOpen ? tr.guideHideExplain : tr.guideExplain}
+                    </Text>
+                  </TouchableOpacity>
+                  {explainOpen && (
+                    <Text style={[s.explainBody, T && { fontSize: 14, lineHeight: 22 }]}>{current.explanation}</Text>
+                  )}
+                </>
+              )}
+
+              {!!current.reference && (
+                <TouchableOpacity
+                  style={s.refRow}
+                  onPress={() => { Linking.openURL(current.referenceUrl).catch(() => {}); }}
+                  disabled={!current.referenceUrl}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="book-outline" size={14} color="#6B7280" />
+                  <Text style={[s.refText, T && { fontSize: 13 }]}>{current.reference}</Text>
+                  {!!current.referenceUrl && <Text style={s.refLink}>{tr.guideOpenBook}</Text>}
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={s.logBtn} onPress={() => logStep(current.id)} activeOpacity={0.85}>
+                <Ionicons name="create-outline" size={17} color="#FFFFFF" />
+                <Text style={[s.logBtnText, T && { fontSize: 15 }]}>{tr.guideLogStep}</Text>
+              </TouchableOpacity>
+              <Text style={[s.logHint, T && { fontSize: 12 }]}>{tr.guideLogHint}</Text>
+            </View>
+          );
+        })() : (
+          <View style={[s.stepCard, { alignItems: 'center' }]}>
+            <Ionicons name="trophy-outline" size={28} color="#059669" />
+            <Text style={[s.stepTitle, { textAlign: 'center', marginTop: 8 }, T && { fontSize: 19 }]}>{tr.guideAllDone}</Text>
+            <Text style={[s.logHint, { textAlign: 'center' }, T && { fontSize: 12 }]}>{tr.guideAllDoneBody}</Text>
+          </View>
+        )}
+
+        {!!progress.next[0] && (
+          <View style={s.nextRow}>
+            <Ionicons name="arrow-forward-circle-outline" size={16} color="#9CA3AF" />
+            <Text style={[s.nextText, T && { fontSize: 13 }]} numberOfLines={2}>
+              {tr.guideNext.replace('{title}', progress.next[0].title)} · {dayLabel(progress.next[0].daysAfterPlanting)}
+            </Text>
+          </View>
+        )}
+
         {/* Climate Advisory Card */}
-        <View style={[s.climateCard, { marginTop: 24 }]}>
+        <View style={[s.climateCard, { marginTop: 20 }]}>
 
           <Text style={[s.climateSubLabel, { marginBottom: 12 }]}>{tr.climateBestMonths}</Text>
 
@@ -533,184 +499,6 @@ export const PlantingGuideScreen: React.FC<PlantingGuideScreenProps> = ({ onMark
           )}
         </View>
 
-        {/* Progress stats — 3 cards (Natapos / Natitira / Kabuuan) */}
-        <View style={s.statsRow}>
-          {[
-            { val: done,         label: 'Completed', accent: '#059669' },
-            { val: total - done, label: 'Remaining', accent: '#6B7280' },
-            { val: total,        label: 'Total',     accent: '#059669' },
-          ].map(p => (
-            <View key={p.label} style={s.statCard}>
-              <Text style={[s.statVal, { color: p.accent }, T && { fontSize: 26 }]}>{p.val}</Text>
-              <Text style={[s.statLabel, T && { fontSize: 12 }]}>{p.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Skeleton only while there are genuinely no steps yet (Gemini in flight + no mock). */}
-        {steps.length === 0 && (
-          <View style={{ marginTop: 20 }}>
-            <Skeleton w={140} h={14} br={5} style={{ marginBottom: 10 }} />
-            {[0, 1, 2].map(i => (
-              <View key={i} style={[s.todoItem, i === 0 && s.todoItemFirst, i === 2 && s.todoItemLast]}>
-                <View style={s.todoRow}>
-                  <Skeleton w={24} h={24} br={7} />
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Skeleton w={'70%' as any} h={14} br={4} style={{ marginBottom: 6 }} />
-                    <Skeleton w={'45%' as any} h={11} br={4} />
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Appending indicator — shown briefly while Gemini fetches the next step */}
-        {appending && (
-          <View style={[s.note, { marginTop: 16, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-            <Ionicons name="time-outline" size={14} color="#059669" />
-            <Text style={[s.noteText, T && { fontSize: 12 }, { color: '#065F46' }]}>
-              {tr.guideAppending}
-            </Text>
-          </View>
-        )}
-
-        {/* Grouped sections — icon + label header, then PENDING steps under (completed are hidden) */}
-        {grouped.map(({ cat, cfg, items }) => (
-          <View key={cat} style={s.group}>
-            <View style={s.groupHeader}>
-              <Ionicons name={cfg.icon} size={18} color={cfg.color} />
-              <Text style={[s.groupLabel, T && { fontSize: 16 }]}>{cfg.label}</Text>
-            </View>
-
-            {items.map((step, idx) => {
-              const isDone  = completed.has(step.id);
-              const isFirst = idx === 0;
-              const isLast  = idx === items.length - 1;
-              const isOpen  = expanded === step.id;
-
-              return (
-                <View key={step.id} style={[s.todoItem, isFirst && s.todoItemFirst, isLast && s.todoItemLast]}>
-
-                <TouchableOpacity
-                  style={s.todoRow}
-                  onPress={() => setExpanded(isOpen ? null : step.id)}
-                  activeOpacity={0.7}
-                >
-                  <TouchableOpacity
-                    style={[s.checkbox, isDone && s.checkboxDone]}
-                    onPress={() => toggle(step.id)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    activeOpacity={0.8}
-                  >
-                    {isDone && <Ionicons name="checkmark" size={13} color="#fff" />}
-                  </TouchableOpacity>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={[
-                      s.todoTitle,
-                      isDone && s.todoTitleDone,
-                      T && { fontSize: 15 },
-                    ]}>
-                      {step.title}
-                    </Text>
-                    <Text style={[s.todoDay, T && { fontSize: 12 }]}>
-                      {dayLabel(step.daysAfterPlanting)}
-                    </Text>
-                  </View>
-
-                  <Ionicons
-                    name={isOpen ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color="#D1D5DB"
-                  />
-                </TouchableOpacity>
-
-                {isOpen && (
-                  <View style={s.todoExpand}>
-                    <Text style={[s.expandBody, T && { fontSize: 13 }]}>
-                      {step.instruction}
-                    </Text>
-                    <TouchableOpacity
-                      style={[s.markBtn, isDone && s.markBtnDone]}
-                      onPress={() => toggle(step.id)}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons
-                        name={isDone ? 'checkmark-circle' : 'radio-button-off-outline'}
-                        size={16}
-                        color={isDone ? '#fff' : '#059669'}
-                      />
-                      <Text style={[s.markBtnText, isDone && s.markBtnTextDone]}>
-                        {isDone ? tr.guideComplete : tr.guideMarkDone}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-              );
-            })}
-          </View>
-        ))}
-
-        {/* Done · N archive — collapsible. Lets the farmer review what's been completed
-            without crowding the active checklist. Hidden when there are no completed steps. */}
-        {doneSteps.length > 0 && (
-          <View style={[s.group, { marginTop: 8 }]}>
-            <TouchableOpacity
-              style={s.groupHeader}
-              onPress={() => setDoneOpen(v => !v)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="checkmark-done-outline" size={18} color="#059669" />
-              <Text style={[s.groupLabel, T && { fontSize: 16 }, { flex: 1 }]}>
-                {tr.guideDoneCount.replace('{n}', String(doneSteps.length))}
-              </Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#059669' }}>
-                {doneOpen ? tr.guideHideDone : tr.guideShowDone}
-              </Text>
-              <Ionicons
-                name={doneOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color="#9CA3AF"
-                style={{ marginLeft: 4 }}
-              />
-            </TouchableOpacity>
-
-            {doneOpen && doneSteps.map((step, idx) => {
-              const isFirst = idx === 0;
-              const isLast  = idx === doneSteps.length - 1;
-              return (
-                <View key={step.id} style={[s.todoItem, isFirst && s.todoItemFirst, isLast && s.todoItemLast]}>
-                  <TouchableOpacity
-                    style={s.todoRow}
-                    onPress={() => toggle(step.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[s.checkbox, s.checkboxDone]}>
-                      <Ionicons name="checkmark" size={13} color="#fff" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[s.todoTitle, s.todoTitleDone, T && { fontSize: 15 }]}>{step.title}</Text>
-                      <Text style={[s.todoDay, T && { fontSize: 12 }]}>{dayLabel(step.daysAfterPlanting)}</Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Cycle cap notice */}
-        {cycleCapReached && (
-          <View style={[s.note, { backgroundColor: '#FFF7ED', borderColor: '#FDE68A' }]}>
-            <Ionicons name="trophy-outline" size={14} color="#D97706" />
-            <Text style={[s.noteText, T && { fontSize: 12 }, { color: '#92400E' }]}>
-              {tr.guideCycleCap}
-            </Text>
-          </View>
-        )}
-
         {/* Disclaimer */}
         <View style={s.note}>
           <Ionicons name="information-circle-outline" size={14} color="#D1D5DB" />
@@ -740,33 +528,6 @@ const s = StyleSheet.create({
   bellDot: { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' },
 
   scroll: { paddingHorizontal: 24, paddingBottom: 110 },
-
-  /* Summary card */
-  summaryCard: {
-    marginTop: 24,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 12,
-  },
-  summaryTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 10 },
-  summaryTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  summarySub:   { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  pctBadge: {
-    width: 44, height: 44, borderRadius: 22,
-    borderWidth: 1, borderColor: '#D1FAE5',
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  pctText: { fontSize: 12, fontWeight: '700', color: '#059669' },
-  summaryDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB', marginBottom: 14 },
-  summaryStats: { flexDirection: 'row' },
-  summaryStat:  { flex: 1, alignItems: 'center', gap: 4 },
-  summaryStatDiv: { width: 1, height: 32, backgroundColor: '#E5E7EB' },
-  summaryStatLabel: { fontSize: 10, color: '#6B7280', fontWeight: '500' },
-  summaryStatVal:   { fontSize: 12, fontWeight: '700', color: '#111827', textAlign: 'center' },
 
   /* Climate card */
   climateCard: {
@@ -803,82 +564,47 @@ const s = StyleSheet.create({
   calLegendSwatch: { width: 12, height: 12, borderRadius: 3, borderWidth: 1 },
   calLegendLabel:  { fontSize: 11, color: '#6B7280', fontWeight: '500' },
 
-  /* Category filter chips */
-  filterRow: { gap: 8, paddingRight: 8 },
-  filterChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 14,
-    borderRadius: 9999, borderWidth: 1, borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+  /* Current PalayCheck step */
+  stepHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 6 },
+  stepOf:   { fontSize: 12, fontWeight: '700', color: '#374151', letterSpacing: 0.3 },
+  stepPct:  { fontSize: 12, fontWeight: '700', color: '#059669' },
+  progBg:   { height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', overflow: 'hidden', marginBottom: 12 },
+  progFill: { height: 6, borderRadius: 3, backgroundColor: '#059669' },
+  stepCard: {
+    backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
+    padding: 16,
   },
-  filterChipActive:     { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
-  filterChipText:       { fontSize: 12, fontWeight: '600', color: '#9CA3AF' },
-  filterChipTextActive: { color: '#059669', fontWeight: '700' },
-
-  /* Progress stats */
-  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  statCard: {
-    flex: 1, borderRadius: 10, padding: 14, alignItems: 'center',
-    borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
+  chipRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1, borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10,
   },
-  statVal:   { fontSize: 24, fontWeight: '700' },
-  statLabel: { fontSize: 11, color: '#6B7280', marginTop: 3, fontWeight: '500' },
-
-  /* Group — icon + label section heading above the steps */
-  group:       { marginTop: 20 },
-  groupHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    marginBottom: 10, paddingHorizontal: 2,
+  chipText:     { fontSize: 11, fontWeight: '700' },
+  keyCheck:     { borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10, backgroundColor: '#F3F4F6' },
+  keyCheckText: { fontSize: 11, fontWeight: '700', color: '#4B5563' },
+  stepTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  stepDay:   { fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 10, fontWeight: '500' },
+  stepBody:  { fontSize: 14, color: '#111827', lineHeight: 21 },
+  explainBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, alignSelf: 'flex-start', paddingVertical: 4 },
+  explainBtnText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
+  explainBody: {
+    fontSize: 13, color: '#1E3A8A', lineHeight: 20, marginTop: 6,
+    backgroundColor: '#EFF6FF', borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE', padding: 12,
   },
-  groupLabel:  { fontSize: 15, fontWeight: '700', color: '#111827' },
-
-  /* Todo items */
-  todoItem: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E7EB',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderTopWidth: 0,
+  refRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
   },
-  todoItemFirst: { borderTopWidth: 1, borderTopLeftRadius: 10, borderTopRightRadius: 10 },
-  todoItemLast:  { borderBottomWidth: 1, borderBottomLeftRadius: 10, borderBottomRightRadius: 10 },
-  todoRow: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 14, paddingHorizontal: 16, paddingVertical: 14,
+  refText: { flex: 1, fontSize: 12, color: '#6B7280' },
+  refLink: { fontSize: 12, fontWeight: '600', color: '#059669' },
+  logBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    height: 48, borderRadius: 12, backgroundColor: '#059669', marginTop: 14,
   },
-  checkbox: {
-    width: 24, height: 24, borderRadius: 7,
-    borderWidth: 1.5, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxDone: { backgroundColor: '#059669', borderColor: '#059669' },
-  todoTitle:     { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 2 },
-  todoTitleDone: { color: '#9CA3AF', textDecorationLine: 'line-through' },
-  todoDay:       { fontSize: 12, color: '#9CA3AF' },
-
-  /* Expanded */
-  todoExpand: { paddingHorizontal: 16, paddingBottom: 16 },
-  expandLabel: {
-    fontSize: 11, fontWeight: '600', color: '#9CA3AF',
-    letterSpacing: 0.8, marginBottom: 8,
-  },
-  expandBody: {
-    fontSize: 13, color: '#111827', lineHeight: 20,
-    backgroundColor: '#F9FAFB', borderRadius: 10,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 12, marginBottom: 12,
-  },
-  markBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 13, borderRadius: 10,
-    borderWidth: 1.5, borderColor: '#059669',
-    backgroundColor: '#ECFDF5',
-  },
-  markBtnDone: { backgroundColor: '#059669', borderColor: '#059669' },
-  markBtnText: { fontSize: 13, fontWeight: '600', color: '#059669' },
-  markBtnTextDone: { color: '#FFFFFF' },
+  logBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  logHint:    { fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 16 },
+  nextRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 4 },
+  nextText:   { flex: 1, fontSize: 12, color: '#6B7280' },
 
   /* Disclaimer */
   note: {
