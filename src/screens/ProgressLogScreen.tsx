@@ -144,7 +144,6 @@ export const ProgressLogScreen: React.FC<ProgressLogScreenProps> = ({ onSaveLog 
       if (recId) {
         apiGuides.generate(recId, {
           variety:  guideVarietyId(),
-          season:   useAppStore.getState().latestGuide?.season ?? 'Wet Season',
           logs:     useAppStore.getState().progressLogs.slice(0, 10),
           language: useLanguageStore.getState().language,
         })

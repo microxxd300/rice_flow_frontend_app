@@ -50,6 +50,17 @@ const GROWTH_STAGES = [
 
 const ISSUE_OPTIONS = ['None', 'Insect', 'Disease', 'Drought', 'Flood', 'Other'];
 
+// The words the farmer sees for each log choice. The saved values stay English: the
+// server and STAGE_NO / ISSUE_TO_API read them.
+const LOG_WORD_KEYS: Record<string, string> = {
+  'Land Prep & Planting': 'plogStLandPrep', 'Early Growth': 'plogStEarly', 'Tillering': 'plogStTiller',
+  'Stem Elongation': 'plogStStem', 'Panicle Initiation': 'plogStPanicle', 'Heading': 'plogStHeading',
+  'Grain Filling': 'plogStGrain',
+  None: 'plogIsNone', Insect: 'plogIsInsect', Disease: 'plogIsDisease', Drought: 'plogIsDrought',
+  Flood: 'plogIsFlood', Other: 'plogIsOther',
+  Low: 'plogSevLow', Medium: 'plogSevMedium', High: 'plogSevHigh',
+};
+
 
 // ── Animated empty-state for Kasaysayan ng Ani ──
 // A "ghost" line draws itself from the top-left curving down to zero on the
@@ -199,6 +210,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const { isLargeText } = useAccessibility();
   const T = isLargeText;
   const tr = useTranslation();
+  const logWord = (value: string): string => (tr as any)[LOG_WORD_KEYS[value]] ?? value;
 
   const TABS: { id: string; label: string; iconName: IoniconsName }[] = [
     { id: 'overview', label: tr.progressOverview, iconName: 'bar-chart-outline' },
@@ -531,7 +543,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const handleSaveLog = async () => {
     if (savingLog) return;
     if (!currentCycle?.id) {
-      Alert.alert('No active season', 'Start a planting season before adding field logs.');
+      Alert.alert(tr.plogNoSeasonT, tr.plogNoSeasonB);
       return;
     }
     const issueClean = logIssue.trim();
@@ -557,7 +569,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       });
       saved = res.data;
     } catch {
-      Alert.alert('Log not saved', 'Check your internet connection and try again.');
+      Alert.alert(tr.plogNotSavedT, tr.plogNotSavedB);
       return;
     } finally {
       setSavingLog(false);
@@ -642,7 +654,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           <Text style={[s.logDateDay, T && { fontSize: 19 }]}>{fmtDay(log.logDate)}</Text>
         </View>
         <View style={s.logContentCol}>
-          <Text style={[s.logRowTitle, T && { fontSize: 15 }]} numberOfLines={1}>{log.growthStage}</Text>
+          <Text style={[s.logRowTitle, T && { fontSize: 15 }]} numberOfLines={1}>{logWord(log.growthStage)}</Text>
           {subBits.length > 0 ? (
             <Text style={[s.logRowSub, T && { fontSize: 13 }]} numberOfLines={2}>
               {subBits.join(' · ')}
@@ -673,7 +685,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             <Text style={s.headerSub}>
               {currentCycle
                 ? seasonLabel(currentCycle).replace(' ', ' Season ')
-                : 'No active cycle'}
+                : tr.plogNoCycle}
             </Text>
           </View>
         </View>
@@ -1382,7 +1394,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             <View style={s.modalContextRow}>
               {[
                 { icon: 'home-outline' as const,     label: (selectedFarm as any)?.name ?? '—' },
-                { icon: 'calendar-outline' as const, label: hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : sowingLabel ?? 'No active cycle' },
+                { icon: 'calendar-outline' as const, label: hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : sowingLabel ?? tr.plogNoCycle },
                 { icon: 'sunny-outline' as const,    label: currentCycle ? seasonLabel(currentCycle) : '—' },
               ].map(c => (
                 <View key={c.label} style={s.contextChip}>
@@ -1449,7 +1461,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   >
                     <Ionicons name="leaf-outline" size={16} color="#9CA3AF" />
                     <Text style={[s.mInput, { color: logStage ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logStage || 'Select a stage...'}
+                      {logStage ? logWord(logStage) : tr.plogStagePh}
                     </Text>
                     <Ionicons name={openStage ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
                   </TouchableOpacity>
@@ -1462,7 +1474,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                           onPress={() => { setLogStage(opt); setOpenStage(false); }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[s.mDropItemText, logStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{opt}</Text>
+                          <Text style={[s.mDropItemText, logStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
                           {logStage === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
                         </TouchableOpacity>
                       ))}
@@ -1482,7 +1494,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   >
                     <Ionicons name="warning-outline" size={16} color="#9CA3AF" />
                     <Text style={[s.mInput, { color: logIssue ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logIssue || 'Select an issue...'}
+                      {logIssue ? logWord(logIssue) : tr.plogIssuePh}
                     </Text>
                     <Ionicons name={openIssue ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
                   </TouchableOpacity>
@@ -1499,7 +1511,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                           }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[s.mDropItemText, logIssue === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{opt}</Text>
+                          <Text style={[s.mDropItemText, logIssue === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
                           {logIssue === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
                         </TouchableOpacity>
                       ))}
@@ -1529,7 +1541,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                             activeOpacity={0.75}
                           >
                             <Text style={[s.segText, active && { color: activeColor, fontWeight: '700' }, T && { fontSize: 14 }]}>
-                              {opt}
+                              {logWord(opt)}
                             </Text>
                           </TouchableOpacity>
                         );
