@@ -218,7 +218,8 @@ export const HomeDashboardScreen: React.FC = () => {
     }));
   })();
   const taskDayLabel = (offset: number) =>
-    offset <= 0 ? tr.homeToday
+    offset < 0 ? tr.guideLate.replace('{n}', String(-offset))
+    : offset === 0 ? tr.homeToday
     : offset === 1 ? tr.homeTomorrow
     : tr.homeInDays.replace('{n}', String(offset));
 
@@ -356,7 +357,7 @@ export const HomeDashboardScreen: React.FC = () => {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[s.taskTitle, T && { fontSize: 16 }]} numberOfLines={1}>{t.title}</Text>
-                      <Text style={[s.taskMeta, { color: meta.color }]}>{taskDayLabel(t.offset)}</Text>
+                      <Text style={[s.taskMeta, { color: t.offset < 0 ? '#D97706' : meta.color }]}>{taskDayLabel(t.offset)}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
                   </TouchableOpacity>
