@@ -42,7 +42,7 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
     // variety. The server's rank can differ from the order shown, so never assume rank 1.
     if (variety.id) useAppStore.getState().setPickedVariety({ recId, varietyId: variety.id });
     try {
-      const res = await apiGuides.generate(recId, { variety: guideVarietyId(), season: 'Wet Season', language });
+      const res = await apiGuides.generate(recId, { variety: guideVarietyId(), language });
       setLatestGuide(res.data);
       useAppStore.getState().addNotification({
         title: 'Your planting guide is ready',

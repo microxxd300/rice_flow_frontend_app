@@ -16,10 +16,8 @@ export function loadGuide(recId: number, language: Language): Promise<any> {
   const running = inflight.get(key);
   if (running) return running;
 
-  const state = useAppStore.getState();
   const request = apiGuides.generate(recId, {
-    variety:  guideVarietyId(),
-    season:   (state.latestGuide as any)?.season ?? 'Wet Season',
+    variety:  guideVarietyId(),   // the server picks this crop's guide and names its season
     language,
   })
     .then(res => {
