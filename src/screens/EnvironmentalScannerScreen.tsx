@@ -146,6 +146,9 @@ export const EnvironmentalScannerScreen: React.FC = () => {
   const sampling  = (scan as any)?.soil_sampling as SoilSampling | undefined;
   // The texture comes from BSWM's soil survey when the farm is on its map; pH from SoilGrids
   const soilSeries = scan?.soil_series || '';
+  // pH and the other values: OpenLandMap (saved for Panabo), or SoilGrids as the backup
+  const soilMap = scan?.soil_source === 'openlandmap' ? 'OpenLandMap'
+    : scan?.soil_source === 'soilgrids' ? 'SoilGrids' : '';
   const soilSub   = [
     soilSeries || null,
     soilPh != null ? `pH ${soilPh}` : null,
@@ -277,7 +280,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
         {state === 'done' && scan && (
           <>
             {[
-              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilSub,   source: soilSeries ? 'BSWM' : 'SoilGrids' },
+              { icon: 'layers-outline'      as IoniconsName, label: tr.envSoilType,    value: scan.soil_texture || '—',                              sub: soilSub,   source: soilSeries ? 'BSWM' : soilMap || 'SoilGrids' },
               { icon: 'rainy-outline'       as IoniconsName, label: tr.envRainPerYear, value: rainMm != null ? `${Math.round(rainMm).toLocaleString()} mm` : '—', sub: tr.envAnnualAvg,        source: 'Open-Meteo' },
               { icon: 'trending-up-outline' as IoniconsName, label: tr.envElevation,   value: elevM != null ? `${Math.round(elevM)} m` : '—',        sub: tr.envLowland,                            source: 'Open-Meteo' },
             ].map(item => (
@@ -343,7 +346,7 @@ export const EnvironmentalScannerScreen: React.FC = () => {
 
             <View style={s.metaCard}>
               <Ionicons name="time-outline" size={13} color="#D1D5DB" />
-              <Text style={s.metaText}>{tr.envScannedOn.replace('{date}', scannedAt).replace('{src}', soilSeries ? 'BSWM · SoilGrids · Open-Meteo' : 'SoilGrids · Open-Meteo')}</Text>
+              <Text style={s.metaText}>{tr.envScannedOn.replace('{date}', scannedAt).replace('{src}', [soilSeries && 'BSWM', soilMap, 'Open-Meteo'].filter(Boolean).join(' · '))}</Text>
             </View>
 
             {/* CTA — only once a real recommendation exists for this scan */}

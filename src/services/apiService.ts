@@ -102,6 +102,7 @@ export interface EnvironmentalScan {
   soil_ph: number;
   soil_texture: string;
   soil_series?: string;        // BSWM soil series at the pin, e.g. "Cabangan clay loam"
+  soil_source?: string;        // 'openlandmap', 'soilgrids' or 'default': where pH and the rest came from
   organic_matter: number;
   drainage: string;
   avg_temperature: number;
