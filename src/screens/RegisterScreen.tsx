@@ -1,24 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, TextInput as RNTextInput, TouchableOpacity, Modal, Pressable, FlatList, Alert,
+  Platform, ScrollView, TextInput as RNTextInput, TouchableOpacity, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuthStore } from '@/features/auth/store';
-
-const PANABO_BARANGAYS = [
-  'A.O. Floirendo', 'Buenavista', 'Cacao', 'Cagangohan', 'Consolacion',
-  'Dapco', 'Datu Abdul Dadia', 'Gredu', 'J.P. Laurel', 'Kasilak',
-  'Katipunan', 'Katualan', 'Kauswagan', 'Kiotoy', 'Little Panay',
-  'Lower Panaga', 'Mabunao', 'Malativas', 'Manay', 'Nanyo',
-  'New Malaga', 'New Malitbog', 'New Pandan', 'New Visayas', 'Quezon',
-  'Salvacion', 'San Francisco', 'San Nicolas', 'San Pedro', 'San Roque',
-  'San Vicente', 'Santa Cruz', 'Santo Niño', 'Sindaton', 'Southern Davao',
-  'Tagpore', 'Tibungol', 'Upper Licanan', 'Waterfall',
-];
 
 type Nav = StackNavigationProp<any>;
 
@@ -30,16 +19,12 @@ export const RegisterScreen: React.FC = () => {
   const [email,           setEmail]           = useState('');
   const [password,        setPassword]        = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [barangay,        setBarangay]        = useState('');
-  const [municipality,    setMunicipality]    = useState('Panabo City');
-  const [province,        setProvince]        = useState('Davao del Norte');
   const [showPw,          setShowPw]          = useState(false);
   const [showCPw,         setShowCPw]         = useState(false);
   const [agreed,          setAgreed]          = useState(false);
   const [submitted,       setSubmitted]       = useState(false);
   const [loading,         setLoading]         = useState(false);
   const [error,           setError]           = useState<string | null>(null);
-  const [barangayOpen,    setBarangayOpen]    = useState(false);
 
   // Per-field error messages so the user sees exactly what to fix.
   type FieldErrors = Partial<Record<'fullName' | 'email' | 'password' | 'confirmPassword' | 'terms', string>>;
@@ -93,9 +78,6 @@ export const RegisterScreen: React.FC = () => {
         password2:    confirmPassword,
         first_name,
         last_name,
-        barangay:     barangay.trim(),
-        municipality: municipality.trim(),
-        province:     province.trim(),
       });
       // register() also signs in; the navigator then opens farm setup
     } catch (err: any) {
@@ -224,26 +206,6 @@ export const RegisterScreen: React.FC = () => {
             }
           />
 
-          {/* Location — Panabo, Davao del Norte */}
-          <View style={s.groupGap} />
-
-          {/* Barangay — dropdown of 39 official Panabo barangays */}
-          <View style={f.wrap}>
-            <Text style={f.label}>Barangay</Text>
-            <TouchableOpacity
-              style={[f.box, barangayOpen && f.boxFocused]}
-              activeOpacity={0.7}
-              onPress={() => setBarangayOpen(true)}
-            >
-              <Text style={[f.input, !barangay && { color: '#D1D5DB' }]}>
-                {barangay || 'Select your barangay'}
-              </Text>
-              <Ionicons name="chevron-down" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-
-          <Field label="City / Municipality" value={municipality} onChangeText={setMunicipality} placeholder="Panabo City"        autoCapitalize="words" />
-          <Field label="Province"            value={province}     onChangeText={setProvince}     placeholder="Davao del Norte"   autoCapitalize="words" />
 
           {/* Terms */}
           <TouchableOpacity style={s.termsRow} onPress={() => { setAgreed(v => !v); if (fieldErrors.terms) setFieldErrors(e => ({ ...e, terms: undefined })); }} activeOpacity={0.7}>
@@ -297,37 +259,6 @@ export const RegisterScreen: React.FC = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Barangay picker modal */}
-      <Modal
-        visible={barangayOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setBarangayOpen(false)}
-      >
-        <Pressable style={s.modalBackdrop} onPress={() => setBarangayOpen(false)}>
-          <Pressable style={s.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={s.modalHeader}>
-              <Text style={s.modalTitle}>Select Barangay</Text>
-              <Text style={s.modalSub}>Panabo City, Davao del Norte</Text>
-            </View>
-            <FlatList
-              data={PANABO_BARANGAYS}
-              keyExtractor={(item) => item}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[s.modalItem, barangay === item && s.modalItemActive]}
-                  onPress={() => { setBarangay(item); setBarangayOpen(false); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[s.modalItemText, barangay === item && s.modalItemTextActive]}>{item}</Text>
-                  {barangay === item && <Ionicons name="checkmark" size={16} color="#059669" />}
-                </TouchableOpacity>
-              )}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -465,25 +396,4 @@ const s = StyleSheet.create({
   },
   errorText: { flex: 1, fontSize: 13, color: '#B91C1C', fontWeight: '600' },
 
-  modalBackdrop: {
-    flex: 1, backgroundColor: 'rgba(17, 24, 39, 0.45)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 24,
-    maxHeight: '78%',
-  },
-  modalHeader: { marginBottom: 12, paddingHorizontal: 4 },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  modalSub:   { fontSize: 12, color: '#6B7280', marginTop: 2 },
-  modalItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  modalItemActive: { backgroundColor: '#F0FDF4' },
-  modalItemText: { fontSize: 14, color: '#111827' },
-  modalItemTextActive: { fontWeight: '700', color: '#059669' },
 });

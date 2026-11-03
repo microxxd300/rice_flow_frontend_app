@@ -36,23 +36,19 @@ export const FarmMapTaggingScreen: React.FC = () => {
   const [coords,   setCoords]   = useState({ lat: initLat, lng: initLng });
   const [locating, setLocating] = useState(false);
 
-  // Address resolved from the pinned location via reverse-geocoding (precise,
-  // API-derived). The address typed at registration is only a fallback.
-  const [resolved, setResolved] = useState<{ barangay?: string; municipality?: string; province?: string }>({});
-
+  // The barangay follows the pin: each time it moves the server reads it from the
+  // official barangay boundaries. The farmer never picks it, and the server sets it
+  // again when the farm is saved.
+  const [pinBarangay, setPinBarangay] = useState<string | null>(null);
+  const lookupRef = useRef(0);
   const resolveAddress = async (lat: number, lng: number) => {
+    const id = ++lookupRef.current;
     try {
-      const r = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,
-        { headers: { 'User-Agent': 'rice-flow-app/1.0 (capstone)' } },
-      );
-      const a = (await r.json())?.address ?? {};
-      setResolved({
-        barangay:     a.suburb || a.village || a.neighbourhood || a.quarter || a.hamlet || undefined,
-        municipality: a.city || a.town || a.municipality || a.county || undefined,
-        province:     a.province || a.state || undefined,
-      });
-    } catch { /* geocode failed — keep the registration fallback below */ }
+      const { data } = await apiFarms.checkLocation(lat, lng);
+      if (id === lookupRef.current) setPinBarangay(data.barangay ?? null);
+    } catch {
+      if (id === lookupRef.current) setPinBarangay(null);   // weak signal: set when the farm is saved
+    }
   };
 
   // Remember this step so an interrupted setup resumes here after the app reopens
@@ -62,11 +58,11 @@ export const FarmMapTaggingScreen: React.FC = () => {
     resolveAddress(coords.lat, coords.lng);
   }, []);
 
-  // Map-resolved location takes precedence; registration values are the backup
+  // RiceFlow is for Panabo City only, so the city and province are fixed
   const farmName     = farmData.farmName     || 'My Farm';
-  const barangay     = resolved.barangay     || farmData.barangay     || '—';
-  const municipality = resolved.municipality || farmData.municipality || '—';
-  const province     = resolved.province     || farmData.province     || '—';
+  const barangay     = pinBarangay || '—';
+  const municipality = 'Panabo City';
+  const province     = 'Davao del Norte';
   const area         = farmData.area ? `${farmData.area} ha` : '—';
 
   const goToMyLocation = async () => {
@@ -93,9 +89,9 @@ export const FarmMapTaggingScreen: React.FC = () => {
         ...farmData,
         latitude:     coords.lat,
         longitude:    coords.lng,
-        barangay:     resolved.barangay     || farmData.barangay     || '',
-        municipality: resolved.municipality || farmData.municipality || '',
-        province:     resolved.province     || farmData.province     || '',
+        barangay:     pinBarangay || '',
+        municipality,
+        province,
         location_confirmed: locationConfirmed,
       },
     });
