@@ -225,6 +225,9 @@ export const apiGuides = {
                                           apiClient.post<any>(API_ROUTES.guides.generate(recId), data, { timeout: 90000 }),
   complete:   (stepId: number, done: boolean = true) =>
                                           apiClient.patch<any>(API_ROUTES.guides.stepComplete(stepId), { is_completed: done }),
+  // "Did you sow already?": sown on a date (YYYY-MM-DD, default today), or not yet
+  sowing:     (guideId: number, data: { sown: boolean; date?: string; language?: string }) =>
+                                          apiClient.post<any>(API_ROUTES.guides.sowing(guideId), data),
 };
 
 // ── Predictions ────────────────────────────────────────────────────────────

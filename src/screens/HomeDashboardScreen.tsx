@@ -5,6 +5,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
+import { SowingQuestion } from '@/components/SowingQuestion';
+import { sowingQuestionDue } from '@/utils/sowing';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
@@ -312,6 +314,13 @@ export const HomeDashboardScreen: React.FC = () => {
             </View>
           </View>
         </View>
+
+        {/* "Did you sow already?" from the planned sowing day until answered */}
+        {sowingQuestionDue(latestGuide, completedGuideSteps) && (
+          <View style={s.section}>
+            <SowingQuestion />
+          </View>
+        )}
 
         {/* ── 2. Susunod na Gawain (next AI guide steps) ── */}
         {upcomingTasks.length > 0 && (

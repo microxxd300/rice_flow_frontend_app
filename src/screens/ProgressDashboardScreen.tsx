@@ -18,6 +18,10 @@ import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
 import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
+import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
+import { useLanguageStore } from '@/store/languageStore';
+import { shortDate } from '@/components/SowingQuestion';
+import { SOWING_KEY } from '@/utils/sowing';
 import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
@@ -231,7 +235,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // refreshed quietly, so the tab does not flash skeletons on every visit
   const cached = cachedActiveCycleLogs(selectedFarmId);
   // Real active cycle only (null until loaded or when there is none) — never a sample cycle
-  const [currentCycle, setCurrentCycle] = useState<any>(cached?.cycle ?? null);
+  const [loadedCycle,  setCurrentCycle] = useState<any>(cached?.cycle ?? null);
   const [logStage,     setLogStage]     = useState('');
   const [logDate,      setLogDate]      = useState(new Date().toISOString().split('T')[0]);
   const [logIssue,     setLogIssue]     = useState('');
@@ -249,6 +253,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const hasIssue = logIssue && logIssue !== 'None';
 
   const { activeCycle, farms } = useAppStore();
+  // A newer copy of this cycle in the store (refreshCycle, after a log or a sowing answer)
+  // wins, so its stage and dates change at once
+  const currentCycle = activeCycle && loadedCycle && activeCycle.id === loadedCycle.id ? activeCycle : loadedCycle;
   // Skeletons only when there is nothing to show yet
   const [cycleLoading, setCycleLoading] = useState(!cached);
 
@@ -403,7 +410,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     : serverHarvest && !isNaN(serverHarvest.getTime()) ? serverHarvest
     : new Date(plannedStart.getTime() + cycleDays * 86400000);
   const harvestLabel    = harvestDate ? `${MONTHS_SHORT[harvestDate.getMonth()]} ${harvestDate.getDate()}` : 'Oct 9';
-  const activeStage     = (() => {
+  // The server's stage: days since sowing or the guide steps logged, whichever is further
+  const activeStage     = (currentCycle as any)?.stage?.name ?? (() => {
     const i = Math.min(CROP_STAGES.length - 1, Math.floor((cyclePct / 100) * CROP_STAGES.length));
     return CROP_STAGES[i]?.stage ?? 'Panicle Initiation';
   })();
@@ -614,6 +622,35 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     setLogIssue(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
     setLogStage(''); closeLog();
+    afterGuideLog(doneStep?.key, saved?.sowing_estimate);
+  };
+
+  // The crop cycle follows the guide: after a step is logged, its stage (and, for the
+  // sowing step, every date) comes back from the server
+  const afterGuideLog = (stepKey: string | undefined, sowingEstimate: string | undefined) => {
+    const language = useLanguageStore.getState().language;
+    const recId = useAppStore.getState().latestRecommendation?.id;
+    if (stepKey === SOWING_KEY && recId) {
+      loadGuide(recId, language).catch(() => {});   // the plan moved to the real sowing day
+    }
+    void refreshCycle();
+    if (sowingEstimate) {
+      // A later step logged before sowing: confirm the sowing day it implies
+      const date = shortDate(sowingEstimate, tr);
+      Alert.alert(tr.sowEstTitle.replace('{date}', date), tr.sowEstBody.replace('{date}', date), [
+        { text: tr.sowLater, style: 'cancel' },
+        { text: tr.sowEstChange, onPress: () => navigation.navigateDeprecated('PlantingTab') },
+        { text: tr.sowEstYes, onPress: () => {
+          answerSowing(true, sowingEstimate, language).catch(() => Alert.alert(tr.sowAskTitle, tr.sowFailed));
+        } },
+      ]);
+    } else if (stepKey === 'harvest') {
+      // The season ends when its yield is saved
+      Alert.alert(tr.harvestAskTitle, tr.harvestAskBody, [
+        { text: tr.sowLater, style: 'cancel' },
+        { text: tr.harvestAskYes, onPress: () => navigation.navigateDeprecated('YieldRecord') },
+      ]);
+    }
   };
 
   // Format ISO date → "Jun 15" (short month + day)

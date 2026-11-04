@@ -7,6 +7,7 @@ import { syncGuideReminders } from '@/services/guideReminderScheduler';
 import { useStepWeather } from '@/hooks/useFarmForecast';
 import { guideSteps } from '@/utils/guideSteps';
 import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { sowingStep } from '@/utils/sowing';
 
 /**
  * Keeps the phone's 7 AM planting-guide reminders in step with the guide: rebuilt when
@@ -22,9 +23,14 @@ export function useGuideReminders(): void {
   const { adviceFor } = useStepWeather();
 
   const byId = new Map(guideSteps(guide).map(st => [st.id, st]));
+  const sowId = sowingStep(guide)?.id;
   const reminders = (enabled ? planGuideReminders(guide, completed) : []).map(r => {
+    const notes: string[] = [];
+    // The sowing day's reminder asks "Did you sow already?", so the plan follows the real day
+    if (sowId && r.stepIds.includes(sowId)) notes.push(tr.sowAskReminder);
     const advice = r.stepIds.map(id => adviceFor(byId.get(id))).find(a => !!a);
-    return advice ? { ...r, note: (tr as any)[ADVICE_TEXT[advice.code]] as string } : r;
+    if (advice) notes.push((tr as any)[ADVICE_TEXT[advice.code]] as string);
+    return notes.length ? { ...r, note: notes.join('\n') } : r;
   });
   // As text, so a new forecast every 10 minutes reschedules nothing unless a note changed
   const plan = JSON.stringify(reminders);
