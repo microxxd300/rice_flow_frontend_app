@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Pressable, Image,
+  View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -10,7 +10,6 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { noticeMessage } from '@/utils/farmerNotices';
 import { relTime } from '@/utils/relativeTime';
 import { notificationGroup, notificationsFor, unreadByTab, type NotificationTab } from '@/utils/notificationGroups';
-import { empty } from '@/assets/illustrations';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -113,7 +112,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#11
 
             {shown.length === 0 ? (
               <View style={s.empty}>
-                <Image source={empty.no_logs} style={{ width: 120, height: 120 }} resizeMode="contain" />
+                <View style={s.emptyTile}>
+                  <Ionicons name="notifications-off-outline" size={34} color="#059669" />
+                </View>
                 <Text style={s.emptyText}>{tr.notifEmpty}</Text>
               </View>
             ) : (
@@ -223,7 +224,8 @@ const s = StyleSheet.create({
   kind:            { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: PAGE },
   kindText:        { fontSize: 11, color: '#374151', fontFamily: 'Inter_600SemiBold' },
 
-  empty:     { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  empty:     { alignItems: 'center', paddingVertical: 32, gap: 12 },
+  emptyTile: { width: 76, height: 76, borderRadius: 26, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
   emptyText: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter_500Medium' },
 
   footer:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14, paddingHorizontal: 4 },

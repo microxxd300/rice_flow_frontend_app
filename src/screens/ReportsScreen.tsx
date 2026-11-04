@@ -243,22 +243,29 @@ export const ReportsScreen: React.FC = () => {
           {loadingHistory ? (
             <View style={{ marginTop: 8 }}><Skeleton w={120} h={44} br={8} /></View>
           ) : (
-            <View style={s.bigRow}>
-              <Text style={s.big}>{filteredHistory.length ? rangeTons.toFixed(1) : '—'}</Text>
-              {filteredHistory.length > 0 && <Text style={s.bigUnit}>{tr.ovTons}</Text>}
-            </View>
+            filteredHistory.length ? (
+              <View style={s.bigRow}>
+                <Text style={s.big}>{rangeTons.toFixed(1)}</Text>
+                <Text style={s.bigUnit}>{tr.ovTons}</Text>
+              </View>
+            ) : (
+              <View style={s.pendingPill}>
+                <Ionicons name="basket-outline" size={15} color="#6B7280" />
+                <Text style={s.pendingText}>{tr.rpNoHarvest}</Text>
+              </View>
+            )
           )}
           <Text style={s.sub}>{tr.rpHarvests.replace('{n}', String(filteredHistory.length))}</Text>
           <View style={s.tiles}>
             {[
-              { lbl: tr.rpAvgYield,   val: avgTHa  != null ? avgTHa.toFixed(1)  : '—', unit: avgTHa  != null ? 't/ha' : '' },
-              { lbl: tr.rpBestSeason, val: bestTHa != null ? bestTHa.toFixed(1) : '—', unit: bestTHa != null ? 't/ha' : '' },
+              { lbl: tr.rpAvgYield,   val: avgTHa  != null ? avgTHa.toFixed(1)  : null, unit: avgTHa  != null ? 't/ha' : '' },
+              { lbl: tr.rpBestSeason, val: bestTHa != null ? bestTHa.toFixed(1) : null, unit: bestTHa != null ? 't/ha' : '' },
               { lbl: tr.reportsFarms, val: String(farmsCount), unit: '' },
             ].map(t => (
               <View key={t.lbl} style={s.tile}>
                 <Text style={s.tileLbl} numberOfLines={2}>{t.lbl}</Text>
                 <View style={s.tileValRow}>
-                  <Text style={s.tileVal}>{t.val}</Text>
+                  <Text style={t.val == null ? s.tileNone : s.tileVal}>{t.val ?? tr.ovNotYet}</Text>
                   {!!t.unit && <Text style={s.tileUnit}>{t.unit}</Text>}
                 </View>
               </View>
@@ -461,6 +468,9 @@ const s = StyleSheet.create({
   tileLbl:    { fontSize: 12, color: '#374151', fontFamily: 'Inter_600SemiBold' },
   tileValRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 8 },
   tileVal:    { fontSize: 20, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  tileNone:   { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  pendingPill:{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 8, marginBottom: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F1F2F1' },
+  pendingText:{ fontSize: 15, color: '#374151', fontFamily: 'Inter_600SemiBold' },
   tileUnit:   { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 3, marginBottom: 3 },
   bars:       { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', minHeight: 170, marginTop: 14 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
