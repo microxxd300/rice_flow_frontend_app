@@ -1,24 +1,24 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { SetupHeader } from '@/components/SetupHeader';
+import { icons } from '@/assets/illustrations';
 
 type Nav = StackNavigationProp<any>;
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface FarmSetupWelcomeScreenProps {
   onSkip?: () => void;
 }
 
-const STEPS: { iconName: IoniconsName; title: string; text: string }[] = [
-  { iconName: 'create-outline',   title: 'Farm details',     text: "Your farm's name and area"           },
-  { iconName: 'navigate-outline', title: 'GPS location',     text: 'Tag your farm on the map'            },
-  { iconName: 'leaf-outline',     title: 'Top 3 varieties',  text: 'Rice varieties matched to your land' },
-  { iconName: 'book-outline',     title: 'Planting guide',   text: 'Step-by-step plan for the season'    },
+const STEPS: { image: ImageSourcePropType; title: string; text: string }[] = [
+  { image: icons.farm,      title: 'Farm details',     text: "Your farm's name and area"           },
+  { image: icons.gps,       title: 'GPS location',     text: 'Tag your farm on the map'            },
+  { image: icons.varieties, title: 'Top 3 varieties',  text: 'Rice varieties matched to your land' },
+  { image: icons.guide,     title: 'Planting guide',   text: 'Step-by-step plan for the season'    },
 ];
 
 export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () => {
@@ -27,12 +27,7 @@ export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () 
   return (
     <SafeAreaView style={s.root}>
 
-      {/* Header — back chevron + page title (matches the rest of the auth flow) */}
-      <View style={s.header}>
-        <View style={{ width: 32 }} />
-        <Text style={s.headerTitle}>Set up your farm</Text>
-        <View style={{ width: 32 }} />
-      </View>
+      <SetupHeader title="Set up your farm" />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
@@ -44,12 +39,12 @@ export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () 
         <View style={s.steps}>
           {STEPS.map((step, i) => (
             <View key={i} style={[s.stepRow, i < STEPS.length - 1 && s.stepRowDivider]}>
-              <Text style={s.stepNum}>{i + 1}</Text>
+              <View style={s.stepNumTile}><Text style={s.stepNum}>{i + 1}</Text></View>
               <View style={{ flex: 1 }}>
                 <Text style={s.stepTitle}>{step.title}</Text>
                 <Text style={s.stepText}>{step.text}</Text>
               </View>
-              <Ionicons name={step.iconName} size={18} color="#9CA3AF" />
+              <Image source={step.image} style={s.stepPic} resizeMode="contain" />
             </View>
           ))}
         </View>
@@ -72,7 +67,7 @@ export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () 
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -83,33 +78,20 @@ const s = StyleSheet.create({
   skipBtn:     { width: 44, height: 32, justifyContent: 'center', alignItems: 'center' },
   skipText:    { fontSize: 13, fontWeight: '600', color: '#6B7280' },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 },
+  scroll: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 24 },
 
-  lead: { fontSize: 14, color: '#374151', lineHeight: 22, marginBottom: 24 },
+  lead: { fontSize: 15, color: '#374151', lineHeight: 22, marginBottom: 16, paddingHorizontal: 4, fontFamily: 'Inter_500Medium' },
 
-  steps: { backgroundColor: '#FFFFFF' },
-  stepRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16,
-  },
-  stepRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  stepNum:   { width: 22, fontSize: 14, fontWeight: '700', color: '#9CA3AF', textAlign: 'center' },
-  stepTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  stepText:  { fontSize: 12, color: '#6B7280', lineHeight: 17 },
+  steps: { backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, paddingHorizontal: 16, paddingVertical: 4 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
+  stepRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  stepNumTile: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
+  stepNum: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
+  stepPic:   { width: 44, height: 44 },
+  stepTitle: { fontSize: 15, color: '#111827', marginBottom: 2, fontFamily: 'Inter_700Bold' },
+  stepText: { fontSize: 13, color: '#6B7280', lineHeight: 18, fontFamily: 'Inter_500Medium' },
 
-  footer: {
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  saveBtn: {
-    height: 50, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
+  saveBtn: { height: 56, borderRadius: 20, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
+  saveBtnText: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
 });

@@ -8,6 +8,7 @@ import { useAppStore, guideVarietyId } from '@/store/appStore';
 import { apiGuides } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
 import { goBackFromStep } from '@/utils/navigation';
+import { SetupHeader } from '@/components/SetupHeader';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -110,197 +111,108 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
   return (
     <SafeAreaView style={s.root}>
 
-      {/* Standard header — same vocabulary as the rest of the setup flow */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => goBackFromStep(navigation, 'PlantingGuideHandoff')} activeOpacity={0.7} style={s.backBtn}>
-          <Ionicons name="chevron-back" size={22} color="#111827" />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>Planting Guide</Text>
-        <View style={{ width: 32 }} />
-      </View>
+      <SetupHeader title="Your farm is ready" onBack={() => goBackFromStep(navigation, 'PlantingGuideHandoff')} />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Variety card — flat white, score on the right with constrained width so the name truncates instead of overflowing */}
-        <View style={s.varietyCard}>
-          <View style={s.varietyLeft}>
-            <Ionicons name="leaf" size={14} color="#059669" />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={s.varietyLabel}>Selected variety</Text>
-              <Text style={s.varietyName} numberOfLines={1} ellipsizeMode="tail">{varName}</Text>
-            </View>
+        {/* The pick: variety, farm and how well they match */}
+        <View style={s.card}>
+          <Text style={s.label}>Selected variety</Text>
+          <Text style={s.varietyName} numberOfLines={2}>{varName}</Text>
+          <View style={s.matchRow}>
+            <Text style={s.big}>{rsi}</Text>
+            <Text style={s.bigUnit}>% farm match</Text>
           </View>
-          <View style={s.scoreCol}>
-            <Text style={s.scoreNum} numberOfLines={1}>{rsi}%</Text>
-            <Text style={s.scoreLabel}>match</Text>
-          </View>
-        </View>
-
-        {/* Farm summary — single flat list, no green storefront tile, no "Handa" pill */}
-        <View style={[s.card, { marginTop: 8 }]}>
-          <Text style={s.cardTitle}>Prepared for</Text>
           <View style={s.farmRow}>
+            <View style={s.farmTile}><Ionicons name="leaf" size={18} color="#059669" /></View>
             <View style={{ flex: 1 }}>
               <Text style={s.farmName} numberOfLines={1}>{farmName}</Text>
-              <Text style={s.farmSub}  numberOfLines={1}>{barangay}, {municipality}</Text>
+              <Text style={s.farmSub} numberOfLines={1}>{barangay}, {municipality}</Text>
             </View>
-            <Ionicons name="checkmark-circle" size={18} color="#059669" />
-          </View>
-
-          {/* Stats — clean 2-column metric strip (RSI score + match %) */}
-          <View style={s.statsRow}>
-            <View style={s.statCell}>
-              <Text style={s.statLabel}>RSI score</Text>
-              <Text style={s.statVal}>{rsi}<Text style={s.statUnit}>/100</Text></Text>
-            </View>
-            <View style={s.statSep} />
-            <View style={s.statCell}>
-              <Text style={s.statLabel}>Farm match</Text>
-              <Text style={[s.statVal, { color: '#059669' }]}>{rsi}<Text style={s.statUnit}>%</Text></Text>
-            </View>
+            <Ionicons name="checkmark-circle" size={22} color="#059669" />
           </View>
         </View>
 
-        {/* Features — vertical list with small inline icons, hairline-separated */}
-        <Text style={s.cardTitle}>Guide contents</Text>
-        <View style={s.featList}>
-          {FEATURES.map((feat, i) => (
-            <View key={feat.label} style={[s.featRow, i < FEATURES.length - 1 && s.featRowDivider]}>
-              <Ionicons name={feat.icon} size={16} color="#9CA3AF" />
-              <Text style={s.featText}>{feat.label}</Text>
-              <Ionicons name="checkmark" size={14} color="#059669" />
+        <Text style={s.question}>Where do you want to start?</Text>
+
+        {/* Planting Guide: the one most farmers want first */}
+        <TouchableOpacity
+          style={[s.choice, s.choiceDark, !!generating && { opacity: 0.7 }]}
+          onPress={handleOpenGuide}
+          disabled={!!generating}
+          activeOpacity={0.88}
+        >
+          <View style={s.choiceHead}>
+            <View style={[s.choiceTile, { backgroundColor: '#1F2937' }]}>
+              <Ionicons name="book" size={22} color="#34D399" />
             </View>
-          ))}
-        </View>
-
-      </ScrollView>
-
-      {/* Footer — primary "Open guide" + ghost "Dashboard", same pair as elsewhere */}
-      <View style={s.footer}>
-        <View style={s.actions}>
-          <TouchableOpacity
-            style={[s.cancelBtn, !!generating && { opacity: 0.6 }]}
-            onPress={handleGoToDashboard}
-            activeOpacity={0.7}
-            disabled={!!generating}
-          >
-            {generating === 'dashboard'
-              ? <ActivityIndicator size="small" color="#374151" />
-              : <Text style={s.cancelBtnText}>Go to Dashboard</Text>
-            }
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[s.saveBtn, !!generating && { opacity: 0.6 }]}
-            onPress={handleOpenGuide}
-            disabled={!!generating}
-            activeOpacity={0.85}
-          >
+            <View style={{ flex: 1 }}>
+              <Text style={[s.choiceTitle, { color: '#FFFFFF' }]}>View Planting Guide</Text>
+              <Text style={[s.choiceText, { color: '#D1D5DB' }]}>Your step-by-step plan for this season</Text>
+            </View>
             {generating === 'guide'
               ? <ActivityIndicator size="small" color="#FFFFFF" />
-              : <Text style={s.saveBtnText}>View Planting Guide</Text>
-            }
-          </TouchableOpacity>
-        </View>
-      </View>
+              : <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />}
+          </View>
+          <View style={s.featWrap}>
+            {FEATURES.map(feat => (
+              <View key={feat.label} style={s.feat}>
+                <Ionicons name={feat.icon} size={13} color="#34D399" />
+                <Text style={s.featText}>{feat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
 
+        {/* Dashboard */}
+        <TouchableOpacity
+          style={[s.choice, !!generating && { opacity: 0.7 }]}
+          onPress={handleGoToDashboard}
+          disabled={!!generating}
+          activeOpacity={0.88}
+        >
+          <View style={s.choiceHead}>
+            <View style={s.choiceTile}>
+              <Ionicons name="home" size={22} color="#111827" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.choiceTitle}>Go to Dashboard</Text>
+              <Text style={s.choiceText}>Your crop, weather and tasks for today</Text>
+            </View>
+            {generating === 'dashboard'
+              ? <ActivityIndicator size="small" color="#111827" />
+              : <Ionicons name="arrow-forward" size={20} color="#111827" />}
+          </View>
+        </TouchableOpacity>
+
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root:   { flex: 1, backgroundColor: '#F1F2F1' },
+  scroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32 },
 
-  /* Header */
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  backBtn:     { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  card:        { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  label:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  varietyName: { fontSize: 22, color: '#111827', letterSpacing: -0.4, marginTop: 4, fontFamily: 'Inter_700Bold' },
+  matchRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 10 },
+  big:         { fontSize: 48, lineHeight: 54, color: '#059669', letterSpacing: -1.5, fontFamily: 'Inter_700Bold' },
+  bigUnit:     { fontSize: 15, color: '#6B7280', marginBottom: 9, fontFamily: 'Inter_600SemiBold' },
+  farmRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, padding: 12, borderRadius: 18, backgroundColor: '#F1F2F1' },
+  farmTile:    { width: 40, height: 40, borderRadius: 14, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
+  farmName:    { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  farmSub:     { fontSize: 12, color: '#6B7280', marginTop: 1, fontFamily: 'Inter_500Medium' },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 24 },
-
-  /* Variety card — flat, no shadow, single green leaf accent */
-  varietyCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1.5, borderColor: '#059669',
-    paddingVertical: 16, paddingHorizontal: 16,
-    marginBottom: 22,
-  },
-  varietyLeft:  { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
-  varietyLabel: { fontSize: 11, color: '#9CA3AF', fontWeight: '500', marginBottom: 2 },
-  varietyName:  { fontSize: 15, fontWeight: '700', color: '#111827' },
-
-  /* Score block — wider minWidth so "100.0%" never clips, alignItems centered for visual stability */
-  scoreCol: {
-    alignItems: 'center',
-    marginLeft: 12,
-    minWidth: 84,
-    flexShrink: 0,
-  },
-  scoreNum:   { fontSize: 18, fontWeight: '800', color: '#059669', lineHeight: 22 },
-  scoreLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: '600', marginTop: 1, letterSpacing: 0.3 },
-
-  /* Card title — sentence case, same as other in-app cards */
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 12, marginTop: 12 },
-
-  /* Farm summary card */
-  card: {
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16, marginBottom: 4,
-  },
-  farmRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
-  farmName: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  farmSub:  { fontSize: 12, color: '#9CA3AF' },
-
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#F3F4F6',
-    paddingTop: 12,
-  },
-  statCell: { flex: 1, alignItems: 'center' },
-  statSep:  { width: StyleSheet.hairlineWidth, height: 30, backgroundColor: '#E5E7EB' },
-  statLabel:{ fontSize: 11, color: '#9CA3AF', fontWeight: '500', marginBottom: 4 },
-  statVal:  { fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.3 },
-  statUnit: { fontSize: 11, fontWeight: '600', color: '#9CA3AF' },
-
-  /* Features — flat hairline-separated rows */
-  featList: {
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
-  featRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 13,
-  },
-  featRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  featText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#374151' },
-
-  /* Footer — primary/ghost pair, equal width 50/50 */
-  footer: {
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  actions: { flexDirection: 'row', gap: 10 },
-  cancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  saveBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  question:    { fontSize: 18, color: '#111827', marginTop: 22, marginBottom: 12, paddingHorizontal: 4, fontFamily: 'Inter_700Bold' },
+  choice:      { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 18, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  choiceDark:  { backgroundColor: '#111827' },
+  choiceHead:  { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  choiceTile:  { width: 52, height: 52, borderRadius: 18, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
+  choiceTitle: { fontSize: 17, color: '#111827', fontFamily: 'Inter_700Bold' },
+  choiceText:  { fontSize: 13, color: '#6B7280', marginTop: 2, lineHeight: 18, fontFamily: 'Inter_500Medium' },
+  featWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
+  feat:        { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#1F2937', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 9 },
+  featText:    { fontSize: 12, color: '#E5E7EB', fontFamily: 'Inter_600SemiBold' },
 });

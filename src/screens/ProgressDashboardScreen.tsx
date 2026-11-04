@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { PieChart } from 'react-native-gifted-charts';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle, Text as SvgText, Line } from 'react-native-svg';
 import { LinearGradient as ExpoGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/Skeleton';
@@ -17,7 +16,7 @@ import { Button } from '../components';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
-import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
+import { useStepWeather } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
@@ -26,8 +25,11 @@ import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
+import { cropDays } from '@/utils/cropDays';
+import { CAVAN_KG } from '@/utils/harvest';
+import { empty, stageImage } from '@/assets/illustrations';
 import { seasonLabel } from '@/utils/formatting';
-import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
+import { ISSUE_TO_API, LOG_WORD_KEYS, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -71,15 +73,6 @@ const PROBLEM_OPTIONS: { value: string; icon: IoniconsName }[] = [
 
 // The words the farmer sees for each log choice. The saved values stay English: the
 // server and STAGE_NO / ISSUE_TO_API read them.
-const LOG_WORD_KEYS: Record<string, string> = {
-  'Land Prep & Planting': 'plogStLandPrep', 'Early Growth': 'plogStEarly', 'Tillering': 'plogStTiller',
-  'Stem Elongation': 'plogStStem', 'Panicle Initiation': 'plogStPanicle', 'Heading': 'plogStHeading',
-  'Grain Filling': 'plogStGrain', 'Ripening': 'plogStRipen', 'Harvesting': 'plogStHarvest',
-  'Post-Harvest': 'plogStPost',
-  None: 'plogIsNone', Insect: 'plogIsInsect', Disease: 'plogIsDisease', Drought: 'plogIsDrought',
-  Flood: 'plogIsFlood', Nutrient: 'plogIsYellow', Other: 'plogIsOther',
-  Low: 'plogSevLow', Medium: 'plogSevMedium', High: 'plogSevHigh',
-};
 
 
 // ── Animated empty-state for Kasaysayan ng Ani ──
@@ -87,8 +80,14 @@ const LOG_WORD_KEYS: Record<string, string> = {
 // baseline, then erases and redraws — visually says "wala pang data, papunta sa zero".
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; onRecord: () => void }> = ({
-  width, expectedYield, onRecord,
+// The server's growth stages run 1..10; from Harvesting (9) on, the harvest is asked for
+const STAGE_COUNT      = 10;
+// Tallest bar in the Trends yield chart
+const BAR_MAX_H        = 120;
+const HARVEST_STAGE_NO = 9;
+
+const EmptyYieldChart: React.FC<{ width: number; onRecord: () => void }> = ({
+  width, onRecord,
 }) => {
   const svgH    = 90;
   const pad     = { l: 8, r: 8, t: 8, b: 10 };
@@ -118,15 +117,10 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
   }, []);
 
   return (
-    <View style={{ backgroundColor: '#FFFFFF', borderRadius: 10, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Yield History</Text>
-        {expectedYield != null && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF7ED', borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 9, borderWidth: 1, borderColor: '#FDE68A' }}>
-            <Ionicons name="trending-up" size={11} color="#D97706" />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>{expectedYield}t expected</Text>
-          </View>
-        )}
+    <View style={[s.card, { padding: 20 }]}>
+      {/* The expected yield has its own card above, so no badge here */}
+      <View style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Yield History</Text>
       </View>
 
       <Svg width={width} height={svgH}>
@@ -162,13 +156,13 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
         activeOpacity={0.85}
         style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-          gap: 6, marginTop: 12,
-          paddingVertical: 10, borderRadius: 10,
-          backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0',
+          gap: 6, marginTop: 14,
+          height: 46, borderRadius: 16,
+          backgroundColor: PAGE,
         }}
       >
-        <Ionicons name="add" size={14} color="#059669" />
-        <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>Record Harvest</Text>
+        <Ionicons name="add" size={16} color="#111827" />
+        <Text style={{ fontSize: 13, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Record Harvest</Text>
       </TouchableOpacity>
     </View>
   );
@@ -371,7 +365,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   const plantingDateStr = (currentCycle as any)?.planting_date ?? (currentCycle as any)?.plantingDate;
   const today           = new Date();
-  const cycleDays       = variety?.maturity_days ?? 115;
+  // The planted crop's season (sowing to expected harvest) first; the top variety's otherwise
+  const cycleDays       = cropDays(plantingDateStr, (currentCycle as any)?.expected_harvest_date)?.total
+    ?? variety?.maturity_days ?? 115;
   // Only treat the planting date as valid if it falls inside a sensible window
   // (not in the future, not older than one full cycle). Otherwise, no real cycle
   // is running yet — UI shows "Day 1" / "—" instead of fabricating mid-cycle state.
@@ -529,46 +525,34 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     useAppStore.getState().setPendingLogStep(null);
   }, [pendingLogStep]);
 
-  // Live temperature for the metric tile, from the app's shared forecast (useFarmForecast)
-  const forecast = useAppStore(s => s.forecast);
-  const liveTemp = forecast && forecast.key === farmKey(selectedFarm) && forecast.data.current?.temperature != null
-    ? Math.round(forecast.data.current.temperature) : null;
   // What the weather means for the step this log finishes
   const { adviceFor } = useStepWeather();
   const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
 
   // Real seasonal yields — one record per cycle that has a saved yield
-  const [realYields, setRealYields] = useState<{ season: string; yieldTons: number }[]>([]);
+  const [realYields, setRealYields] = useState<{ season: string; yieldTons: number; tHa: number | null }[]>([]);
   useEffect(() => {
     const load = async () => {
       try {
         const farmId    = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles    = cyclesRes.data ?? [];
-        const out: { season: string; yieldTons: number }[] = [];
+        const out: { season: string; yieldTons: number; tHa: number | null }[] = [];
         for (const c of cycles) {
           try {
             const y = await apiProgress.getYield(c.id);
             // The yield record carries kilograms (same field the Reports screen reads)
             const kg = y.data?.net_yield_kg;
             if (kg != null) {
-              out.push({ season: seasonLabel(c), yieldTons: +(kg / 1000).toFixed(1) });
+              out.push({ season: seasonLabel(c), yieldTons: +(kg / 1000).toFixed(1), tHa: c.yield_per_ha ?? null });
             }
           } catch {}
         }
-        setRealYields(out);
+        setRealYields(out.reverse());   // the server lists the newest first
       } catch {}
     };
     load();
   }, [selectedFarmId]);
-
-  const CAT_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    planting:        { label: 'Planting',   color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
-    fertilizer:      { label: 'Fertilizer', color: '#D97706', bg: '#FFF7ED', border: '#FDE68A' },
-    pest_prevention: { label: 'Pest Care',  color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
-    irrigation:      { label: 'Irrigation', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-    harvesting:      { label: 'Harvesting', color: '#B45309', bg: '#FFFBEB', border: '#FCD34D' },
-  };
 
   const handleSaveLog = async () => {
     if (savingLog) return;
@@ -715,6 +699,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     const subBits: string[] = [];
     if (hasIssue) subBits.push(log.observedIssue);
     if (hasIssue && log.actionTaken) subBits.push(log.actionTaken);
+    const title = (log.growthStage ? logWord(log.growthStage) : '') || log.notes || '—';
 
     return (
       <View key={idx} style={[s.logRow, !isLast && s.logRowDivider]}>
@@ -723,13 +708,14 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           <Text style={[s.logDateDay, T && { fontSize: 19 }]}>{fmtDay(log.logDate)}</Text>
         </View>
         <View style={s.logContentCol}>
-          <Text style={[s.logRowTitle, T && { fontSize: 15 }]} numberOfLines={1}>{logWord(log.growthStage)}</Text>
+          {/* A step log may have no stage: its note (the step) is the title then */}
+          <Text style={[s.logRowTitle, T && { fontSize: 16 }]} numberOfLines={2}>{title}</Text>
           {subBits.length > 0 ? (
             <Text style={[s.logRowSub, T && { fontSize: 13 }]} numberOfLines={2}>
               {subBits.join(' · ')}
             </Text>
           ) : null}
-          {log.notes ? (
+          {log.notes && title !== log.notes ? (
             <Text style={[s.logRowNote, T && { fontSize: 13 }]} numberOfLines={2}>{log.notes}</Text>
           ) : null}
         </View>
@@ -746,11 +732,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       {/* Header */}
       <View style={s.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <View style={s.titleIcon}>
-            <Ionicons name="analytics-outline" size={16} color="#FFFFFF" />
-          </View>
           <View>
-            <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.progressHeader}</Text>
+            <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.progressHeader}</Text>
             <Text style={s.headerSub}>
               {currentCycle
                 ? seasonLabel(currentCycle).replace(' ', ' Season ')
@@ -758,7 +741,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             </Text>
           </View>
         </View>
-        <NotificationBell color="#059669" size={22} />
+        <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -787,136 +770,106 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           })}
         </View>
 
-        {/* TAB 1: BUOD */}
+        {/* TAB 1: OVERVIEW: how the crop is doing (Home has what to do today) */}
         {selectedTab === 'overview' && (() => {
           const cW2 = Dimensions.get('window').width - 80;
+          const days      = cropDays(plantingDateStr, (currentCycle as any)?.expected_harvest_date);
+          const stageNo   = (currentCycle as any)?.stage?.stage_no ?? null;
+          const nextStage = stageNo != null && stageNo < STAGE_COUNT ? logWord(stageLabel(stageNo + 1)) : '';
+          const stepsDone = guideList.filter(st => completedSteps.includes(st.id)).length;
+          const problems  = storeLogs.filter((l: any) => {
+            const issue = String(l.observedIssue ?? l.observed_issue ?? '').trim();
+            return !!issue && issue !== 'None' && issue !== 'Wala';
+          }).length;
+          const showYield  = hasRealCycle && predictedYield != null;
+          const sacks      = showYield ? Math.round((predictedYield! * 1000) / CAVAN_KG) : null;
+          const harvestDue = stageNo != null && stageNo >= HARVEST_STAGE_NO && (currentCycle as any)?.yield_per_ha == null;
           return (
             <>
-              {/* Card 1: Status — flat (with shimmer loading state) */}
-              <View style={[s.card, { marginTop: 16, marginBottom: 10, padding: 16 }]}>
-                <View style={{ marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.6 }}>{tr.activeStageLabel}</Text>
-                    {cycleLoading && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 10, color: '#059669', fontWeight: '600' }}>{tr.progressViewing}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 6 }}>
-                          {[dot1, dot2, dot3].map((d, i) => (
-                            <Animated.View key={i} style={{
-                              width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: '#059669',
-                              opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
-                              transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
-                            }} />
-                          ))}
-                        </View>
-                      </View>
+              {/* The season: today's stage on the 10-stage track, the day and the harvest date */}
+              <View style={[s.card, s.ovCard]}>
+                <View style={s.ovHead}>
+                  <Text style={s.ovLabel}>{tr.ovStageNow}</Text>
+                  {cycleLoading && <ActivityIndicator size="small" color="#059669" />}
+                </View>
+                <View style={s.ovStageRow}>
+                  <View style={{ flex: 1 }}>
+                    {cycleLoading
+                      ? <SkelBar w={190} h={26} br={6} />
+                      : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{currentCycle ? activeStage : tr.plogNoCycle}</Text>}
+                    {!!nextStage && !cycleLoading && (
+                      <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.ovNext.replace('{stage}', nextStage)}</Text>
                     )}
                   </View>
-                  {cycleLoading ? (
-                    <SkelBar w={180} h={20} br={6} />
-                  ) : (
-                    <Text style={{ fontSize: T ? 17 : 16, fontWeight: '700', color: '#111827' }}>
-                      {activeStage}
-                    </Text>
+                  {!cycleLoading && !!stageImage(stageNo) && (
+                    <Image source={stageImage(stageNo)!} style={s.ovStagePic} resizeMode="contain" />
                   )}
                 </View>
-
-                {/* Progress pill */}
-                <View style={{ height: 4, backgroundColor: '#F3F4F6', borderRadius: 999, marginBottom: 14, overflow: 'hidden' }}>
-                  {cycleLoading ? (
-                    <Animated.View style={{
-                      position: 'absolute', top: 0, bottom: 0, width: 110,
-                      transform: [{
-                        translateX: stripeX.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-110, Dimensions.get('window').width - 40],
-                        }),
-                      }],
-                    }}>
-                      <ExpoGradient
-                        colors={['rgba(5,150,105,0)', '#059669', 'rgba(5,150,105,0)']}
-                        start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
-                        style={{ flex: 1, borderRadius: 999 }}
-                      />
-                    </Animated.View>
-                  ) : (
-                    <Animated.View style={{
-                      height: 4, borderRadius: 999, overflow: 'hidden',
-                      backgroundColor: '#059669',
-                      width: fillAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
-                    }}>
-                      {/* Continuous shimmer sweep on the green fill */}
-                      <Animated.View style={{
-                        position: 'absolute', top: 0, bottom: 0, width: 60,
-                        transform: [{
-                          translateX: fillSweep.interpolate({
-                            inputRange:  [0, 1],
-                            outputRange: [-60, Dimensions.get('window').width - 40],
-                          }),
-                        }],
-                      }}>
-                        <ExpoGradient
-                          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']}
-                          start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
-                          style={{ flex: 1 }}
-                        />
-                      </Animated.View>
-                    </Animated.View>
-                  )}
+                <View style={s.stageTrack}>
+                  {Array.from({ length: STAGE_COUNT }, (_, i) => i + 1).map(no => (
+                    <View
+                      key={no}
+                      style={[s.stageSeg, stageNo != null && no < stageNo && s.stageSegDone, no === stageNo && s.stageSegNow]}
+                    />
+                  ))}
                 </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={s.ovStats}>
                   {[
-                    { val: cycleLoading ? null : (hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : sowingLabel ?? '—'), lbl: tr.cycCurrent, valColor: '#111827' },
-                    { val: cycleLoading ? null : `${cyclePct}%`,                                              lbl: tr.cycDone,           valColor: '#059669' },
-                    { val: cycleLoading ? null : (harvestDate ? harvestLabel : '—'),                           lbl: tr.progressExpected,  valColor: '#111827' },
-                  ].map((c, i, arr) => (
-                    <React.Fragment key={c.lbl}>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
-                        {c.val == null
-                          ? <View style={{ marginBottom: 4 }}><SkelBar w={46} h={14} br={4} /></View>
-                          : <Text style={{ fontSize: 14, fontWeight: '700', color: c.valColor }}>{c.val}</Text>
-                        }
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{c.lbl}</Text>
-                      </View>
-                      {i < arr.length - 1 && <View style={{ width: 1, height: 26, backgroundColor: '#E5E7EB' }} />}
-                    </React.Fragment>
+                    { lbl: tr.cycCurrent,       val: days && days.day >= 1 ? `${tr.cycDayPrefix} ${days.day}` : (sowingLabel ?? '—') },
+                    { lbl: tr.cycDone,          val: days && days.total && days.day >= 1 ? `${Math.round(days.share * 100)}%` : '—' },
+                    { lbl: tr.progressExpected, val: harvestDate ? harvestLabel : '—' },
+                  ].map(c => (
+                    <View key={c.lbl} style={{ flex: 1 }}>
+                      <Text style={[s.ovStatLbl, T && { fontSize: 13 }]} numberOfLines={1}>{c.lbl}</Text>
+                      {cycleLoading
+                        ? <View style={{ marginTop: 6 }}><SkelBar w={52} h={16} br={4} /></View>
+                        : <Text style={[s.ovStatVal, T && { fontSize: 18 }]}>{c.val}</Text>}
+                    </View>
                   ))}
                 </View>
               </View>
 
-              {/* Card 2: 3-column metrics — flat, with per-tile skeleton when data not yet loaded */}
-              <View style={[s.card, { padding: 0, marginBottom: 10 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16 }}>
-                  {[
-                    { icon: 'shield-checkmark-outline' as const, value: healthScore != null ? String(healthScore) : '—',                        sub: healthScore != null ? '/100' : '',                        label: tr.cycHealth,          loading: cycleLoading },
-                    { icon: 'trending-up-outline'      as const, value: (hasRealCycle && predictedYield != null) ? predictedYield.toFixed(1) : '—', sub: (hasRealCycle && predictedYield != null) ? 't' : '',     label: tr.cycExpectedYield,   loading: false },
-                    { icon: 'thermometer-outline'      as const, value: liveTemp != null ? String(liveTemp) : '—',                             sub: liveTemp != null ? '°C' : '',                             label: tr.cycTemperature,     loading: liveTemp == null },
-                  ].map((m, i) => (
-                    <React.Fragment key={m.label}>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
-                        <Ionicons name={m.icon} size={14} color="#9CA3AF" style={{ marginBottom: 6 }} />
-                        {m.loading ? (
-                          <Skeleton w={48} h={T ? 26 : 24} br={5} style={{ marginBottom: 6 }} />
-                        ) : (
-                          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                            <Text style={{ fontSize: T ? 24 : 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5 }}>{m.value}</Text>
-                            <Text style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 2, fontWeight: '600' }}>{m.sub}</Text>
-                          </View>
-                        )}
-                        <Text style={{ fontSize: 10, color: '#6B7280', marginTop: 4 }}>{m.label}</Text>
-                      </View>
-                      {i < 2 && <View style={{ width: 1, height: 38, backgroundColor: '#E5E7EB' }} />}
-                    </React.Fragment>
-                  ))}
+              {/* Expected harvest from the yield model, in tons and sacks */}
+              <View style={[s.card, s.ovCard]}>
+                <Text style={s.ovLabel}>{tr.cycExpectedYield}</Text>
+                <View style={s.ovBigRow}>
+                  <Text style={s.ovBig}>{showYield ? predictedYield!.toFixed(1) : '—'}</Text>
+                  {showYield && <Text style={s.ovBigUnit}>{tr.ovTons}</Text>}
                 </View>
+                <Text style={[s.ovSub, T && { fontSize: 14 }]}>
+                  {sacks != null
+                    ? tr.ovSacks.replace('{n}', String(sacks)).replace('{ha}', String(farmArea))
+                    : tr.ovYieldLater}
+                </Text>
+                {harvestDue && (
+                  <TouchableOpacity style={s.ovDarkBtn} onPress={() => navigation.navigateDeprecated('YieldRecord')} activeOpacity={0.85}>
+                    <Ionicons name="basket-outline" size={17} color="#FFFFFF" />
+                    <Text style={s.ovDarkBtnText}>{tr.harvestAskYes}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* This season in three tiles */}
+              <View style={s.tiles}>
+                {[
+                  { lbl: tr.cycHealth,     val: healthScore != null ? String(healthScore) : '—', unit: healthScore != null ? '/100' : '' },
+                  { lbl: tr.ovStepsDone,   val: guideList.length ? String(stepsDone) : '—',      unit: guideList.length ? `/${guideList.length}` : '' },
+                  { lbl: tr.ovProblems,    val: String(problems),                                  unit: '' },
+                ].map(m => (
+                  <View key={m.lbl} style={s.tile}>
+                    <Text style={[s.tileLbl, T && { fontSize: 13 }]} numberOfLines={2}>{m.lbl}</Text>
+                    <View style={s.tileValRow}>
+                      <Text style={[s.tileVal, T && { fontSize: 26 }]}>{m.val}</Text>
+                      {!!m.unit && <Text style={s.tileUnit}>{m.unit}</Text>}
+                    </View>
+                  </View>
+                ))}
               </View>
 
               {/* Card 3: Yield trend — animated empty state (line draws down to zero) */}
               {realYields.length === 0 ? (
                 <EmptyYieldChart
                   width={cW2}
-                  expectedYield={hasRealCycle && predictedYield != null ? predictedYield : null}
                   onRecord={() => navigation.navigateDeprecated('YieldRecord')}
                 />
               ) : (() => {
@@ -1029,42 +982,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 );
               })()}
 
-              {/* Card 4: Todo list */}
-              {(() => {
-                const todos = [guideNow.current, ...guideNow.next].filter(st => !!st).slice(0, 4) as typeof guideList;
-                if (!todos.length) return null;
-                return (
-                  <View style={[s.card, { padding: 0, overflow: 'hidden', marginBottom: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.3 }}>NEXT TASKS</Text>
-                      <TouchableOpacity onPress={() => setShowAddLog(true)} style={s.todoLogBtn} activeOpacity={0.8}>
-                        <Ionicons name="add" size={13} color="#059669" />
-                        <Text style={s.todoLogBtnText}>{tr.homeAddLog}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {todos.map((step, i) => {
-                      const cat    = CAT_CONFIG[step.category] ?? CAT_CONFIG.planting;
-                      const isNext = i === 0;
-                      return (
-                        <TouchableOpacity
-                          key={step.id}
-                          onPress={() => openLogFor(step.id)}
-                          activeOpacity={0.75}
-                          style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: i < todos.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}
-                        >
-                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isNext ? cat.color : '#D1D5DB', marginTop: 5 }} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: T ? 13 : 12, color: isNext ? '#111827' : '#9CA3AF', lineHeight: 19, fontWeight: isNext ? '600' : '400' }}>
-                              {step.title}
-                            </Text>
-                          </View>
-                          <Ionicons name="chevron-forward" size={14} color="#D1D5DB" style={{ marginTop: 3 }} />
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                );
-              })()}
             </>
           );
         })()}
@@ -1097,9 +1014,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               </View>
             ) : (
               <View style={s.logEmpty}>
-                <View style={s.logEmptyIconWrap}>
-                  <Ionicons name="document-text-outline" size={28} color="#9CA3AF" />
-                </View>
+                <Image source={empty.no_logs} style={{ width: 132, height: 132, marginBottom: 6 }} resizeMode="contain" />
                 <Text style={s.logEmptyTitle}>{tr.progressNoLogsTitle}</Text>
                 <Text style={s.logEmptySub}>
                   Log your first field observation{'\n'}to get started.
@@ -1109,135 +1024,77 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           </>
         )}
 
-        {/* TAB 3: MGA TREND */}
+        {/* TAB 3: TRENDS: how this farm changes from season to season */}
         {selectedTab === 'trends' && (() => {
-          const chartW = Dimensions.get('window').width - 80;
           const shortLabel = (season: string) =>
             season.replace('Dry ', 'D').replace('Wet ', 'W').replace('20', "'");
-
-          const buildLine = (pts: { x: number; y: number }[]) => {
-            let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-            for (let i = 1; i < pts.length; i++) {
-              const cpx = ((pts[i - 1].x + pts[i].x) / 2).toFixed(1);
-              d += ` C${cpx},${pts[i - 1].y.toFixed(1)} ${cpx},${pts[i].y.toFixed(1)} ${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`;
-            }
-            return d;
-          };
-
-          const StatsRow = ({ items }: { items: { label: string; value: string; color: string }[] }) => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', marginTop: 8 }}>
-              {items.map((stat, i) => (
-                <React.Fragment key={stat.label}>
-                  <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: stat.color, letterSpacing: -0.3 }}>{stat.value}</Text>
-                    <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{stat.label}</Text>
-                  </View>
-                  {i < items.length - 1 && <View style={{ width: 1, height: 32, backgroundColor: '#E5E7EB' }} />}
-                </React.Fragment>
-              ))}
-            </View>
-          );
+          // Past harvests (t/ha, oldest first), then this season's expected yield
+          const past     = realYields.filter(y => y.tHa != null).slice(-5);
+          const thisTHa  = hasRealCycle && predictedYield != null && (currentCycle as any)?.yield_per_ha == null
+            ? +(predictedYield / Math.max(farmArea, 0.1)).toFixed(1) : null;
+          const bars = [
+            ...past.map((y, i) => ({ key: `p${i}`, label: shortLabel(y.season), value: y.tHa as number, now: false })),
+            ...(thisTHa != null ? [{ key: 'now', label: tr.trThisSeason, value: thisTHa, now: true }] : []),
+          ];
+          const maxV     = Math.max(1, ...bars.map(b => b.value));
+          const headline = thisTHa ?? (past.length ? past[past.length - 1].tHa as number : null);
+          const prev     = thisTHa != null ? past[past.length - 1]?.tHa : past[past.length - 2]?.tHa;
+          const delta    = headline != null && prev ? Math.round(((headline - prev) / prev) * 100) : null;
 
           return (
             <>
-              {/* ── Yield Forecast — only when a real cycle is running AND the LR model has responded ── */}
-              {(() => {
-                // No real cycle yet → show a clean "start a cycle" empty state instead of fabricated numbers
-                if (!hasRealCycle || predictedYield == null) {
-                  return (
-                    <View style={[s.trendCard, { marginTop: 20, alignItems: 'center', paddingVertical: 28 }]}>
-                      <Ionicons name="trending-up-outline" size={28} color="#D1D5DB" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }}>
-                        {tr.yieldNeedCycle}
-                      </Text>
-                    </View>
-                  );
-                }
-
-                const daysLeft      = Math.max(0, cycleDays - CURRENT_DAY);
-                const prevYield     = realYields.length > 0 ? realYields[realYields.length - 1].yieldTons : null;
-                const deltaPct      = prevYield != null && prevYield > 0
-                  ? +(((predictedYield - prevYield) / prevYield) * 100).toFixed(1)
-                  : null;
-                const varietyName   = variety?.common_name ?? 'NSIC Rc160';
-
-                return (
-                  <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => navigation.navigateDeprecated('RecommendationResults')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{varietyName}</Text>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.progressExpected}</Text>
-                      </View>
-                      <View style={s.trendHarvestPill}>
-                        <Ionicons name="time-outline" size={12} color="#D97706" />
-                        <Text style={s.trendHarvestPillText}>{harvestLabel}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-                      <PieChart
-                        donut
-                        data={[
-                          { value: cyclePct,        color: '#059669' },
-                          { value: 100 - cyclePct,  color: '#F3F4F6' },
-                        ]}
-                        radius={58}
-                        innerRadius={44}
-                        strokeColor="#FFFFFF"
-                        strokeWidth={2}
-                        centerLabelComponent={() => (
-                          <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.5 }}>{predictedYield.toFixed(1)}t</Text>
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: '#9CA3AF', marginTop: 1 }}>{tr.donutPrediction}</Text>
-                          </View>
-                        )}
-                      />
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '600', marginBottom: 6 }}>{tr.donutCyclePct.replace('{p}', String(cyclePct))}</Text>
-
-                        <View style={{ marginBottom: 10 }}>
-                          <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5, lineHeight: 26 }}>
-                            {(predictedYield / Math.max(farmArea, 0.1)).toFixed(1)}<Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '600' }}> t/ha</Text>
-                          </Text>
-                          <Text style={{ fontSize: 11, color: '#6B7280' }}>{tr.donutExpectedAni}</Text>
+              {/* ── Yield per season: bars like the reference's score chart ── */}
+              <View style={[s.trendCard, { marginTop: 4 }]}>
+                <Text style={s.ovLabel}>{tr.trYieldTitle}</Text>
+                {bars.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 6 }}>
+                    <Image source={empty.no_harvest} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
+                    <Text style={[s.ovSub, { marginTop: 0, textAlign: 'center' }]}>{tr.yieldNeedCycle}</Text>
+                  </View>
+                ) : (
+                  <>
+                    <View style={s.ovBigRow}>
+                      <Text style={s.ovBig}>{headline != null ? headline.toFixed(1) : '—'}</Text>
+                      <Text style={s.ovBigUnit}>t/ha</Text>
+                      {delta != null && (
+                        <View style={[s.deltaPill, { backgroundColor: delta >= 0 ? '#E8F5EF' : '#FDECEC' }]}>
+                          <Ionicons name={delta >= 0 ? 'arrow-up' : 'arrow-down'} size={12} color={delta >= 0 ? '#059669' : '#B91C1C'} />
+                          <Text style={[s.deltaText, { color: delta >= 0 ? '#059669' : '#B91C1C' }]}>{Math.abs(delta)}%</Text>
                         </View>
-
-                        {deltaPct != null && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name={deltaPct >= 0 ? 'arrow-up' : 'arrow-down'} size={11} color={deltaPct >= 0 ? '#059669' : '#DC2626'} />
-                            <Text style={{ fontSize: 11, color: deltaPct >= 0 ? '#059669' : '#DC2626', fontWeight: '600' }}>
-                              {tr.donutVsPrev.replace('{d}', `${deltaPct >= 0 ? '+' : ''}${deltaPct}`)}
-                            </Text>
-                          </View>
-                        )}
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
-                          {tr.donutDaysLeft.replace('{n}', String(daysLeft))}
-                        </Text>
-                      </View>
+                      )}
                     </View>
-                  </TouchableOpacity>
-                );
-              })()}
+                    <Text style={[s.ovSub, T && { fontSize: 14 }]}>
+                      {thisTHa != null ? tr.trExpectedNow : tr.trLastHarvest}
+                      {delta != null ? ` · ${tr.trVsLast}` : ''}
+                    </Text>
+                    <View style={s.bars}>
+                      {bars.map(b => (
+                        <View key={b.key} style={s.barCol}>
+                          <Text style={[s.barVal, b.now && { color: '#059669' }]}>{b.value.toFixed(1)}</Text>
+                          <View style={[s.bar, {
+                            height: Math.max(8, Math.round((b.value / maxV) * BAR_MAX_H)),
+                            backgroundColor: b.now ? '#059669' : '#111827',
+                            opacity: b.now ? 0.85 : 1,
+                          }]} />
+                          <Text style={[s.barLbl, b.now && { color: '#059669' }]} numberOfLines={1}>{b.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {past.length === 0 && <Text style={[s.ovSub, { marginTop: 12 }]}>{tr.trRecordToCompare}</Text>}
+                  </>
+                )}
+              </View>
 
-              {/* (Kasaysayan ng Ani lives in Buod — kept off Trends to avoid duplicate) */}
-
-              {/* ── Plant Health ── derived from real progressLogs (severity-weighted). Empty state when no logs. */}
+              {/* ── Plant health: one score, three things it watches ── */}
               {(() => {
                 if (recentLogs.length === 0) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 20, alignItems: 'center', paddingVertical: 28 }]}>
-                      <Ionicons name="shield-checkmark-outline" size={28} color="#D1D5DB" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }}>
-                        {tr.healthNoLogs}
-                      </Text>
+                    <View style={[s.trendCard, { alignItems: 'center', paddingVertical: 28 }]}>
+                      <Image source={empty.no_logs} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
+                      <Text style={[s.logEmptySub, { color: '#111827' }]}>{tr.healthNoLogs}</Text>
                     </View>
                   );
                 }
-
                 // Classify each recent log into one of 3 categories using the same regex as notifications
                 const SEV_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
                 const worst = (cat: 'insekto' | 'sakit' | 'tubig'): string => {
@@ -1282,46 +1139,36 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   : hs >= 60 ? '#D97706'
                   :            '#DC2626';
 
-                const rows = [
+                const tiles = [
                   { icon: 'bug-outline'   as const, label: tr.healthInsect,  value: insekto },
                   { icon: 'leaf-outline'  as const, label: tr.healthDisease, value: sakit },
                   { icon: 'water-outline' as const, label: tr.healthWater,   value: labelFor('tubig', tubig) },
                 ];
-
                 return (
-                  <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => setSelectedTab('logs')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{tr.progressPlantHealth}</Text>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.healthFromLogs.replace('{n}', String(recentLogs.length))}</Text>
-                      </View>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: overallColor }}>{overallLabel}</Text>
+                  <TouchableOpacity style={s.trendCard} onPress={() => setSelectedTab('logs')} activeOpacity={0.85}>
+                    <View style={s.ovHead}>
+                      <Text style={s.ovLabel}>{tr.progressPlantHealth}</Text>
+                      <Text style={[s.deltaText, { color: overallColor }]}>{overallLabel}</Text>
                     </View>
-                    {rows.map((row, i, arr) => (
-                      <View key={row.label} style={[s.listRow, i === arr.length - 1 && { borderBottomWidth: 0, marginBottom: 12 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <Ionicons name={row.icon} size={16} color="#9CA3AF" />
-                          <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
+                    <View style={s.ovBigRow}>
+                      <Text style={s.ovBig}>{hs == null ? '—' : hs}</Text>
+                      {hs != null && <Text style={s.ovBigUnit}>/100</Text>}
+                    </View>
+                    <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.healthFromLogs.replace('{n}', String(recentLogs.length))}</Text>
+                    <View style={[s.tiles, { marginTop: 16, marginBottom: 0 }]}>
+                      {tiles.map(t => (
+                        <View key={t.label} style={s.innerTile}>
+                          <Ionicons name={t.icon} size={18} color="#111827" />
+                          <Text style={[s.tileLbl, { marginTop: 10 }, T && { fontSize: 13 }]} numberOfLines={1}>{t.label}</Text>
+                          <Text style={[s.innerTileVal, { color: colorFor(t.value) }]} numberOfLines={1}>{t.value}</Text>
                         </View>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colorFor(row.value) }}>{row.value}</Text>
-                      </View>
-                    ))}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>{tr.progressOverallHealth}</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: overallColor }}>{hs == null ? '—' : `${hs}%`}</Text>
-                    </View>
-                    <View style={s.progBg}>
-                      <View style={[s.progFill, { width: `${hs ?? 0}%`, backgroundColor: overallColor }]} />
+                      ))}
                     </View>
                   </TouchableOpacity>
                 );
               })()}
 
-              {/* ── GABAY ── only counts steps the farmer ACTUALLY checked in the Gabay tab */}
+              {/* ── Guide on time: steps checked so far, by kind ── */}
               {(() => {
                 const steps: any[] = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
                 const checkedIds = new Set(completedSteps);
@@ -1377,67 +1224,54 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 if (buckets.length === 0) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 20, alignItems: 'center', paddingVertical: 24 }]}>
-                      <Ionicons name="book-outline" size={28} color="#D1D5DB" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8 }}>{tr.progressNoGuide}</Text>
-                      <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4, textAlign: 'center' }}>
-                        {tr.guideOpenTabHint}
-                      </Text>
+                    <View style={[s.trendCard, { alignItems: 'center', paddingVertical: 24 }]}>
+                      <Image source={empty.no_guide} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
+                      <Text style={s.logEmptyTitle}>{tr.progressNoGuide}</Text>
+                      <Text style={s.logEmptySub}>{tr.guideOpenTabHint}</Text>
                     </View>
                   );
                 }
-
                 return (
-                  <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 20 }]}
-                    onPress={() => navigation.navigateDeprecated('PlantingTab')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{tr.progressGuideAdh}</Text>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}</Text>
-                      </View>
-                      <View style={{ backgroundColor: badge.bg, borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: badge.border }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: badge.color }}>{badge.label}</Text>
+                  <TouchableOpacity style={s.trendCard} onPress={() => navigation.navigateDeprecated('PlantingTab')} activeOpacity={0.85}>
+                    <View style={s.ovHead}>
+                      <Text style={s.ovLabel}>{tr.progressGuideAdh}</Text>
+                      <View style={[s.deltaPill, { backgroundColor: badge.bg }]}>
+                        <Text style={[s.deltaText, { color: badge.color }]}>{badge.label}</Text>
                       </View>
                     </View>
-                    {buckets.map((item, i, arr) => (
-                      <View key={item.cat} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}>
-                        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: item.done ? '#ECFDF5' : '#F9FAFB', borderWidth: 1.5, borderColor: item.done ? '#059669' : '#E5E7EB', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                          {item.done
-                            ? <Ionicons name="checkmark" size={14} color="#059669" />
-                            : <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#D1D5DB' }} />
-                          }
+                    <View style={s.ovBigRow}>
+                      <Text style={s.ovBig}>{adherence}</Text>
+                      <Text style={s.ovBigUnit}>%</Text>
+                    </View>
+                    <Text style={[s.ovSub, T && { fontSize: 14 }]}>
+                      {tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}
+                    </Text>
+                    <View style={{ marginTop: 14, gap: 14 }}>
+                      {buckets.map(item => (
+                        <View key={item.cat}>
+                          <View style={s.ovHead}>
+                            <Text style={[s.rowLabel, { fontFamily: 'Inter_600SemiBold' }, T && { fontSize: 15 }]}>{item.label}</Text>
+                            <Text style={[s.ovStatLbl, item.done && { color: '#059669' }]}>{item.doneCt}/{item.total} · {item.status}</Text>
+                          </View>
+                          <View style={[s.progBg, { marginTop: 6, height: 8 }]}>
+                            <View style={[s.progFill, { height: 8, width: `${Math.round((item.doneCt / item.total) * 100)}%` }]} />
+                          </View>
+                          <Text style={[s.ovStatLbl, { marginTop: 4 }]}>{item.detail}</Text>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: item.done ? '#111827' : '#9CA3AF' }}>{item.label}</Text>
-                          <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{item.detail} · {item.doneCt}/{item.total}</Text>
-                        </View>
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: item.done ? '#059669' : '#9CA3AF' }}>{item.status}</Text>
-                      </View>
-                    ))}
-                    <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>{tr.progressOverallAdh}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#1F6B3F' }}>{adherence}%</Text>
-                      </View>
-                      <View style={s.progBg}>
-                        <View style={[s.progFill, { width: `${adherence}%` }]} />
-                      </View>
+                      ))}
                     </View>
                   </TouchableOpacity>
                 );
               })()}
 
-              {/* "Buong Kasaysayan" → goes to Reports screen (full historical view across all seasons/farms) */}
+              {/* The whole history, every season and farm */}
               <TouchableOpacity
                 onPress={() => navigation.navigateDeprecated('ReportsHome')}
                 activeOpacity={0.85}
-                style={{ height: 50, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', marginTop: 16, flexDirection: 'row', gap: 6 }}
+                style={s.ovDarkBtn}
               >
-                <Ionicons name="document-text-outline" size={16} color="#374151" />
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>{tr.progressFullReport}</Text>
+                <Ionicons name="document-text-outline" size={17} color="#FFFFFF" />
+                <Text style={s.ovDarkBtnText}>{tr.progressFullReport}</Text>
               </TouchableOpacity>
             </>
           );
@@ -1487,7 +1321,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       onPress={() => setLogKind(k.key)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name={k.icon} size={20} color={active ? '#FFFFFF' : '#059669'} />
+                      <Ionicons name={k.icon} size={22} color={active ? '#FFFFFF' : '#059669'} />
                       <Text style={[s.kindText, active && s.kindTextOn, T && { fontSize: 14 }]}>{(tr as any)[k.label]}</Text>
                     </TouchableOpacity>
                   );
@@ -1532,7 +1366,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                             onPress={() => setLogIssue(opt.value)}
                             activeOpacity={0.8}
                           >
-                            <Ionicons name={opt.icon} size={20} color={active ? '#B45309' : '#6B7280'} />
+                            <Ionicons name={opt.icon} size={22} color={active ? '#FFFFFF' : '#111827'} />
                             <Text style={[s.issueText, active && s.issueTextOn, T && { fontSize: 13 }]} numberOfLines={2}>
                               {logWord(opt.value)}
                             </Text>
@@ -1574,7 +1408,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       <TextInput
                         style={[s.mInput, T && { fontSize: 16 }]}
                         placeholder={tr.plogActionPh}
-                        placeholderTextColor="#D1D5DB"
+                        placeholderTextColor="#9CA3AF"
                         value={logAction}
                         onChangeText={setLogAction}
                       />
@@ -1596,7 +1430,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       <TextInput
                         style={[s.mInput, { textAlignVertical: 'top', minHeight: 60 }, T && { fontSize: 16 }]}
                         placeholder={tr.plogNotesPh}
-                        placeholderTextColor="#D1D5DB"
+                        placeholderTextColor="#9CA3AF"
                         value={logNotes}
                         onChangeText={setLogNotes}
                         multiline
@@ -1626,7 +1460,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         onPress={() => setPickDate(true)}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="calendar-outline" size={14} color={pickDate ? '#FFFFFF' : '#059669'} />
+                        <Ionicons name="calendar-outline" size={15} color={pickDate ? '#FFFFFF' : '#111827'} />
                         <Text style={[s.dateChipText, pickDate && s.dateChipTextOn, T && { fontSize: 14 }]}>{tr.plogPickDate}</Text>
                       </TouchableOpacity>
                     </View>
@@ -1636,7 +1470,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         <TextInput
                           style={[s.mInput, T && { fontSize: 16 }]}
                           placeholder="YYYY-MM-DD"
-                          placeholderTextColor="#D1D5DB"
+                          placeholderTextColor="#9CA3AF"
                           value={logDate}
                           onChangeText={setLogDate}
                         />
@@ -1693,14 +1527,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   );
 };
 
+const PAGE = '#F1F2F1';   // the page gray behind the white cards (as on Home)
+
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F9F8' },
-  stepToggle: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, marginBottom: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  stepToggleOn:    { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' },
+  container: { flex: 1, backgroundColor: PAGE },
+  stepToggle: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 14, marginBottom: 16, backgroundColor: PAGE },
+  stepToggleOn: { backgroundColor: '#E8F5EF' },
   stepCheck: {
     width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#D1D5DB',
     justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
@@ -1714,33 +1546,31 @@ const s = StyleSheet.create({
   },
   logWeatherStop: { borderColor: '#FECACA', backgroundColor: '#FEF2F2' },
   logWeatherText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: '#92400E', fontWeight: '600' },
-  scroll: { paddingHorizontal: 24, paddingBottom: 110 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 130 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4,
   },
   titleIcon:   { width: 34, height: 34, borderRadius: 17, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  headerSub:   { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  headerBtn:   { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 21, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  headerSub:   { fontSize: 13, color: '#6B7280', marginTop: 1, fontFamily: 'Inter_500Medium' },
+  headerBtn:   { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   bellDot:     { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' },
 
   /* Segmented control */
   segWrap: {
     flexDirection: 'row',
-    backgroundColor: '#F1F3F5',
-    borderRadius: 10,
-    padding: 3,
-    marginTop: 20,
+    backgroundColor: '#E4E6E4',
+    borderRadius: 16,
+    padding: 4,
+    marginTop: 14,
     marginBottom: 4,
   },
   segItem: {
-    flex: 1, height: 36,
+    flex: 1, height: 40,
     alignItems: 'center', justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 12,
   },
   segItemActive: {
     backgroundColor: '#FFFFFF',
@@ -1750,8 +1580,8 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
-  segText:       { fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
-  segTextActive: { color: '#111827', fontWeight: '700' },
+  segText:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  segTextActive: { color: '#111827', fontFamily: 'Inter_700Bold' },
 
   sectionLabel: {
     fontSize: 11, fontWeight: '600', color: '#9CA3AF',
@@ -1759,29 +1589,59 @@ const s = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#FFFFFF', borderRadius: 10, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
 
-  trendCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14,
-    marginBottom: 10, borderWidth: 1, borderColor: '#E5E7EB',
+  /* Overview */
+  ovCard:      { padding: 20, marginTop: 4 },
+  ovHead:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ovLabel:     { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold', marginBottom: 8 },
+  ovStageRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ovStagePic:  { width: 84, height: 84 },
+  ovStage:     { fontSize: 22, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  ovSub:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium', marginTop: 4 },
+  stageTrack:  { flexDirection: 'row', gap: 4, marginTop: 16 },
+  stageSeg:    { flex: 1, height: 10, borderRadius: 5, backgroundColor: PAGE },
+  stageSegDone:{ backgroundColor: '#111827' },
+  stageSegNow: { backgroundColor: '#059669' },
+  ovStats:     { flexDirection: 'row', marginTop: 18 },
+  ovStatLbl:   { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  ovStatVal:   { fontSize: 16, color: '#111827', fontFamily: 'Inter_700Bold', marginTop: 4 },
+  ovBigRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  ovBig:       { fontSize: 48, lineHeight: 54, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -1.5 },
+  ovBigUnit:   { fontSize: 16, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 9 },
+  ovDarkBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: '#111827', marginTop: 16 },
+  ovDarkBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+  tiles:       { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  innerTile:   { flex: 1, backgroundColor: PAGE, borderRadius: 18, padding: 12 },
+  innerTileVal:{ fontSize: 15, marginTop: 2, fontFamily: 'Inter_700Bold' },
+  deltaPill:   { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 10, paddingVertical: 5, paddingHorizontal: 9, marginLeft: 4, marginBottom: 9 },
+  deltaText:   { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  bars:        { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', marginTop: 18, minHeight: BAR_MAX_H + 44 },
+  barCol:      { alignItems: 'center', flex: 1, maxWidth: 64 },
+  barVal:      { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  bar:         { width: 28, borderRadius: 14 },
+  barLbl:      { fontSize: 11, color: '#6B7280', marginTop: 8, fontFamily: 'Inter_500Medium' },
+  tile:        {
+    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 14, minHeight: 112, justifyContent: 'space-between',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
-  trendHarvestPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#FFF7ED', borderRadius: 9999,
-    paddingVertical: 5, paddingHorizontal: 10,
-    borderWidth: 1, borderColor: '#FDE68A',
-  },
-  trendHarvestPillText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  tileLbl:     { fontSize: 12, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  tileValRow:  { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 },
+  tileVal:     { fontSize: 24, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
+  tileUnit:    { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 2, marginBottom: 4 },
+
+  trendCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  trendHarvestPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3DC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
+  trendHarvestPillText: { fontSize: 12, color: '#B45309', fontFamily: 'Inter_700Bold' },
   cardHighlight: { borderColor: '#059669' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 12 },
 
-  listRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  rowLabel: { fontSize: 14, color: '#6B7280' },
+  listRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  rowLabel: { fontSize: 14, color: '#111827', fontFamily: 'Inter_500Medium' },
   rowValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
 
   /* Graph card */
@@ -1878,60 +1738,30 @@ const s = StyleSheet.create({
   healthChipText: { fontSize: 11, fontWeight: '600', color: '#065F46' },
 
   /* Log list — single container with hairline-separated rows (apps-log style) */
-  logList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
+  logList: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 6, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
 
   /* Empty state — shows when there are no real logs yet */
-  logEmpty: {
-    backgroundColor: '#FFFFFF', borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    paddingVertical: 32, paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  logEmptyIconWrap: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12,
-  },
-  logEmptyTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 6 },
-  logEmptySub:   { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 18 },
-  logRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    paddingVertical: 14, paddingHorizontal: 14, gap: 14,
-  },
-  logRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  logDateCol:    { width: 42, alignItems: 'center' },
-  logDateMo:     { fontSize: 10, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.5, textTransform: 'uppercase' },
-  logDateDay:    { fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 1, lineHeight: 22 },
-  logContentCol: { flex: 1 },
-  logRowTitle:   { fontSize: 14, fontWeight: '600', color: '#111827' },
-  logRowSub:     { fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 17 },
-  logRowNote:    { fontSize: 12, color: '#9CA3AF', marginTop: 3, lineHeight: 17, fontStyle: 'italic' },
-  logRowSev:     { fontSize: 11, fontWeight: '700', alignSelf: 'flex-start', marginTop: 2 },
+  logEmpty: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 32, paddingHorizontal: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  logEmptyTitle: { fontSize: 15, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  logEmptySub: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19, fontFamily: 'Inter_500Medium' },
+  logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, paddingHorizontal: 12, gap: 14 },
+  logRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  logDateCol: { width: 54, height: 54, borderRadius: 16, backgroundColor: PAGE, alignItems: 'center', justifyContent: 'center' },
+  logDateMo: { fontSize: 10, color: '#6B7280', letterSpacing: 0.5, textTransform: 'uppercase', fontFamily: 'Inter_600SemiBold' },
+  logDateDay: { fontSize: 19, color: '#111827', lineHeight: 23, fontFamily: 'Inter_700Bold' },
+  logContentCol: { flex: 1, paddingTop: 2 },
+  logRowTitle: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  logRowSub: { fontSize: 13, color: '#374151', marginTop: 3, lineHeight: 18, fontFamily: 'Inter_500Medium' },
+  logRowNote: { fontSize: 13, color: '#6B7280', marginTop: 3, lineHeight: 18 },
+  logRowSev: { fontSize: 11, alignSelf: 'flex-start', marginTop: 2, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: PAGE, overflow: 'hidden', fontFamily: 'Inter_700Bold' },
 
   /* Log tab buttons */
-  logBtnRow: { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 14 },
-  logActionBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 6, height: 50, borderRadius: 12,
-  },
-  logActionBtnPrimary: {
-    backgroundColor: '#059669',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  logActionBtnPrimaryText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
-  logActionBtnGhost: {
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB',
-  },
-  logActionBtnGhostText:   { fontSize: 14, fontWeight: '600', color: '#374151' },
+  logBtnRow: { flexDirection: 'row', gap: 10, marginTop: 14, marginBottom: 12 },
+  logActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18 },
+  logActionBtnPrimary: { backgroundColor: '#111827' },
+  logActionBtnPrimaryText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+  logActionBtnGhost: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  logActionBtnGhostText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   /* Yield trend */
   yieldSectionHeader: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
@@ -1967,104 +1797,62 @@ const s = StyleSheet.create({
   yieldStatDiv:   { width: 1, height: 36, backgroundColor: '#E5E7EB' },
 
   /* Progress bar */
-  progBg:    { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2 },
-  progFill:  { height: 4, borderRadius: 2, backgroundColor: '#059669' },
+  progBg: { height: 10, backgroundColor: PAGE, borderRadius: 5, overflow: 'hidden' },
+  progFill: { height: 10, borderRadius: 5, backgroundColor: '#059669' },
   progLabel: { fontSize: 12, color: '#6B7280', marginTop: 6, fontWeight: '600' },
 
   /* Modal */
   modalOverlay:  { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingHorizontal: 24, paddingBottom: 32, maxHeight: '92%',
-  },
-  modalHandle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB',
-    alignSelf: 'center', marginTop: 10, marginBottom: 4,
-  },
+  modalSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 32, maxHeight: '92%' },
+  modalHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#E5E7EB', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827', letterSpacing: -0.3 },
-  modalSub:   { fontSize: 13, color: '#6B7280', marginTop: 1 },
-  modalCloseBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  modalTitle: { fontSize: 20, color: '#111827', letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  modalSub: { fontSize: 13, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
+  modalCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: PAGE, justifyContent: 'center', alignItems: 'center' },
   modalContextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  contextChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#F9FAFB', borderRadius: 9999, borderWidth: 1, borderColor: '#E5E7EB',
-    paddingVertical: 5, paddingHorizontal: 10,
-  },
-  contextChipText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+  contextChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: PAGE, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
+  contextChipText: { fontSize: 12, color: '#374151', fontFamily: 'Inter_600SemiBold' },
   modalFieldLabel: {
     fontSize: 11, fontWeight: '600', color: '#9CA3AF',
     letterSpacing: 0.8, marginBottom: 8, marginTop: 14,
   },
-  modalInput: {
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
-    backgroundColor: '#FFFFFF', paddingHorizontal: 14, minHeight: 52, justifyContent: 'center',
-  },
+  modalInput: { borderRadius: 16, backgroundColor: PAGE, paddingHorizontal: 16, minHeight: 52, justifyContent: 'center' },
   modalTextArea:  { minHeight: 88, justifyContent: 'flex-start', paddingVertical: 8 },
   modalInputText: { fontSize: 15, color: '#111827', flex: 1 },
   stageChipRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  stageChip: {
-    paddingVertical: 9, paddingHorizontal: 14, borderRadius: 9999,
-    borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
-    minHeight: 44, justifyContent: 'center',
-  },
-  stageChipActive:     { backgroundColor: '#059669', borderColor: '#059669' },
-  stageChipText:       { fontSize: 13, fontWeight: '600', color: '#111827' },
+  stageChip: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, backgroundColor: PAGE, minHeight: 44, justifyContent: 'center' },
+  stageChipActive: { backgroundColor: '#111827' },
+  stageChipText: { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
   stageChipTextActive: { color: '#FFFFFF' },
   modalActions: { gap: 8, marginTop: 16, marginBottom: 8 },
 
   /* Modal professional form */
-  mFieldWrap:  { marginBottom: 20 },
-  mLabel:      { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 8 },
+  mFieldWrap: { marginBottom: 22 },
+  mLabel: { fontSize: 14, color: '#111827', marginBottom: 10, fontFamily: 'Inter_700Bold' },
   mReq:        { color: '#EF4444' },
-  mHint:       { fontSize: 11.5, color: '#6B7280', marginTop: -4, marginBottom: 8, lineHeight: 16 },
-  kindRow:     { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  kindBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 4,
-    borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0', backgroundColor: '#FFFFFF',
-  },
-  kindBtnOn:   { backgroundColor: '#059669', borderColor: '#059669' },
-  kindText:    { fontSize: 12.5, fontWeight: '700', color: '#065F46', textAlign: 'center' },
+  mHint: { fontSize: 12, color: '#6B7280', marginTop: -4, marginBottom: 10, lineHeight: 17, fontFamily: 'Inter_500Medium' },
+  kindRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
+  kindBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, paddingHorizontal: 4, borderRadius: 18, backgroundColor: PAGE },
+  kindBtnOn: { backgroundColor: '#111827' },
+  kindText: { fontSize: 13, color: '#111827', textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
   kindTextOn:  { color: '#FFFFFF' },
   issueGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  issueBtn: {
-    width: '31%', alignItems: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 4,
-    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
-  },
-  issueBtnOn:  { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
-  issueText:   { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center' },
-  issueTextOn: { color: '#B45309' },
+  issueBtn: { width: '31%', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 16, backgroundColor: PAGE },
+  issueBtnOn: { backgroundColor: '#111827' },
+  issueText: { fontSize: 12.5, color: '#111827', textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
+  issueTextOn: { color: '#FFFFFF' },
   dateRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  dateChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9999, borderWidth: 1,
-    borderColor: '#A7F3D0', backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 14,
-  },
-  dateChipOn:     { backgroundColor: '#059669', borderColor: '#059669' },
-  dateChipText:   { fontSize: 13, fontWeight: '600', color: '#065F46' },
+  dateChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, backgroundColor: PAGE, minHeight: 44, paddingHorizontal: 16 },
+  dateChipOn: { backgroundColor: '#111827' },
+  dateChipText: { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
   dateChipTextOn: { color: '#FFFFFF' },
-  stageLine: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: 10, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 4,
-  },
-  stageLineText:   { flex: 1, fontSize: 12, color: '#374151' },
-  stageLineChange: { fontSize: 12, fontWeight: '700', color: '#059669' },
-  mInputBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
-    backgroundColor: '#FFFFFF', paddingHorizontal: 14, height: 52,
-  },
-  mInput: { flex: 1, fontSize: 15, color: '#111827' },
-  mDropMenu: {
-    marginTop: 4, backgroundColor: '#FFFFFF',
-    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
+  stageLine: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: PAGE, marginBottom: 4 },
+  stageLineText: { flex: 1, fontSize: 13, color: '#111827', fontFamily: 'Inter_500Medium' },
+  stageLineChange: { fontSize: 13, color: '#059669', fontFamily: 'Inter_700Bold' },
+  mInputBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, backgroundColor: PAGE, paddingHorizontal: 16, height: 52 },
+  mInput: { flex: 1, fontSize: 15, color: '#111827', fontFamily: 'Inter_500Medium' },
+  mDropMenu: { marginTop: 6, backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   mDropItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 16,
@@ -2073,22 +1861,12 @@ const s = StyleSheet.create({
   mDropItemText:   { fontSize: 14, color: '#6B7280', fontWeight: '500' },
   mDropItemActive: { color: '#059669', fontWeight: '700' },
   /* Primary action — solid green, white text */
-  mSaveBtn: {
-    flex: 1,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, height: 50, backgroundColor: '#059669', borderRadius: 12,
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  mSaveBtnText:  { fontSize: 14, color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.2 },
+  mSaveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, backgroundColor: '#111827', borderRadius: 18 },
+  mSaveBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 
   /* Secondary action — ghost with hairline border */
-  mCancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  mCancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  mCancelBtn: { flex: 1, height: 54, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: PAGE },
+  mCancelBtnText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   /* ── BUOD tab: Farm Banner (Card 1) ── */
   bannerCard: {

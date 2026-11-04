@@ -329,60 +329,43 @@ export const AnalysisLoadingScreen: React.FC = () => {
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
   body: {
     flex: 1, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 32,
     alignItems: 'center',
   },
 
-  hero: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#F0FDF4',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 22,
-  },
+  hero: { width: 76, height: 76, borderRadius: 26, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginBottom: 22, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
 
-  title:    { fontSize: 20, fontWeight: '700', color: '#111827', letterSpacing: -0.4, textAlign: 'center', marginBottom: 6 },
-  subtitle: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19, marginBottom: 28, minHeight: 38 },
+  title: { fontSize: 24, color: '#111827', letterSpacing: -0.5, textAlign: 'center', marginBottom: 8, fontFamily: 'Inter_700Bold' },
+  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20, marginBottom: 24, minHeight: 40, fontFamily: 'Inter_500Medium' },
 
   /* Overall progress */
   progressWrap: { width: '100%', marginBottom: 24 },
-  progressTrack: {
-    height: 8, borderRadius: 4,
-    backgroundColor: '#ECFDF5', overflow: 'hidden',
-  },
-  progressFill:  { height: '100%', backgroundColor: '#059669', borderRadius: 4, overflow: 'hidden' },
+  progressTrack: { height: 10, borderRadius: 5, backgroundColor: '#E4E6E4', overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#059669', borderRadius: 5, overflow: 'hidden' },
   progressShine: { position: 'absolute', top: 0, bottom: 0, width: 80, backgroundColor: 'rgba(255,255,255,0.45)' },
   progressMeta:  { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  progressCount: { fontSize: 11, fontWeight: '600', color: '#9CA3AF' },
+  progressCount: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
 
-  keepOpen: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8, alignSelf: 'stretch',
-    backgroundColor: '#ECFDF5', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 20,
-  },
+  keepOpen: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, alignSelf: 'stretch', backgroundColor: '#E8F5EF', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 16 },
   keepOpenText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#047857', fontWeight: '600' },
 
   /* Step list — flat */
-  steps: { width: '100%' },
+  steps: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, paddingHorizontal: 16, paddingVertical: 4 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     paddingVertical: 14,
   },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  label:       { flex: 1, fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  label: { flex: 1, fontSize: 14, color: '#9CA3AF', fontFamily: 'Inter_500Medium' },
   labelDone:   { color: '#374151' },
-  labelActive: { color: '#111827', fontWeight: '700' },
+  labelActive: { color: '#111827', fontFamily: 'Inter_700Bold' },
 
-  primaryBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    alignSelf: 'stretch', backgroundColor: '#059669', borderRadius: 14, paddingVertical: 15,
-  },
-  primaryBtnText:   { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  primaryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'stretch', backgroundColor: '#111827', borderRadius: 20, height: 56 },
+  primaryBtnText: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
   secondaryBtn:     { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 14, marginTop: 8 },
-  secondaryBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  secondaryBtnText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   stepSpinner: { transform: [{ scale: 0.8 }] },
   pendingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#E5E7EB' },

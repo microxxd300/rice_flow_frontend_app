@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert, Image,
 } from 'react-native';
+import { empty } from '@/assets/illustrations';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -26,6 +27,7 @@ interface HarvestRow {
   varietyName: string;
   badge:       string;
   badgeStatus: 'success' | 'warning';
+  kg:          number;   // dry palay kg in this harvest
 }
 
 // Last report per farm in this app session: reopening Reports shows it at once and
@@ -36,7 +38,7 @@ export const ReportsScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
 
-  const { farms, activeCycle, latestRecommendation } = useAppStore();
+  const { farms, activeCycle } = useAppStore();
   const selectedFarm = useSelectedFarm();
   const selectedFarmId = selectedFarm?.id;
   const known = lastReport.get(selectedFarmId);
@@ -89,9 +91,11 @@ export const ReportsScreen: React.FC = () => {
             varietyName: cycle.variety_name ?? '—',
             badge:       isExcellent ? tr.reportsBadgeExcellent : tr.reportsBadgeGood,
             badgeStatus: isExcellent ? 'success' : 'warning',
+            kg:          netKg,
           });
         });
 
+        history.reverse();
         // A farm with no harvests shows a dash, not the previous farm's total
         const total = history.length > 0 ? `${(totalKg / 1000).toFixed(1)} T` : '—';
         lastReport.set(farmId, { history, totalYield: total, cyclesCount: cycles.length });
@@ -114,9 +118,6 @@ export const ReportsScreen: React.FC = () => {
     load();
   }, [selectedFarmId]);
 
-  // Real RSI from the latest recommendation top result; honest dash when absent
-  const realRsi = (latestRecommendation as any)?.results?.[0]?.rsi_score;
-  const avgRSI  = realRsi != null ? Math.round(realRsi).toString() : '—';
 
   // Filter harvest history by the active date-range chip
   const filteredHistory = useMemo(() => {
@@ -125,11 +126,17 @@ export const ReportsScreen: React.FC = () => {
     return harvestHistory.slice(-1);
   }, [activeRange, harvestHistory]);
 
+  // The summary follows the range chips
+  const rangeTHa  = filteredHistory.map(h => parseFloat(h.yieldValue) || 0);
+  const rangeTons = filteredHistory.reduce((a, h) => a + (h.kg || 0), 0) / 1000;
+  const avgTHa    = rangeTHa.length ? rangeTHa.reduce((a, b) => a + b, 0) / rangeTHa.length : null;
+  const bestTHa   = rangeTHa.length ? Math.max(...rangeTHa) : null;
+
   // Bar chart — only built from real harvests. Empty state shown when none.
   const chartBars = useMemo(() => {
     if (harvestHistory.length === 0) return [];
     return harvestHistory.slice(-5).map((h, i, arr) => ({
-      label:    h.season.replace(' Season', '\n'),
+      label:    h.season.replace('Dry ', 'D').replace('Wet ', 'W').replace('20', "'"),
       value:    parseFloat(h.yieldValue) || 0,
       isLatest: i === arr.length - 1,
     }));
@@ -167,7 +174,7 @@ export const ReportsScreen: React.FC = () => {
       lines.push('');
       lines.push(`${tr.reportsSummary}`);
       lines.push(`  ${tr.reportsTotalYield}: ${totalYield}`);
-      lines.push(`  ${tr.reportsAvgRsi}:     ${avgRSI}`);
+      lines.push(`  ${tr.rpAvgYield}: ${avgTHa != null ? `${avgTHa.toFixed(2)} t/ha` : '—'}`);
       lines.push(`  ${tr.reportsFarms}:      ${farmsCount}`);
       lines.push('');
       lines.push(`${tr.reportsHistoryTitle} (${filteredHistory.length})`);
@@ -200,14 +207,14 @@ export const ReportsScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={s.backBtn}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>{tr.reportsTitle}</Text>
-        <View style={{ width: 32 }} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.headerTitle}>{tr.reportsTitle}</Text>
+          {/* Farm and season */}
+          <Text style={s.subtitle} numberOfLines={1}>{headerSub}</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Subtitle line — farm + cycle */}
-        <Text style={s.subtitle}>{headerSub}</Text>
 
         {/* Date-range filter chips */}
         <ScrollView
@@ -223,180 +230,140 @@ export const ReportsScreen: React.FC = () => {
                 onPress={() => setActiveRange(r.key)}
                 activeOpacity={0.8}
               >
-                {active && <Ionicons name="checkmark" size={13} color="#059669" />}
+                {active && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
                 <Text style={[s.chipText, active && s.chipTextActive]}>{r.label}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {/* Summary card */}
+        {/* ── Summary: the harvest in the chosen range, in one big number ── */}
         <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Ionicons name="stats-chart-outline" size={16} color="#059669" />
-            <Text style={s.cardTitle}>{tr.reportsSummary}</Text>
-          </View>
-          <View style={s.summaryRow}>
-            <View style={s.summaryCell}>
-              {loadingHistory
-                ? <Skeleton w={60} h={22} br={5} />
-                : <Text style={s.summaryVal}>{totalYield}</Text>
-              }
-              <Text style={s.summaryLbl}>{tr.reportsTotalYield}</Text>
+          <Text style={s.cardLabel}>{tr.reportsTotalYield}</Text>
+          {loadingHistory ? (
+            <View style={{ marginTop: 8 }}><Skeleton w={120} h={44} br={8} /></View>
+          ) : (
+            <View style={s.bigRow}>
+              <Text style={s.big}>{filteredHistory.length ? rangeTons.toFixed(1) : '—'}</Text>
+              {filteredHistory.length > 0 && <Text style={s.bigUnit}>{tr.ovTons}</Text>}
             </View>
-            <View style={s.summarySep} />
-            <View style={s.summaryCell}>
-              {loadingHistory
-                ? <Skeleton w={40} h={22} br={5} />
-                : <Text style={s.summaryVal}>{avgRSI}</Text>
-              }
-              <Text style={s.summaryLbl}>{tr.reportsAvgRsi}</Text>
-            </View>
-            <View style={s.summarySep} />
-            <View style={s.summaryCell}>
-              {loadingHistory
-                ? <Skeleton w={28} h={22} br={5} />
-                : <Text style={s.summaryVal}>{farmsCount}</Text>
-              }
-              <Text style={s.summaryLbl}>{tr.reportsFarms}</Text>
-            </View>
+          )}
+          <Text style={s.sub}>{tr.rpHarvests.replace('{n}', String(filteredHistory.length))}</Text>
+          <View style={s.tiles}>
+            {[
+              { lbl: tr.rpAvgYield,   val: avgTHa  != null ? avgTHa.toFixed(1)  : '—', unit: avgTHa  != null ? 't/ha' : '' },
+              { lbl: tr.rpBestSeason, val: bestTHa != null ? bestTHa.toFixed(1) : '—', unit: bestTHa != null ? 't/ha' : '' },
+              { lbl: tr.reportsFarms, val: String(farmsCount), unit: '' },
+            ].map(t => (
+              <View key={t.lbl} style={s.tile}>
+                <Text style={s.tileLbl} numberOfLines={2}>{t.lbl}</Text>
+                <View style={s.tileValRow}>
+                  <Text style={s.tileVal}>{t.val}</Text>
+                  {!!t.unit && <Text style={s.tileUnit}>{t.unit}</Text>}
+                </View>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* Yield Trend chart */}
+        {/* ── Yield per season: dark bars, the newest in green ── */}
         <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Ionicons name="bar-chart-outline" size={16} color="#059669" />
-            <Text style={s.cardTitle}>{tr.reportsYieldPerSeason}</Text>
-          </View>
-          <Text style={s.cardSubtitle}>{tr.reportsTonsPerHa}</Text>
-
+          <Text style={s.cardLabel}>{tr.reportsYieldPerSeason}</Text>
+          <Text style={[s.sub, { marginTop: 4 }]}>{tr.reportsTonsPerHa}</Text>
           {loadingHistory ? (
-            <View style={s.chartBox}>
-              {[0, 1, 2, 3, 4].map(i => (
-                <View key={i} style={s.barWrap}>
-                  <Skeleton w={26} h={11} br={3} style={{ marginBottom: 4 }} />
-                  <Skeleton w={32} h={60 + (i % 3) * 20} br={5} />
-                  <Skeleton w={32} h={9} br={3} style={{ marginTop: 6 }} />
-                </View>
-              ))}
+            <View style={s.bars}>
+              {[0, 1, 2, 3].map(i => <Skeleton key={i} w={26} h={50 + (i % 3) * 25} br={13} />)}
             </View>
           ) : chartBars.length === 0 ? (
             <View style={s.emptyBox}>
-              <Ionicons name="bar-chart-outline" size={28} color="#D1D5DB" />
+              <View style={s.emptyIcon}><Ionicons name="bar-chart-outline" size={24} color="#059669" /></View>
               <Text style={s.emptyTitle}>{tr.reportsNoDataChart}</Text>
               <Text style={s.emptyHint}>{tr.reportsHistoryHint}</Text>
             </View>
           ) : (
-            <View style={s.chartBox}>
-              {chartBars.map((b, idx) => {
-                const h = Math.max(8, Math.round((b.value / chartMax) * 120));
-                return (
-                  <View key={idx} style={s.barWrap}>
-                    <Text style={[s.barVal, b.isLatest && { color: '#059669' }]}>{b.value.toFixed(1)}</Text>
-                    <View style={[s.bar, { height: h, backgroundColor: b.isLatest ? '#059669' : '#D1D5DB' }]} />
-                    <Text style={[s.barLbl, b.isLatest && { color: '#059669', fontWeight: '700' }]}>
-                      {b.label}
-                    </Text>
-                  </View>
-                );
-              })}
+            <View style={s.bars}>
+              {chartBars.map((b, idx) => (
+                <View key={idx} style={s.barWrap}>
+                  <Text style={[s.barVal, b.isLatest && { color: '#059669' }]}>{b.value.toFixed(1)}</Text>
+                  <View style={[s.bar, {
+                    height: Math.max(8, Math.round((b.value / chartMax) * 120)),
+                    backgroundColor: b.isLatest ? '#059669' : '#111827',
+                  }]} />
+                  <Text style={[s.barLbl, b.isLatest && { color: '#059669' }]} numberOfLines={1}>{b.label}</Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
 
-        {/* Variety Performance */}
+        {/* ── Which variety did best ── */}
         <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Ionicons name="leaf-outline" size={16} color="#059669" />
-            <Text style={s.cardTitle}>{tr.reportsVarietyPerf}</Text>
-          </View>
-
+          <Text style={s.cardLabel}>{tr.reportsVarietyPerf}</Text>
           {loadingHistory ? (
-            <View style={{ gap: 12, marginTop: 6 }}>
-              {[0, 1].map(i => (
-                <View key={i} style={{ gap: 6 }}>
-                  <Skeleton w={120} h={12} br={3} />
-                  <Skeleton w="100%" h={4} br={2} />
-                </View>
-              ))}
+            <View style={{ gap: 12, marginTop: 14 }}>
+              {[0, 1].map(i => <Skeleton key={i} w="100%" h={44} br={14} />)}
             </View>
           ) : varietyPerf.length === 0 ? (
             <View style={s.emptyBox}>
-              <Ionicons name="leaf-outline" size={28} color="#D1D5DB" />
+              <View style={s.emptyIcon}><Ionicons name="leaf-outline" size={24} color="#059669" /></View>
               <Text style={s.emptyTitle}>{tr.reportsNoVariety}</Text>
               <Text style={s.emptyHint}>{tr.reportsHistoryHint}</Text>
             </View>
           ) : (
-            varietyPerf.map((v, idx, arr) => (
-              <View key={v.name} style={[s.varietyRow, idx < arr.length - 1 && s.rowBorder]}>
-                <Text style={s.varietyName}>{v.name}</Text>
-                <View style={s.varietyProg}>
-                  <View style={s.varietyTrack}>
-                    <View style={[s.varietyFill, {
-                      width: `${v.pct}%` as any,
-                      backgroundColor: idx === 0 ? '#059669' : '#9CA3AF',
-                    }]} />
-                  </View>
-                  <Text style={[s.varietyPct, { color: idx === 0 ? '#059669' : '#6B7280' }]}>{v.pct}%</Text>
+            varietyPerf.map((v, idx) => (
+              <View key={v.name} style={s.varietyRow}>
+                <View style={[s.rankTile, idx === 0 && s.rankTileTop]}>
+                  <Text style={[s.rankText, idx === 0 && { color: '#FFFFFF' }]}>{idx + 1}</Text>
                 </View>
-                <Text style={s.varietyYield}>{v.yield}</Text>
+                <View style={{ flex: 1 }}>
+                  <View style={s.rowBetween}>
+                    <Text style={s.varietyName} numberOfLines={1}>{v.name}</Text>
+                    <Text style={s.varietyYield}>{v.yield}</Text>
+                  </View>
+                  <View style={s.varietyTrack}>
+                    <View style={[s.varietyFill, { width: `${v.pct}%` as any, backgroundColor: idx === 0 ? '#059669' : '#111827' }]} />
+                  </View>
+                </View>
               </View>
             ))
           )}
         </View>
 
-        {/* Harvest History — filtered by date range chip */}
-        <Text style={[s.sectionTitle, { marginTop: 4 }]}>{tr.reportsHistoryTitle}</Text>
-
-        {filteredHistory.length === 0 ? (
-          <View style={[s.card, { alignItems: 'center', paddingVertical: 24 }]}>
-            <Ionicons name="basket-outline" size={28} color="#D1D5DB" />
-            <Text style={s.emptyTitle}>
-              {harvestHistory.length === 0 ? tr.reportsHistoryEmpty : tr.reportsRangeEmpty}
-            </Text>
-            <Text style={s.emptyHint}>
-              {harvestHistory.length === 0 ? tr.reportsHistoryHint : tr.reportsRangeHint}
-            </Text>
-          </View>
-        ) : (
-          filteredHistory.map(h => (
-            <TouchableOpacity
-              key={h.id}
-              style={s.historyCard}
-              onPress={() => navigation.navigateDeprecated('YieldProgress')}
-              activeOpacity={0.85}
-            >
-              <View style={s.historyIcon}>
-                <Ionicons name="basket-outline" size={18} color="#D97706" />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={s.historyFarm}>{h.farmName}</Text>
-                <Text style={s.historySeason}>{h.season}</Text>
-                <Text style={s.historyDate}>{tr.reportsPlanted}: {h.datePlanted}</Text>
-                <View style={s.historyChipRow}>
-                  <View style={s.varietyChip}>
-                    <Text style={s.varietyChipText}>{h.varietyName}</Text>
-                  </View>
-                  <View style={[s.badgeChip, {
-                    backgroundColor: h.badgeStatus === 'success' ? '#ECFDF5' : '#FFF7ED',
-                    borderColor:     h.badgeStatus === 'success' ? '#D1FAE5' : '#FDE68A',
-                  }]}>
-                    <Text style={[s.badgeChipText, {
-                      color: h.badgeStatus === 'success' ? '#065F46' : '#D97706',
-                    }]}>
-                      {h.badge}
-                    </Text>
+        {/* ── Every harvest in the range ── */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>{tr.reportsHistoryTitle}</Text>
+          {filteredHistory.length === 0 ? (
+            <View style={s.emptyBox}>
+              <Image source={empty.no_harvest} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
+              <Text style={s.emptyTitle}>{harvestHistory.length === 0 ? tr.reportsHistoryEmpty : tr.reportsRangeEmpty}</Text>
+              <Text style={s.emptyHint}>{harvestHistory.length === 0 ? tr.reportsHistoryHint : tr.reportsRangeHint}</Text>
+            </View>
+          ) : (
+            [...filteredHistory].reverse().map((h, i) => (
+              <TouchableOpacity
+                key={h.id}
+                style={[s.historyRow, i > 0 && s.rowBorder]}
+                onPress={() => navigation.navigateDeprecated('YieldProgress')}
+                activeOpacity={0.85}
+              >
+                <View style={s.historyIcon}>
+                  <Ionicons name="basket-outline" size={20} color="#B45309" />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={s.historyFarm} numberOfLines={1}>{h.season}</Text>
+                  <Text style={s.historySeason} numberOfLines={1}>{h.farmName} · {h.varietyName}</Text>
+                  <Text style={s.historyDate}>{tr.reportsPlanted}: {h.datePlanted}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  <Text style={s.historyYield}>{h.yieldValue}<Text style={s.historyYieldUnit}> t/ha</Text></Text>
+                  <View style={[s.badgeChip, { backgroundColor: h.badgeStatus === 'success' ? '#E8F5EF' : '#FEF3DC' }]}>
+                    <Text style={[s.badgeChipText, { color: h.badgeStatus === 'success' ? '#047857' : '#B45309' }]}>{h.badge}</Text>
                   </View>
                 </View>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={s.historyYield}>{h.yieldValue}</Text>
-                <Text style={s.historyYieldUnit}>t/ha</Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
 
         {/* Download button — opens the native share sheet with a multilingual summary */}
         <TouchableOpacity
@@ -415,111 +382,95 @@ export const ReportsScreen: React.FC = () => {
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  backBtn:     { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 21, color: '#111827', letterSpacing: -0.4, fontFamily: 'Inter_700Bold' },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 120 },
+  scroll: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 150 },   // room for the floating tab bar
 
-  subtitle: { fontSize: 12, color: '#6B7280', marginBottom: 14 },
+  subtitle: { fontSize: 13, color: '#6B7280', marginTop: 1, fontFamily: 'Inter_500Medium' },
 
-  chipRow: { flexDirection: 'row', gap: 8, paddingRight: 4, marginBottom: 16 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 9999, backgroundColor: '#FFFFFF',
-    borderWidth: 1, borderColor: '#E5E7EB', minHeight: 36,
-  },
-  chipActive:     { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
-  chipText:       { fontSize: 13, fontWeight: '600', color: '#6B7280' },
-  chipTextActive: { color: '#065F46' },
+  chipRow: { flexDirection: 'row', gap: 8, paddingRight: 4, marginBottom: 14 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#FFFFFF', minHeight: 42 },
+  chipActive: { backgroundColor: '#111827' },
+  chipText: { fontSize: 13, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  chipTextActive: { color: '#FFFFFF' },
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16,
-    marginBottom: 12,
-  },
-  cardHeader:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  cardTitle:    { fontSize: 14, fontWeight: '700', color: '#111827' },
-  cardSubtitle: { fontSize: 11, color: '#9CA3AF', marginTop: -4, marginBottom: 12 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  cardTitle: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  cardSubtitle: { fontSize: 12, color: '#6B7280', marginTop: -6, marginBottom: 12, fontFamily: 'Inter_500Medium' },
 
   /* Summary */
-  summaryRow:  { flexDirection: 'row', alignItems: 'center', paddingTop: 4 },
-  summaryCell: { flex: 1, alignItems: 'center' },
-  summaryVal:  { fontSize: 22, fontWeight: '800', color: '#1F6B3F', letterSpacing: -0.4 },
-  summaryLbl:  { fontSize: 11, color: '#6B7280', marginTop: 4, textAlign: 'center' },
-  summarySep:  { width: StyleSheet.hairlineWidth, height: 36, backgroundColor: '#E5E7EB' },
+  summaryRow: { flexDirection: 'row', alignItems: 'flex-start', paddingTop: 4 },
+  summaryCell: { flex: 1 },
+  summaryVal: { fontSize: 26, color: '#111827', letterSpacing: -0.6, fontFamily: 'Inter_700Bold' },
+  summaryLbl: { fontSize: 12, color: '#6B7280', marginTop: 4, fontFamily: 'Inter_500Medium' },
+  summarySep: { width: 0 },
 
   /* Chart */
   chartBox: {
     flexDirection: 'row', alignItems: 'flex-end',
     justifyContent: 'space-between', height: 170, paddingTop: 6,
   },
-  barWrap: { alignItems: 'center', justifyContent: 'flex-end', flex: 1 },
-  barVal:  { fontSize: 11, fontWeight: '700', color: '#6B7280', marginBottom: 4 },
-  bar:     { width: 30, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
-  barLbl:  { fontSize: 10, color: '#9CA3AF', textAlign: 'center', marginTop: 6, lineHeight: 14 },
+  barWrap: { alignItems: 'center', justifyContent: 'flex-end', flex: 1, maxWidth: 64 },
+  barVal: { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  bar: { width: 26, borderRadius: 13 },
+  barLbl: { fontSize: 11, color: '#6B7280', textAlign: 'center', marginTop: 8, lineHeight: 14, fontFamily: 'Inter_500Medium' },
 
   /* Variety perf */
-  varietyRow:     { paddingVertical: 12, gap: 6 },
-  rowBorder:      { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
-  varietyName:    { fontSize: 13, fontWeight: '700', color: '#111827' },
+  varietyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
+  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB' },
+  varietyName: { fontSize: 14, color: '#111827', fontFamily: 'Inter_700Bold' },
   varietyProg:    { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  varietyTrack:   { flex: 1, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', overflow: 'hidden' },
-  varietyFill:    { height: '100%', borderRadius: 2 },
-  varietyPct:     { fontSize: 12, fontWeight: '700', minWidth: 38, textAlign: 'right' },
-  varietyYield:   { fontSize: 12, color: '#6B7280' },
+  varietyTrack: { height: 8, borderRadius: 4, backgroundColor: '#F1F2F1', overflow: 'hidden', marginTop: 8 },
+  varietyFill: { height: '100%', borderRadius: 5 },
+  varietyPct: { fontSize: 13, minWidth: 42, textAlign: 'right', fontFamily: 'Inter_700Bold' },
+  varietyYield: { fontSize: 13, color: '#111827', fontFamily: 'Inter_700Bold' },
 
   /* History list */
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 10, marginTop: 6 },
-  historyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 14, marginBottom: 10,
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-  },
-  historyIcon: {
-    width: 38, height: 38, borderRadius: 10,
-    backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FDE68A',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  historyFarm:   { fontSize: 14, fontWeight: '700', color: '#111827' },
-  historySeason: { fontSize: 12, color: '#6B7280' },
-  historyDate:   { fontSize: 11, color: '#9CA3AF', marginBottom: 4 },
+  sectionTitle: { fontSize: 17, color: '#111827', marginBottom: 10, marginTop: 10, paddingHorizontal: 4, fontFamily: 'Inter_700Bold' },
+  historyCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  historyIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#FEF3DC', justifyContent: 'center', alignItems: 'center' },
+  historyFarm: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  historySeason: { fontSize: 13, color: '#374151', fontFamily: 'Inter_500Medium' },
+  historyDate: { fontSize: 12, color: '#6B7280', marginBottom: 6 },
   historyChipRow:{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  varietyChip: {
-    backgroundColor: '#F9FAFB', borderRadius: 9999, borderWidth: 1, borderColor: '#E5E7EB',
-    paddingHorizontal: 10, paddingVertical: 3,
-  },
-  varietyChipText: { fontSize: 11, fontWeight: '600', color: '#6B7280' },
-  badgeChip: {
-    borderRadius: 9999, borderWidth: 1,
-    paddingHorizontal: 10, paddingVertical: 3,
-  },
-  badgeChipText:    { fontSize: 11, fontWeight: '600' },
-  historyYield:     { fontSize: 20, fontWeight: '800', color: '#D97706', letterSpacing: -0.5 },
-  historyYieldUnit: { fontSize: 11, color: '#9CA3AF' },
+  varietyChip: { backgroundColor: '#F1F2F1', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  varietyChipText: { fontSize: 11, color: '#374151', fontFamily: 'Inter_600SemiBold' },
+  badgeChip: { borderRadius: 8, borderWidth: 0, paddingHorizontal: 8, paddingVertical: 4 },
+  badgeChipText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  historyYield: { fontSize: 18, color: '#111827', letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  historyYieldUnit: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
 
   /* Empty state */
-  emptyBox:   { alignItems: 'center', paddingVertical: 22 },
-  emptyTitle: { fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8 },
-  emptyHint:  { fontSize: 11, color: '#9CA3AF', marginTop: 4, textAlign: 'center', paddingHorizontal: 12 },
+  emptyBox: { alignItems: 'center', paddingVertical: 18 },
+  emptyTitle: { fontSize: 14, color: '#111827', marginTop: 10, fontFamily: 'Inter_600SemiBold' },
+  emptyHint: { fontSize: 12, color: '#6B7280', marginTop: 4, textAlign: 'center', paddingHorizontal: 12, lineHeight: 17 },
+
+  /* New look: big number, tiles, bars, rank tiles */
+  cardLabel:  { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  sub:        { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  bigRow:     { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 6 },
+  big:        { fontSize: 48, lineHeight: 54, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -1.5 },
+  bigUnit:    { fontSize: 16, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 9 },
+  tiles:      { flexDirection: 'row', gap: 8, marginTop: 16 },
+  tile:       { flex: 1, backgroundColor: '#F1F2F1', borderRadius: 18, padding: 12, minHeight: 92, justifyContent: 'space-between' },
+  tileLbl:    { fontSize: 12, color: '#374151', fontFamily: 'Inter_600SemiBold' },
+  tileValRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 8 },
+  tileVal:    { fontSize: 20, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  tileUnit:   { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 3, marginBottom: 3 },
+  bars:       { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', minHeight: 170, marginTop: 14 },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  rankTile:   { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
+  rankTileTop:{ backgroundColor: '#111827' },
+  rankText:   { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
+  emptyIcon:  { width: 56, height: 56, borderRadius: 18, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
 
   /* Download */
-  downloadBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: 52, borderRadius: 12,
-    backgroundColor: '#059669', marginTop: 18,
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  downloadText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  downloadBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: '#111827', marginTop: 14 },
+  downloadText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 });

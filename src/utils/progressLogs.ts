@@ -19,6 +19,17 @@ export function stageLabel(stageNo?: number | null): string {
   return Object.keys(STAGE_NO).find(k => STAGE_NO[k] === stageNo) ?? '';
 }
 
+/** Translation keys for the log form's stage, issue and severity words. */
+export const LOG_WORD_KEYS: Record<string, string> = {
+  'Land Prep & Planting': 'plogStLandPrep', 'Early Growth': 'plogStEarly', 'Tillering': 'plogStTiller',
+  'Stem Elongation': 'plogStStem', 'Panicle Initiation': 'plogStPanicle', 'Heading': 'plogStHeading',
+  'Grain Filling': 'plogStGrain', 'Ripening': 'plogStRipen', 'Harvesting': 'plogStHarvest',
+  'Post-Harvest': 'plogStPost',
+  None: 'plogIsNone', Insect: 'plogIsInsect', Disease: 'plogIsDisease', Drought: 'plogIsDrought',
+  Flood: 'plogIsFlood', Nutrient: 'plogIsYellow', Other: 'plogIsOther',
+  Low: 'plogSevLow', Medium: 'plogSevMedium', High: 'plogSevHigh',
+};
+
 export const ISSUE_TO_API: Record<string, string> = {
   Insect: 'pest', Disease: 'disease', Drought: 'weather', Flood: 'weather', Nutrient: 'nutrient', Other: 'other',
 };

@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,16 +20,17 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SowingQuestion } from '@/components/SowingQuestion';
+import { empty, stepIcon } from '@/assets/illustrations';
 
 // Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
 // farm's own monthly rainfall loads, or when the phone is offline.
 const PANABO_MONTHLY_RAIN = [332, 206, 197, 201, 361, 377, 249, 278, 262, 269, 243, 281];
 
 // Colors for the current-month alert under the calendar (same as the month legend)
-const ALERT_TONE: Record<string, { bg: string; border: string; fg: string; icon: 'warning' | 'information-circle' | 'checkmark-circle' }> = {
-  danger:  { bg: '#FEF2F2', border: '#FECACA', fg: '#DC2626', icon: 'warning' },
-  caution: { bg: '#FFF7ED', border: '#FDE68A', fg: '#D97706', icon: 'information-circle' },
-  safe:    { bg: '#ECFDF5', border: '#A7F3D0', fg: '#059669', icon: 'checkmark-circle' },
+const ALERT_TONE: Record<string, { bg: string; fg: string; icon: 'warning' | 'information-circle' | 'checkmark-circle' }> = {
+  danger:  { bg: '#FDECEC', fg: '#B91C1C', icon: 'warning' },
+  caution: { bg: '#FEF3DC', fg: '#B45309', icon: 'information-circle' },
+  safe:    { bg: '#E8F5EF', fg: '#047857', icon: 'checkmark-circle' },
 };
 
 /**
@@ -90,8 +91,8 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 // Weather warning on the step card: stop = do not do the step now, caution = take care
 const WX_TONE = {
-  stop:    { bg: '#FEF2F2', border: '#FECACA', fg: '#B91C1C' },
-  caution: { bg: '#FFF7ED', border: '#FDE68A', fg: '#92400E' },
+  stop:    { bg: '#FDECEC', fg: '#B91C1C' },
+  caution: { bg: '#FEF3DC', fg: '#92400E' },
 };
 
 /** "2:05 PM" */
@@ -101,10 +102,7 @@ function clock(ms: number): string {
   return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 }
 
-type CatConfig = {
-  label: string; icon: IoniconsName;
-  color: string; bg: string; border: string;
-};
+type CatConfig = { label: string; icon: IoniconsName; color: string; bg: string };
 
 export const PlantingGuideScreen: React.FC = () => {
   const { isLargeText } = useAccessibility();
@@ -113,11 +111,11 @@ export const PlantingGuideScreen: React.FC = () => {
   const tr = useTranslation();
 
   const CAT_CONFIG: Record<string, CatConfig> = {
-    planting:        { label: tr.guidePlanting,   icon: 'leaf-outline',             color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
-    fertilizer:      { label: tr.guideFertilizer, icon: 'flask-outline',            color: '#D97706', bg: '#FFF7ED', border: '#FDE68A' },
-    pest_prevention: { label: tr.guidePest,       icon: 'shield-checkmark-outline', color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
-    irrigation:      { label: tr.guideIrrigation, icon: 'water-outline',            color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-    harvesting:      { label: tr.guideHarvest,    icon: 'basket-outline',           color: '#B45309', bg: '#FFFBEB', border: '#FCD34D' },
+    planting:        { label: tr.guidePlanting,   icon: 'leaf-outline',             color: '#059669', bg: '#E8F5EF' },
+    fertilizer:      { label: tr.guideFertilizer, icon: 'flask-outline',            color: '#B45309', bg: '#FEF3DC' },
+    pest_prevention: { label: tr.guidePest,       icon: 'shield-checkmark-outline', color: '#DC2626', bg: '#FDECEC' },
+    irrigation:      { label: tr.guideIrrigation, icon: 'water-outline',            color: '#2563EB', bg: '#EAF1FD' },
+    harvesting:      { label: tr.guideHarvest,    icon: 'basket-outline',           color: '#B45309', bg: '#FDF3E1' },
   };
 
   const completedIds = useAppStore(s => s.completedGuideSteps);
@@ -273,13 +271,8 @@ export const PlantingGuideScreen: React.FC = () => {
     return (
       <SafeAreaView style={s.root}>
         <View style={s.header}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-            <View style={s.titleIcon}>
-              <Ionicons name="leaf-outline" size={16} color="#FFFFFF" />
-            </View>
-            <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.guideScreenTitle}</Text>
-          </View>
-          <NotificationBell color="#059669" size={22} />
+          <Text style={[s.headerTitle, { flex: 1 }, T && { fontSize: 24 }]}>{tr.guideScreenTitle}</Text>
+          <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
         </View>
 
         <View style={s.emptyWrap}>
@@ -292,9 +285,7 @@ export const PlantingGuideScreen: React.FC = () => {
             </>
           ) : genError ? (
             <>
-              <View style={s.emptyIcon}>
-                <Ionicons name="cloud-offline-outline" size={28} color="#D97706" />
-              </View>
+              <Image source={empty.offline} style={{ width: 140, height: 140, marginBottom: 6 }} resizeMode="contain" />
               <Text style={s.emptyTitle}>{tr.guideGenFailed}</Text>
               <TouchableOpacity
                 style={s.emptyCta}
@@ -307,9 +298,7 @@ export const PlantingGuideScreen: React.FC = () => {
             </>
           ) : (
             <>
-              <View style={s.emptyIcon}>
-                <Ionicons name="leaf-outline" size={28} color="#059669" />
-              </View>
+              <Image source={empty.no_farm} style={{ width: 140, height: 140, marginBottom: 6 }} resizeMode="contain" />
               <Text style={s.emptyTitle}>{tr.guideNoRecTitle}</Text>
               <Text style={s.emptyBody}>{tr.guideNoRecBody}</Text>
               <TouchableOpacity
@@ -327,88 +316,72 @@ export const PlantingGuideScreen: React.FC = () => {
     );
   }
 
+  // The months' rain as bars, colored by how safe each month is to plant
+  const rainMax = Math.max(1, ...climate.months.map(m => m.rainfall ?? 0));
+  const MONTH_TONE: Record<string, string> = { safe: '#059669', caution: '#D97706', danger: '#DC2626' };
+
   return (
     <SafeAreaView style={s.root}>
 
       {/* Header */}
       <View style={s.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <View style={s.titleIcon}>
-            <Ionicons name="leaf-outline" size={16} color="#FFFFFF" />
-          </View>
-          <View>
-            <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.guideScreenTitle}</Text>
-            <Text style={s.headerSub}>
-              {[(latestGuide as any).season ?? 'Wet Season', guideVarietyName].filter(Boolean).join(' · ')}
-            </Text>
-          </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.guideScreenTitle}</Text>
+          <Text style={s.headerSub} numberOfLines={1}>
+            {[(latestGuide as any).season ?? 'Wet Season', guideVarietyName].filter(Boolean).join(' · ')}
+          </Text>
         </View>
-        <NotificationBell color="#059669" size={22} />
+        <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Language switch in flight — the previous guide stays readable while
-            the translated steps are generated, so the screen never goes blank. */}
+        {/* Language switch in flight: the old guide stays readable while the new words load */}
         {translating && (
-          <View style={[s.note, { marginTop: 16, backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+          <View style={[s.softBox, { backgroundColor: '#EAF1FD' }]}>
             <ActivityIndicator size="small" color="#2563EB" />
-            <Text style={[s.noteText, T && { fontSize: 12 }, { color: '#1E40AF' }]}>
-              {tr.guideTranslating}
-            </Text>
+            <Text style={[s.softBoxText, { color: '#1E40AF' }, T && { fontSize: 14 }]}>{tr.guideTranslating}</Text>
           </View>
         )}
 
         {/* From the planned sowing day until answered: the plan follows the real sowing day */}
         <SowingQuestion />
 
-        {/* The current PalayCheck step — the only step shown. Logging it moves the guide on. */}
-        <View style={s.stepHead}>
-          <Text style={[s.stepOf, T && { fontSize: 13 }]}>
+        {/* ── Progress through the guide ── */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>{tr.guideProgress}</Text>
+          <View style={s.bigRow}>
+            <Text style={s.big}>{pct}</Text>
+            <Text style={s.bigUnit}>%</Text>
+          </View>
+          <Text style={[s.sub, T && { fontSize: 14 }]}>
             {tr.guideStepOf
               .replace('{n}', String(Math.min(progress.done + 1, progress.total)))
               .replace('{total}', String(progress.total))}
           </Text>
-          <Text style={s.stepPct}>{pct}%</Text>
-        </View>
-        <View style={s.progBg}>
-          <View style={[s.progFill, { width: `${pct}%` }]} />
+          <View style={s.progBg}>
+            <View style={[s.progFill, { width: `${pct}%` }]} />
+          </View>
         </View>
 
+        {/* ── The current PalayCheck step: the only one to do. Logging it moves the guide on. ── */}
         {current ? (() => {
           const cfg     = CAT_CONFIG[current.category] ?? CAT_CONFIG.planting;
           const late    = today - current.daysAfterPlanting;
           const weather = adviceFor(current);
           const waitForRain = rainfedWaitAdvice(calendarFarm?.ecosystem, latestGuide, current);
           return (
-            <View style={[s.stepCard, { borderColor: weather ? WX_TONE[weather.level].border : cfg.border }]}>
-              {/* What today's forecast means for this step (Phase 2: the guide reacts to the weather) */}
-              {weather && (
-                <View style={[s.wxBanner, { backgroundColor: WX_TONE[weather.level].bg, borderColor: WX_TONE[weather.level].border }]}>
-                  <Ionicons name={weather.level === 'stop' ? 'warning' : 'rainy-outline'} size={16} color={WX_TONE[weather.level].fg} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.wxBannerText, { color: WX_TONE[weather.level].fg }, T && { fontSize: 14, lineHeight: 21 }]}>
-                      {(tr as any)[ADVICE_TEXT[weather.code]]}
-                    </Text>
-                    {updatedAt != null && (
-                      <Text style={s.wxBannerTime}>{tr.wxUpdatedAt.replace('{time}', clock(updatedAt))}</Text>
-                    )}
-                  </View>
+            <View style={s.card}>
+              <View style={s.stepTop}>
+                <View style={[s.catTile, { backgroundColor: cfg.bg }]}>
+                  <Image source={stepIcon(current.category)} style={{ width: 38, height: 38 }} resizeMode="contain" />
                 </View>
-              )}
-              {/* Rainfed farm sowing in the drier months (Phase 3: season advice) */}
-              {waitForRain && (
-                <View style={[s.wxBanner, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-                  <Ionicons name="water-outline" size={16} color="#1D4ED8" />
-                  <Text style={[s.wxBannerText, { flex: 1, color: '#1E40AF', fontWeight: '500' }, T && { fontSize: 14, lineHeight: 21 }]}>
-                    {tr.guideRainfedWait}
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.catLabel, { color: cfg.color }]}>{cfg.label}</Text>
+                  <Text style={[s.stepDay, late > 0 && { color: '#B45309' }, T && { fontSize: 14 }]}>
+                    {dayLabel(current.daysAfterPlanting)}
+                    {late > 0 ? ` · ${tr.guideLate.replace('{n}', String(late))}` : ''}
                   </Text>
-                </View>
-              )}
-              <View style={s.chipRow}>
-                <View style={[s.chip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-                  <Ionicons name={cfg.icon} size={13} color={cfg.color} />
-                  <Text style={[s.chipText, { color: cfg.color }]}>{cfg.label}</Text>
                 </View>
                 {current.keyCheck != null && (
                   <View style={s.keyCheck}>
@@ -417,24 +390,45 @@ export const PlantingGuideScreen: React.FC = () => {
                 )}
               </View>
 
-              <Text style={[s.stepTitle, T && { fontSize: 19 }]}>{current.title}</Text>
-              <Text style={[s.stepDay, late > 0 && { color: '#D97706' }, T && { fontSize: 13 }]}>
-                {dayLabel(current.daysAfterPlanting)}
-                {late > 0 ? ` · ${tr.guideLate.replace('{n}', String(late))}` : ''}
-              </Text>
-              <Text style={[s.stepBody, T && { fontSize: 15, lineHeight: 23 }]}>{current.instruction}</Text>
+              <Text style={[s.stepTitle, T && { fontSize: 23 }]}>{current.title}</Text>
 
-              {/* Pre-written explanation (reviewed text, in the Settings language) — not AI */}
+              {/* What the forecast means for this step */}
+              {weather && (
+                <View style={[s.softBox, { backgroundColor: WX_TONE[weather.level].bg }]}>
+                  <Ionicons name={weather.level === 'stop' ? 'warning' : 'rainy-outline'} size={18} color={WX_TONE[weather.level].fg} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.softBoxText, { color: WX_TONE[weather.level].fg, fontFamily: 'Inter_600SemiBold' }, T && { fontSize: 15, lineHeight: 22 }]}>
+                      {(tr as any)[ADVICE_TEXT[weather.code]]}
+                    </Text>
+                    {updatedAt != null && (
+                      <Text style={s.softBoxTime}>{tr.wxUpdatedAt.replace('{time}', clock(updatedAt))}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+              {/* A rainfed farm sowing in the drier months */}
+              {waitForRain && (
+                <View style={[s.softBox, { backgroundColor: '#EAF1FD' }]}>
+                  <Ionicons name="water-outline" size={18} color="#1D4ED8" />
+                  <Text style={[s.softBoxText, { flex: 1, color: '#1E40AF' }, T && { fontSize: 15, lineHeight: 22 }]}>
+                    {tr.guideRainfedWait}
+                  </Text>
+                </View>
+              )}
+
+              <Text style={[s.stepBody, T && { fontSize: 16, lineHeight: 25 }]}>{current.instruction}</Text>
+
+              {/* Pre-written explanation (reviewed text, in the Settings language), not AI */}
               {!!current.explanation && (
                 <>
                   <TouchableOpacity style={s.explainBtn} onPress={() => setExplainedId(explainOpen ? null : current.id)} activeOpacity={0.75}>
-                    <Ionicons name={explainOpen ? 'chevron-up' : 'bulb-outline'} size={15} color="#2563EB" />
-                    <Text style={[s.explainBtnText, T && { fontSize: 14 }]}>
+                    <Ionicons name={explainOpen ? 'chevron-up' : 'bulb-outline'} size={16} color="#111827" />
+                    <Text style={[s.explainBtnText, T && { fontSize: 15 }]}>
                       {explainOpen ? tr.guideHideExplain : tr.guideExplain}
                     </Text>
                   </TouchableOpacity>
                   {explainOpen && (
-                    <Text style={[s.explainBody, T && { fontSize: 14, lineHeight: 22 }]}>{current.explanation}</Text>
+                    <Text style={[s.explainBody, T && { fontSize: 15, lineHeight: 23 }]}>{current.explanation}</Text>
                   )}
                 </>
               )}
@@ -446,101 +440,91 @@ export const PlantingGuideScreen: React.FC = () => {
                   disabled={!current.referenceUrl}
                   activeOpacity={0.75}
                 >
-                  <Ionicons name="book-outline" size={14} color="#6B7280" />
-                  <Text style={[s.refText, T && { fontSize: 13 }]}>{current.reference}</Text>
+                  <Ionicons name="book-outline" size={15} color="#6B7280" />
+                  <Text style={[s.refText, T && { fontSize: 14 }]}>{current.reference}</Text>
                   {!!current.referenceUrl && <Text style={s.refLink}>{tr.guideOpenBook}</Text>}
                 </TouchableOpacity>
               )}
 
               <TouchableOpacity style={s.logBtn} onPress={() => logStep(current.id)} activeOpacity={0.85}>
-                <Ionicons name="create-outline" size={17} color="#FFFFFF" />
-                <Text style={[s.logBtnText, T && { fontSize: 15 }]}>{tr.guideLogStep}</Text>
+                <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+                <Text style={[s.logBtnText, T && { fontSize: 16 }]}>{tr.guideLogStep}</Text>
               </TouchableOpacity>
-              <Text style={[s.logHint, T && { fontSize: 12 }]}>{tr.guideLogHint}</Text>
+              <Text style={[s.logHint, T && { fontSize: 13 }]}>{tr.guideLogHint}</Text>
             </View>
           );
         })() : (
-          <View style={[s.stepCard, { alignItems: 'center' }]}>
-            <Ionicons name="trophy-outline" size={28} color="#059669" />
-            <Text style={[s.stepTitle, { textAlign: 'center', marginTop: 8 }, T && { fontSize: 19 }]}>{tr.guideAllDone}</Text>
-            <Text style={[s.logHint, { textAlign: 'center' }, T && { fontSize: 12 }]}>{tr.guideAllDoneBody}</Text>
+          <View style={[s.card, { alignItems: 'center' }]}>
+            <View style={[s.catTile, { backgroundColor: '#E8F5EF' }]}>
+              <Ionicons name="trophy-outline" size={24} color="#059669" />
+            </View>
+            <Text style={[s.stepTitle, { textAlign: 'center', marginTop: 12 }, T && { fontSize: 23 }]}>{tr.guideAllDone}</Text>
+            <Text style={[s.logHint, { textAlign: 'center' }, T && { fontSize: 13 }]}>{tr.guideAllDoneBody}</Text>
           </View>
         )}
 
-        {!!progress.next[0] && (
-          <View style={s.nextRow}>
-            <Ionicons name="arrow-forward-circle-outline" size={16} color="#9CA3AF" />
-            <Text style={[s.nextText, T && { fontSize: 13 }]} numberOfLines={2}>
-              {tr.guideNext.replace('{title}', progress.next[0].title)} · {dayLabel(progress.next[0].daysAfterPlanting)}
-            </Text>
-          </View>
-        )}
-
-        {/* Climate Advisory Card */}
-        <View style={[s.climateCard, { marginTop: 20 }]}>
-
-          <Text style={[s.climateSubLabel, { marginBottom: 12 }]}>{tr.climateBestMonths}</Text>
-
-          {/* Calendar grid — 4 columns × 3 rows */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
-            {climate.months.map((m, i) => {
-              const isSafe    = m.status === 'safe';
-              const isCaution = m.status === 'caution';
-              const isCurrent = m.label === climate.currentMonth.slice(0, 3);
-              const bg     = isSafe ? '#ECFDF5' : isCaution ? '#FFF7ED' : '#FEF2F2';
-              const border = isSafe ? '#A7F3D0' : isCaution ? '#FDE68A' : '#FECACA';
-              const color  = isSafe ? '#059669' : isCaution ? '#D97706' : '#DC2626';
+        {/* ── Up next ── */}
+        {progress.next.length > 0 && (
+          <View style={s.card}>
+            <Text style={[s.cardLabel, { marginBottom: 4 }]}>{tr.guideUpNext}</Text>
+            {progress.next.slice(0, 2).map(st => {
+              const cfg = CAT_CONFIG[st.category] ?? CAT_CONFIG.planting;
               return (
-                <View key={i} style={{ width: '25%', padding: 3 }}>
-                  <View style={[
-                    s.monthCell,
-                    { backgroundColor: bg, borderColor: isCurrent ? color : border },
-                    isCurrent && { borderWidth: 2 },
-                  ]}>
-                    <Text style={[s.monthCellText, { color }, isCurrent && { fontWeight: '800' }]}>
-                      {m.label}
-                    </Text>
+                <View key={st.id} style={s.nextRow}>
+                  <View style={[s.catTile, { width: 44, height: 44, borderRadius: 14, backgroundColor: cfg.bg }]}>
+                    <Image source={stepIcon(st.category)} style={{ width: 32, height: 32 }} resizeMode="contain" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.nextTitle, T && { fontSize: 16 }]} numberOfLines={2}>{st.title}</Text>
+                    <Text style={[s.nextDay, T && { fontSize: 13 }]}>{dayLabel(st.daysAfterPlanting)}</Text>
                   </View>
                 </View>
               );
             })}
           </View>
+        )}
 
-          {/* Legend */}
-          <View style={s.calLegendRow}>
+        {/* ── Best months to plant: each month's usual rain, colored by how safe it is ── */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>{tr.guideBestMonths}</Text>
+          <Text style={[s.sub, { marginTop: 4 }, T && { fontSize: 14 }]}>{tr.guideRainSub}</Text>
+          <View style={s.rainBars}>
+            {climate.months.map((m, i) => {
+              const isCurrent = i === new Date().getMonth();
+              const h = Math.max(6, Math.round(((m.rainfall ?? 0) / rainMax) * RAIN_BAR_H));
+              return (
+                <View key={i} style={s.rainCol}>
+                  <View style={[s.rainBar, { height: h, backgroundColor: MONTH_TONE[m.status] ?? '#9CA3AF', opacity: isCurrent ? 1 : 0.75 }]} />
+                  <Text style={[s.rainLbl, isCurrent && s.rainLblNow]} numberOfLines={1}>{m.label}</Text>
+                  {/* every month keeps the dot's space, so the labels line up */}
+                  <View style={[s.rainNowDot, !isCurrent && { backgroundColor: 'transparent' }]} />
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={s.legend}>
             {[
-              { color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', label: tr.floodSafe },
-              { color: '#D97706', bg: '#FFF7ED', border: '#FDE68A', label: tr.floodCaution },
-              { color: '#DC2626', bg: '#FEF2F2', border: '#FECACA', label: tr.floodWarning },
+              { color: '#059669', label: tr.floodSafe },
+              { color: '#D97706', label: tr.floodCaution },
+              { color: '#DC2626', label: tr.floodWarning },
             ].map(l => (
-              <View key={l.label} style={s.calLegendItem}>
-                <View style={[s.calLegendSwatch, { backgroundColor: l.bg, borderColor: l.color }]} />
-                <Text style={s.calLegendLabel}>{l.label}</Text>
+              <View key={l.label} style={s.legendItem}>
+                <View style={[s.legendDot, { backgroundColor: l.color }]} />
+                <Text style={s.legendLabel}>{l.label}</Text>
               </View>
             ))}
           </View>
 
-          {/* Alert warning strip */}
+          {/* This month, in words */}
           {climate.alert.level && (
-            <View style={[s.alertStrip, {
-              backgroundColor: ALERT_TONE[climate.alert.level].bg,
-              borderColor:     ALERT_TONE[climate.alert.level].border,
-            }]}>
-              <Ionicons
-                name={ALERT_TONE[climate.alert.level].icon}
-                size={14}
-                color={ALERT_TONE[climate.alert.level].fg}
-                style={{ marginTop: 1, flexShrink: 0 }}
-              />
+            <View style={[s.softBox, { backgroundColor: ALERT_TONE[climate.alert.level].bg, marginBottom: 0, marginTop: 14 }]}>
+              <Ionicons name={ALERT_TONE[climate.alert.level].icon} size={18} color={ALERT_TONE[climate.alert.level].fg} />
               <View style={{ flex: 1 }}>
-                <Text style={[s.alertStripTitle, {
-                  color: ALERT_TONE[climate.alert.level].fg,
-                }, T && { fontSize: 13 }]}>
+                <Text style={[s.alertTitle, { color: ALERT_TONE[climate.alert.level].fg }, T && { fontSize: 15 }]}>
                   {climate.alert.title}
                 </Text>
-                <Text style={[s.alertStripMsg, T && { fontSize: 12 }]}>
-                  {climate.alert.message}
-                </Text>
+                <Text style={[s.alertMsg, T && { fontSize: 14 }]}>{climate.alert.message}</Text>
               </View>
             </View>
           )}
@@ -548,10 +532,8 @@ export const PlantingGuideScreen: React.FC = () => {
 
         {/* Disclaimer */}
         <View style={s.note}>
-          <Ionicons name="information-circle-outline" size={14} color="#D1D5DB" />
-          <Text style={[s.noteText, T && { fontSize: 12 }]}>
-            {tr.guideDisclaimer}
-          </Text>
+          <Ionicons name="information-circle-outline" size={15} color="#9CA3AF" />
+          <Text style={[s.noteText, T && { fontSize: 13 }]}>{tr.guideDisclaimer}</Text>
         </View>
 
       </ScrollView>
@@ -559,139 +541,86 @@ export const PlantingGuideScreen: React.FC = () => {
   );
 };
 
+// Tallest bar in the rain chart
+const RAIN_BAR_H = 110;
+const PAGE = '#F1F2F1';
+const INK  = '#111827';
+const SHADOW = {
+  shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+} as const;
+
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F7F9F8' },
+  root: { flex: 1, backgroundColor: PAGE },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
-  },
-  titleIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  headerSub:   { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  headerBtn:   { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  bellDot: { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' },
+  header:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4 },
+  headerTitle: { fontSize: 21, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  headerSub:   { fontSize: 13, color: '#6B7280', marginTop: 1, fontFamily: 'Inter_500Medium' },
+  headerBtn:   { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
 
-  scroll: { paddingHorizontal: 24, paddingBottom: 110 },
+  scroll: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 140 },
 
-  /* Climate card */
-  climateCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 16,
-    marginBottom: 12,
-  },
-  alertPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1, borderRadius: 9999,
-    paddingVertical: 4, paddingHorizontal: 8,
-  },
-  alertPillText: { fontSize: 11, fontWeight: '600' },
-  alertStrip: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 12,
-  },
-  alertStripTitle: { fontSize: 12, fontWeight: '700', marginBottom: 3 },
-  alertStripMsg:   { fontSize: 11, color: '#6B7280', lineHeight: 17 },
-  climateSubLabel: { fontSize: 11, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.8 },
-  monthCell: {
-    borderWidth: 1, borderRadius: 8, height: 40,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  monthCellText: { fontSize: 11, fontWeight: '600' },
-  calLegendRow: {
-    flexDirection: 'row', gap: 16, marginTop: 10, paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-  },
-  calLegendItem:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  calLegendSwatch: { width: 12, height: 12, borderRadius: 3, borderWidth: 1 },
-  calLegendLabel:  { fontSize: 11, color: '#6B7280', fontWeight: '500' },
+  /* Cards */
+  card:      { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 12, ...SHADOW },
+  cardLabel: { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  sub:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  bigRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginTop: 6 },
+  big:       { fontSize: 48, lineHeight: 54, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -1.5 },
+  bigUnit:   { fontSize: 18, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 8 },
+  progBg:    { height: 10, borderRadius: 5, backgroundColor: PAGE, overflow: 'hidden', marginTop: 14 },
+  progFill:  { height: 10, borderRadius: 5, backgroundColor: '#059669' },
 
-  /* Current PalayCheck step */
-  stepHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 6 },
-  stepOf:   { fontSize: 12, fontWeight: '700', color: '#374151', letterSpacing: 0.3 },
-  stepPct:  { fontSize: 12, fontWeight: '700', color: '#059669' },
-  progBg:   { height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', overflow: 'hidden', marginBottom: 12 },
-  progFill: { height: 6, borderRadius: 3, backgroundColor: '#059669' },
-  stepCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16,
-  },
-  chipRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  wxBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 12,
-  },
-  wxBannerText: { fontSize: 13, lineHeight: 19, fontWeight: '600' },
-  wxBannerTime: { fontSize: 11, color: '#6B7280', marginTop: 3 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderWidth: 1, borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10,
-  },
-  chipText:     { fontSize: 11, fontWeight: '700' },
-  keyCheck:     { borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10, backgroundColor: '#F3F4F6' },
-  keyCheckText: { fontSize: 11, fontWeight: '700', color: '#4B5563' },
-  stepTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
-  stepDay:   { fontSize: 12, color: '#6B7280', marginTop: 3, marginBottom: 10, fontWeight: '500' },
-  stepBody:  { fontSize: 14, color: '#111827', lineHeight: 21 },
-  explainBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, alignSelf: 'flex-start', paddingVertical: 4 },
-  explainBtnText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
-  explainBody: {
-    fontSize: 13, color: '#1E3A8A', lineHeight: 20, marginTop: 6,
-    backgroundColor: '#EFF6FF', borderRadius: 10, borderWidth: 1, borderColor: '#BFDBFE', padding: 12,
-  },
-  refRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-  },
-  refText: { flex: 1, fontSize: 12, color: '#6B7280' },
-  refLink: { fontSize: 12, fontWeight: '600', color: '#059669' },
-  logBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 48, borderRadius: 12, backgroundColor: '#059669', marginTop: 14,
-  },
-  logBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  logHint:    { fontSize: 11, color: '#9CA3AF', marginTop: 8, lineHeight: 16 },
-  nextRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 4 },
-  nextText:   { flex: 1, fontSize: 12, color: '#6B7280' },
+  /* Soft colored boxes (weather, rainfed, this month, translating) */
+  softBox:     { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 16, padding: 14, marginBottom: 12 },
+  softBoxText: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_500Medium' },
+  softBoxTime: { fontSize: 12, color: '#6B7280', marginTop: 4 },
+
+  /* Current step */
+  stepTop:      { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  catTile:      { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  catLabel:     { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  stepDay:      { fontSize: 13, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
+  keyCheck:     { borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: PAGE },
+  keyCheckText: { fontSize: 12, color: INK, fontFamily: 'Inter_700Bold' },
+  stepTitle:    { fontSize: 21, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.3, marginBottom: 12 },
+  stepBody:     { fontSize: 15, color: '#1F2937', lineHeight: 23 },
+  explainBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, backgroundColor: PAGE },
+  explainBtnText: { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  explainBody:  { fontSize: 14, color: '#1E3A8A', lineHeight: 21, marginTop: 10, backgroundColor: '#EAF1FD', borderRadius: 16, padding: 14 },
+  refRow:       { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB' },
+  refText:      { flex: 1, fontSize: 13, color: '#6B7280' },
+  refLink:      { fontSize: 13, color: '#059669', fontFamily: 'Inter_700Bold' },
+  logBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: INK, marginTop: 16 },
+  logBtnText:   { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+  logHint:      { fontSize: 12, color: '#6B7280', marginTop: 10, lineHeight: 17 },
+
+  /* Up next */
+  nextRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
+  nextTitle: { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  nextDay:   { fontSize: 12, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
+
+  /* Rain by month */
+  rainBars:   { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 18, minHeight: RAIN_BAR_H + 34 },
+  rainCol:    { flex: 1, alignItems: 'center' },
+  rainBar:    { width: 14, borderRadius: 7 },
+  rainLbl:    { fontSize: 10, color: '#6B7280', marginTop: 6, fontFamily: 'Inter_500Medium' },
+  rainLblNow: { color: INK, fontFamily: 'Inter_700Bold' },
+  rainNowDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: INK, marginTop: 3 },
+  legend:      { flexDirection: 'row', gap: 16, marginTop: 12 },
+  legendItem:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot:   { width: 10, height: 10, borderRadius: 5 },
+  legendLabel: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  alertTitle:  { fontSize: 14, marginBottom: 3, fontFamily: 'Inter_700Bold' },
+  alertMsg:    { fontSize: 13, color: '#374151', lineHeight: 19 },
 
   /* Disclaimer */
-  note: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    marginTop: 24, padding: 14,
-    backgroundColor: '#F9FAFB', borderRadius: 10,
-    borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 8,
-  },
-  noteText: { fontSize: 11, color: '#6B7280', lineHeight: 17, flex: 1 },
+  note:     { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 8, paddingHorizontal: 6 },
+  noteText: { fontSize: 12, color: '#6B7280', lineHeight: 18, flex: 1 },
 
   /* No-guide-yet states (loading / generating / empty / error) */
-  emptyWrap: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: 36, paddingBottom: 120, gap: 12,
-  },
-  emptyIcon: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#D1FAE5',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  emptyTitle: {
-    fontSize: 16, fontWeight: '700', color: '#111827',
-    textAlign: 'center',
-  },
-  emptyBody: {
-    fontSize: 13, color: '#6B7280', lineHeight: 19,
-    textAlign: 'center',
-  },
-  emptyCta: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: 48, borderRadius: 12, paddingHorizontal: 22,
-    backgroundColor: '#059669', marginTop: 8,
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  emptyWrap:  { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 36, paddingBottom: 120, gap: 12 },
+  emptyIcon:  { width: 64, height: 64, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', ...SHADOW },
+  emptyTitle: { fontSize: 17, color: INK, textAlign: 'center', fontFamily: 'Inter_700Bold' },
+  emptyBody:  { fontSize: 14, color: '#6B7280', lineHeight: 20, textAlign: 'center' },
+  emptyCta:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, paddingHorizontal: 24, backgroundColor: INK, marginTop: 8 },
+  emptyCtaText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 });

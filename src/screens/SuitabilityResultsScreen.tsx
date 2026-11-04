@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { SetupHeader } from '@/components/SetupHeader';
 import { useTranslation } from '@/i18n/useTranslation';
 import type { Recommendation } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
@@ -182,11 +183,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
   if (combined.length === 0) {
     return (
       <SafeAreaView style={s.root}>
-        <View style={s.header}>
-          <View style={{ width: 32 }} />
-          <Text style={s.headerTitle}>Recommendations</Text>
-          <Text style={s.stepText}>4 / 4</Text>
-        </View>
+        <SetupHeader title="Recommendations" step={4} />
         <View style={s.failBox}>
           <Ionicons name="cloud-offline-outline" size={30} color="#9CA3AF" />
           <Text style={s.failTitle}>We couldn't get recommendations</Text>
@@ -202,12 +199,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
   return (
     <SafeAreaView style={s.root}>
 
-      {/* Header — same as the rest of the setup flow */}
-      <View style={s.header}>
-        <View style={{ width: 32 }} />
-        <Text style={s.headerTitle}>Recommendations</Text>
-        <Text style={s.stepText}>4 / 4</Text>
-      </View>
+      <SetupHeader title="Recommendations" step={4} />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
@@ -275,12 +267,12 @@ export const SuitabilityResultsScreen: React.FC = () => {
                   <Text style={[s.rankChipText, isTop && s.rankChipTextTop]}>{rec.rank}</Text>
                 </View>
                 <View style={s.varNameWrap}>
-                  <Ionicons name="leaf" size={13} color={isTop ? '#059669' : '#9CA3AF'} />
+                  <Ionicons name="leaf" size={15} color={isTop ? '#059669' : '#9CA3AF'} />
                   <Text style={[s.varName, T && { fontSize: 19 }]} numberOfLines={1}>{rec.variety.name}</Text>
                 </View>
                 {isTop && (
                   <View style={s.recommendedBadge}>
-                    <Ionicons name="ribbon" size={14} color="#059669" />
+                    <Ionicons name="ribbon" size={16} color="#FFFFFF" />
                   </View>
                 )}
               </View>
@@ -385,170 +377,113 @@ export const SuitabilityResultsScreen: React.FC = () => {
 };
 
 const s = StyleSheet.create({
-  soilNotice: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12,
-    backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 10, padding: 10,
-  },
+  soilNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 12, backgroundColor: '#FEF3DC', borderRadius: 16, padding: 12 },
   soilNoticeText: { flex: 1, fontSize: 12, color: '#7C2D12', lineHeight: 17 },
   failBox:     { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 10 },
   failTitle:   { fontSize: 16, fontWeight: '700', color: '#111827', textAlign: 'center' },
   failBody:    { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19 },
-  failBtn:     { marginTop: 8, backgroundColor: '#059669', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 22 },
-  failBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  failBtn: { marginTop: 8, backgroundColor: '#111827', borderRadius: 20, height: 52, paddingHorizontal: 26, justifyContent: 'center' },
+  failBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
 
   /* Header — same as Login / Register / FarmSetup / etc. */
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  stepText:    { width: 32, textAlign: 'right', fontSize: 12, fontWeight: '600', color: '#9CA3AF' },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 40 },
 
   /* Field suitability card — flat white */
-  fieldCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 18, marginBottom: 20,
-  },
-  fieldLead: { fontSize: 12, color: '#9CA3AF', fontWeight: '600', marginBottom: 4 },
+  fieldCard: { backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, padding: 20, marginBottom: 18 },
+  fieldLead: { fontSize: 14, color: '#111827', marginBottom: 6, fontFamily: 'Inter_600SemiBold' },
   fieldVerdict: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 14 },
-  fieldClass: { fontSize: 24, fontWeight: '800', color: '#059669', letterSpacing: -0.5, lineHeight: 30 },
+  fieldClass: { fontSize: 28, color: '#059669', letterSpacing: -0.6, lineHeight: 34, fontFamily: 'Inter_700Bold' },
 
   fieldScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 },
-  fieldScore:    { fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
-  fieldScoreUnit:{ fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
-  fieldScoreNote:{ fontSize: 12, color: '#6B7280', marginTop: 2 },
+  fieldScore: { fontSize: 30, color: '#111827', letterSpacing: -0.8, fontFamily: 'Inter_700Bold' },
+  fieldScoreUnit: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  fieldScoreNote: { fontSize: 12, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
 
   /* Score bar — thin track + green fill (visual rhythm without a chart) */
   scoreBarWrap:  { flex: 1.4 },
-  scoreBarTrack: { height: 4, borderRadius: 2, backgroundColor: '#F3F4F6', overflow: 'hidden' },
-  scoreBarFill:  { height: '100%', borderRadius: 2, backgroundColor: '#059669' },
+  scoreBarTrack: { height: 10, borderRadius: 5, backgroundColor: '#F1F2F1', overflow: 'hidden' },
+  scoreBarFill: { height: '100%', borderRadius: 5, backgroundColor: '#059669' },
 
-  evidenceList: {
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#F3F4F6',
-    marginBottom: 14,
-  },
+  evidenceList: { backgroundColor: '#F1F2F1', borderRadius: 18, paddingHorizontal: 14, marginBottom: 14 },
   evidenceRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 11,
   },
-  evidenceRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  evidenceDot:   { width: 4, height: 4, borderRadius: 2, backgroundColor: '#D1D5DB' },
-  evidenceLabel: { flex: 1, fontSize: 12, color: '#6B7280' },
-  evidenceValue: { fontSize: 13, fontWeight: '600', color: '#111827' },
+  evidenceRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  evidenceDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#059669' },
+  evidenceLabel: { flex: 1, fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  evidenceValue: { fontSize: 13, color: '#111827', fontFamily: 'Inter_700Bold' },
 
-  fieldNote: { fontSize: 12, color: '#9CA3AF', lineHeight: 17, fontStyle: 'italic' },
+  fieldNote: { fontSize: 12, color: '#6B7280', lineHeight: 18 },
 
   /* Section heading — sentence case bold, same as elsewhere */
-  listHeading: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12, marginTop: 8 },
+  listHeading: { fontSize: 18, color: '#111827', marginBottom: 12, marginTop: 6, paddingHorizontal: 4, fontFamily: 'Inter_700Bold' },
 
   /* Variety card */
-  varCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16, marginBottom: 10,
-  },
+  varCard: { backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, padding: 18, marginBottom: 12 },
   /* Top card — green-tinted border + barely-there mint wash for elevation without weight */
-  varCardTop: {
-    borderColor: '#059669', borderWidth: 1.5,
-    backgroundColor: '#F7FBF9',
-  },
+  varCardTop: { borderWidth: 2, borderColor: '#059669' },
 
   varHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
 
   /* Soft rank chip — light gray normally, soft green on the top one */
-  rankChip: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  rankChipTop:     { backgroundColor: '#ECFDF5' },
-  rankChipText:    { fontSize: 12, fontWeight: '700', color: '#9CA3AF' },
-  rankChipTextTop: { color: '#059669' },
+  rankChip: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
+  rankChipTop: { backgroundColor: '#111827' },
+  rankChipText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  rankChipTextTop: { color: '#FFFFFF' },
 
-  varName: { flexShrink: 1, fontSize: 15, fontWeight: '700', color: '#111827' },
+  varName: { flexShrink: 1, fontSize: 17, color: '#111827', letterSpacing: -0.2, fontFamily: 'Inter_700Bold' },
 
   /* Recommended badge — icon only, no label */
-  recommendedBadge: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#ECFDF5',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  recommendedBadge: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
 
-  metricRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12 },
-  metricCol: { flex: 1, alignItems: 'center' },
+  metricRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
+  metricCol: { flex: 1, backgroundColor: '#F1F2F1', borderRadius: 16, padding: 12 },
   metricHead:{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
-  metricSep: { width: StyleSheet.hairlineWidth, height: 38, backgroundColor: '#E5E7EB' },
-  metricVal: { fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.3 },
-  metricUnit:{ fontSize: 11, fontWeight: '600', color: '#9CA3AF' },
-  metricLabel:{ fontSize: 11, color: '#9CA3AF' },
+  metricSep: { width: 0 },
+  metricVal: { fontSize: 22, color: '#111827', letterSpacing: -0.5, fontFamily: 'Inter_700Bold' },
+  metricUnit: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  metricLabel: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
 
   /* Tolerance meter block — replaces plain "Flood: Low" text */
-  tolBlock: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F9FAFB', borderRadius: 10,
-    paddingVertical: 10, paddingHorizontal: 12,
-    marginBottom: 14,
-  },
+  tolBlock: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F2F1', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 },
   tolDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: '#E5E7EB' },
 
   /* Farm-fit callout — soft green, since it's the personalized bit */
-  fitBox: {
-    backgroundColor: '#F0FDF4', borderRadius: 10,
-    borderWidth: 1, borderColor: '#D1FAE5',
-    paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12,
-  },
+  fitBox: { backgroundColor: '#E8F5EF', borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 12 },
   fitHead:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 },
-  fitHeadText: { fontSize: 11, fontWeight: '700', color: '#065F46', letterSpacing: 0.2 },
-  fitText:     { fontSize: 12.5, color: '#065F46', lineHeight: 18 },
+  fitHeadText: { fontSize: 12, color: '#065F46', fontFamily: 'Inter_700Bold' },
+  fitText: { fontSize: 13, color: '#065F46', lineHeight: 19 },
 
   /* About-the-variety prose */
-  aboutText: { fontSize: 12.5, color: '#6B7280', lineHeight: 18, marginBottom: 14 },
+  aboutText: { fontSize: 13, color: '#6B7280', lineHeight: 19, marginBottom: 14 },
 
   /* Variety name with leading leaf icon */
   varNameWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
 
   /* Buttons — same vocabulary as elsewhere */
-  saveBtn: {
-    height: 46, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
-  saveBtnGhost: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1, borderColor: '#E5E7EB',
-    shadowOpacity: 0, elevation: 0,
-  },
-  saveBtnTextGhost: { color: '#374151', fontWeight: '600' },
+  saveBtn: { height: 52, borderRadius: 18, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
+  saveBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
+  saveBtnGhost: { backgroundColor: '#F1F2F1' },
+  saveBtnTextGhost: { color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   /* Comparison table */
-  table: {
-    backgroundColor: '#FFFFFF', borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden', marginTop: 4, marginBottom: 16,
-  },
+  table: { backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, overflow: 'hidden', marginTop: 2, marginBottom: 16 },
   tHead: {
     flexDirection: 'row',
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
     paddingVertical: 10,
   },
   tHeadCell: { flex: 1, alignItems: 'center', gap: 2 },
-  tHeadRank: { fontSize: 11, color: '#9CA3AF', fontWeight: '600' },
-  tHeadName: { fontSize: 12, fontWeight: '700', color: '#111827' },
+  tHeadRank: { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  tHeadName: { fontSize: 12, color: '#111827', fontFamily: 'Inter_700Bold' },
 
   tRow: { flexDirection: 'row', paddingVertical: 12 },
   tRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
-  tLabel: { fontSize: 12, color: '#6B7280' },
+  tLabel: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
   tCell:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tVal:   { fontSize: 12, fontWeight: '600', color: '#374151' },
-  tValTop:{ color: '#059669', fontWeight: '800' },
+  tVal: { fontSize: 12, color: '#374151', fontFamily: 'Inter_600SemiBold' },
+  tValTop: { color: '#059669', fontFamily: 'Inter_700Bold' },
 });

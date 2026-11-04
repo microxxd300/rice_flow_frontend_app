@@ -1,11 +1,11 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
-import { SowingQuestion } from '@/components/SowingQuestion';
+import { SowingQuestion, shortDate } from '@/components/SowingQuestion';
 import { sowingQuestionDue } from '@/utils/sowing';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -13,751 +13,477 @@ import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
 import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { LOG_WORD_KEYS, stageLabel } from '@/utils/progressLogs';
 import { useAuthStore } from '@/features/auth/store';
 import { Skeleton } from '@/components/Skeleton';
 import { dedupeName } from '@/utils/formatting';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useAccessibility } from '@/context/AccessibilityContext';
-import { useLanguageStore } from '@/store/languageStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
-import { FarmSwitcher } from '@/components/FarmSwitcher';
+import { loadFarmData } from '@/services/farmData';
+import { cropDays } from '@/utils/cropDays';
+import { empty, farmPhoto, panaboHour, stageImage, stepIcon, weatherIcon } from '@/assets/illustrations';
+import { loadGuide, refreshCycle } from '@/services/guideLoader';
+import { useLanguageStore } from '@/store/languageStore';
 
 type Nav = StackNavigationProp<any>;
 
-const DAY_NAMES = {
-  en:  ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-  fil: ['Linggo', 'Lunes', 'Martes', 'Miyerkules', 'Huwebes', 'Biyernes', 'Sabado'],
-  ceb: ['Domingo', 'Lunes', 'Martes', 'Miyerkules', 'Huwebes', 'Biyernes', 'Sabado'],
-} as const;
-const MONTH_NAMES = {
-  en:  ['January','February','March','April','May','June','July','August','September','October','November','December'],
-  fil: ['Enero','Pebrero','Marso','Abril','Mayo','Hunyo','Hulyo','Agosto','Setyembre','Oktubre','Nobyembre','Disyembre'],
-  ceb: ['Enero','Pebrero','Marso','Abril','Mayo','Hunyo','Hulyo','Agosto','Setyembre','Oktubre','Nobyembre','Disyembre'],
-} as const;
+// The stages from Harvesting on: Home asks for the harvest until it is recorded
+const HARVEST_STAGE_NO = 9;
 
-function formatDate(d: Date, lang: 'en' | 'fil' | 'ceb') {
-  const D = DAY_NAMES[lang]; const M = MONTH_NAMES[lang];
-  return `${D[d.getDay()]}, ${M[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+// The forecast's hours are Panabo time ("yyyy-MM-ddTHH:00"): read the hour as written,
+// so the label and the day/night picture don't shift on a phone set to another zone
+function forecastHour(iso: string): number {
+  const h = Number(String(iso).slice(11, 13));
+  return Number.isFinite(h) ? h : new Date(iso).getHours();
+}
+function hourFmt(iso: string) {
+  const h = forecastHour(iso);
+  return `${h % 12 || 12}${h >= 12 ? 'PM' : 'AM'}`;
 }
 
-function formatTime(d: Date) {
-  let h = d.getHours();
-  const m    = String(d.getMinutes()).padStart(2, '0');
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
-}
+// The PalayCheck step's kind -> its tile colour (the icon comes from stepIcon)
+const TASK_META: Record<string, { color: string; bg: string }> = {
+  planting:        { color: '#059669', bg: '#E8F5EF' },
+  fertilizer:      { color: '#D97706', bg: '#FEF3DC' },
+  pest_prevention: { color: '#DC2626', bg: '#FDECEC' },
+  irrigation:      { color: '#2563EB', bg: '#EAF1FD' },
+  harvesting:      { color: '#B45309', bg: '#FDF3E1' },
+};
 
+/** The small round arrow in a card's corner (the card itself is the button). */
+const ArrowBadge: React.FC<{ dark?: boolean }> = ({ dark }) => (
+  <View style={[s.badge, dark && s.badgeDark]}>
+    <Ionicons name="arrow-forward" size={14} color={dark ? '#FFFFFF' : '#111827'} style={{ transform: [{ rotate: '-45deg' }] }} />
+  </View>
+);
+
+/**
+ * Home: what the farmer needs today, in this order. My crop (stage, day, harvest date),
+ * the planting guide's next steps with their weather warnings, the weather, then the
+ * farms (tap one to show it). Before a crop is planted the crop card shows the top recommendation; once it
+ * reaches harvesting it asks for the harvest. All logs live on the Progress tab.
+ */
 export const HomeDashboardScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
-  const { isLargeText } = useAccessibility();
-  const T = isLargeText;   // easy-reading text scale
-  const lang = useLanguageStore(s => s.language);
-  const [greeting,    setGreeting]    = useState('');
-  const [now,         setNow]         = useState(new Date());
-  const [showHourly,  setShowHourly]  = useState(false);
+  const { isLargeText: T } = useAccessibility();   // easy-reading text scale
+  const [showHourly, setShowHourly] = useState(false);
+  const lang = useLanguageStore(st => st.language);
 
   const { user: authUser } = useAuthStore();
-  const { farms: realFarms, farmsLoaded, latestRecommendation, latestGuide, progressLogs, completedGuideSteps } = useAppStore();
-
-  const STAGE_LABELS: Record<string, string> = {
-    'Seedling':           tr.stageSeedling,
-    'Vegetative':         tr.stageVegetative,
-    'Tillering':          tr.stageTillering,
-    'Stem Elongation':    tr.stageStemElong,
-    'Panicle Initiation': tr.stagePanicle,
-    'Heading':            tr.stageHeading,
-    'Ripening':           tr.stageRipening,
-    'Harvest':            tr.stageHarvest,
-  };
-
-  useEffect(() => {
-    const h = new Date().getHours();
-    if (h < 12)      setGreeting(tr.homeGreetingAm);
-    else if (h < 18) setGreeting(tr.homeGreetingPm);
-    else             setGreeting(tr.homeGreetingEve);
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
-  }, [tr]);
-
-  // Use the currently SELECTED farm (falls back to the first farm). No mock farm: a new
-  // farmer sees the empty state instead of made-up data.
+  const { farms, farmsLoaded, latestRecommendation, latestGuide, completedGuideSteps, activeCycle } = useAppStore();
   const selectedFarm = useSelectedFarm();
+  const farmId = selectedFarm?.id;
 
-  // Real recommendation only; with none yet the card invites the farmer to scan
-  const topRealResult = latestRecommendation?.results?.[0];
-  const topVariety    = topRealResult
-    ? { name: topRealResult.variety.common_name, maturityDays: topRealResult.variety.maturity_days, avgYield: topRealResult.variety.avg_yield_t_ha, floodTolerance: topRealResult.variety.submergence_tolerance }
-    : null;
-  const topScore      = topRealResult ? Math.round(topRealResult.rsi_score) : null;
+  // The crop card needs this farm's cycle; nothing else loads it at start-up
+  useEffect(() => { if (farmId != null) void refreshCycle(); }, [farmId]);
 
-  // Shown only after the live weather loads (skeletons before), so no fake numbers
-  const rainPct = 0;
-  const temp    = 0;
-  const windKph = 0;
-
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? tr.homeGreetingAm : hour < 18 ? tr.homeGreetingPm : tr.homeGreetingEve;
   const displayName = dedupeName(authUser?.name) || 'Farmer';
   const initials    = displayName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
 
-  const WX_IMAGES = {
-    heavy_rain:    require('../assets/weather_icons/weather/heavy_rain.png'),
-    light_rain:    require('../assets/weather_icons/weather/light_rain.png'),
-    drizzle:       require('../assets/weather_icons/weather/Drizzle_rain.png'),
-    partly_cloudy: require('../assets/weather_icons/weather/partly_cloudy.png'),
-    partly_sunny:  require('../assets/weather_icons/weather/partly_sunny.png'),
-    mostly_sunny:  require('../assets/weather_icons/weather/Mostly_sunny.png'),
-    sunny:         require('../assets/weather_icons/weather/sunny.png'),
-    cloudy:        require('../assets/weather_icons/weather/cloudy.png'),
-  };
-
-  // WMO weather code -> our local image + Filipino description
-  const codeToImage = (code?: number) => {
-    if (code === 0)                       return WX_IMAGES.sunny;
-    if (code === 1)                       return WX_IMAGES.mostly_sunny;
-    if (code === 2)                       return WX_IMAGES.partly_sunny;
-    if (code === 3 || code === 45 || code === 48) return WX_IMAGES.cloudy;
-    if (code !== undefined && code >= 51 && code <= 57) return WX_IMAGES.drizzle;
-    if (code === 61 || code === 80)       return WX_IMAGES.light_rain;
-    if (code === 63 || code === 81)       return WX_IMAGES.light_rain;
-    if (code === 65 || code === 82)       return WX_IMAGES.heavy_rain;
-    if (code !== undefined && code >= 95) return WX_IMAGES.heavy_rain;
-    return WX_IMAGES.partly_cloudy;
-  };
-  const codeToDesc = (code?: number) => {
-    if (code === 0)                       return tr.wxClear;
-    if (code === 1)                       return tr.wxMostlyClear;
-    if (code === 2)                       return tr.wxPartlyCloudy;
-    if (code === 3 || code === 45 || code === 48) return tr.wxOvercast;
-    if (code !== undefined && code >= 51 && code <= 57) return tr.wxDrizzle;
-    if (code === 61 || code === 80)       return tr.wxLightRain;
-    if (code === 63 || code === 81)       return tr.wxRainDesc;
-    if (code === 65 || code === 82)       return tr.wxHeavyRain;
-    if (code !== undefined && code >= 95) return tr.wxThunder;
-    return tr.wxFair;
-  };
-
-  // Live weather (current + next 8 hours) for the farm being shown: the app's shared
-  // forecast, kept fresh by useFarmForecast. Skeletons until this farm's has loaded.
-  const forecast  = useAppStore(s => s.forecast);
+  // ── Weather: the app's shared forecast for this farm (useFarmForecast keeps it fresh) ──
+  const forecast  = useAppStore(st => st.forecast);
   const wxData    = forecast && forecast.key === farmKey(selectedFarm) ? forecast.data : null;
   const wxCurrent = wxData?.current ?? null;
-  const wxHourly  = wxData?.hourly ?? [];
+  const hourly    = (wxData?.hourly ?? []).map(h => ({ time: hourFmt(h.time), img: weatherIcon(h.weather_code, forecastHour(h.time)), temp: Math.round(h.temp) }));
   const { adviceFor } = useStepWeather();
 
-  // Display values — real if loaded, sensible fallbacks otherwise
-  const wxImage = codeToImage(wxCurrent?.weather_code);
-  const wxDesc  = codeToDesc(wxCurrent?.weather_code);
-  const liveTemp = wxCurrent ? Math.round(wxCurrent.temperature) : temp;
-  const liveRainPct = wxCurrent ? wxCurrent.rain_pct : rainPct;
-  const liveWindKph = wxCurrent ? wxCurrent.wind_speed_kph : windKph;
+  // ── My crop ──
+  // Only a growing crop: a finished season leaves the card asking for the next one
+  const cycle    = activeCycle?.status === 'active' && (farmId == null || activeCycle.farm === farmId) ? activeCycle : null;
+  const days     = cropDays(cycle?.planting_date, cycle?.expected_harvest_date);
+  const stageNo  = cycle?.stage?.stage_no ?? null;
+  const stageKey = LOG_WORD_KEYS[stageLabel(stageNo)];
+  const stageTxt = stageKey ? (tr as any)[stageKey] : (cycle?.stage?.name ?? '');
+  const harvestDue = !!cycle && stageNo != null && stageNo >= HARVEST_STAGE_NO && cycle.yield_per_ha == null;
 
-  // Babala derived from live rain probability + current heavy-rain weather code
-  const heavyCodes = [65, 82, 95, 96, 99];
-  const liveFloodRisk: 'low' | 'moderate' | 'high' =
-    (wxCurrent && (liveRainPct >= 70 || heavyCodes.includes(wxCurrent.weather_code))) ? 'high'
-    : (wxCurrent && liveRainPct >= 40) ? 'moderate'
-    : 'low';
+  const topResult = latestRecommendation?.results?.[0];
+  const topScore  = topResult ? Math.round(topResult.rsi_score) : null;
 
-  const hourFmt = (iso: string) => {
-    const d = new Date(iso);
-    let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-    return `${h}${ampm}`;
-  };
-  // Real hourly forecast only (empty until it loads)
-  const hourlyForecast = wxHourly.map(h => ({ time: hourFmt(h.time), img: codeToImage(h.weather_code), temp: Math.round(h.temp) }));
-
-  // Normalize log shape: store-saved logs may use snake_case from backend
-  const allLogs = progressLogs.map((l: any) => ({
-    id:            l.id ?? `${l.log_date ?? l.logDate ?? ''}_${l.growth_stage ?? l.growthStage ?? ''}`,
-    growthStage:   l.growthStage   ?? l.growth_stage   ?? '—',
-    observedIssue: l.observedIssue ?? l.observed_issue ?? null,
-    notes:         l.notes         ?? '',
-    logDate:       l.logDate       ?? l.log_date       ?? '',
-  }));
-
-  // "Susunod na Gawain" — the current PalayCheck step and the two after it (same rule as the
-  // Planting tab); tapping one opens the log that finishes it
-  type TaskCat = 'planting' | 'fertilizer' | 'pest_prevention' | 'irrigation' | 'harvesting';
-  const TASK_META: Record<string, { icon: React.ComponentProps<typeof Ionicons>['name']; color: string; bg: string }> = {
-    planting:        { icon: 'leaf-outline',             color: '#059669', bg: '#ECFDF5' },
-    fertilizer:      { icon: 'flask-outline',            color: '#D97706', bg: '#FFF7ED' },
-    pest_prevention: { icon: 'shield-checkmark-outline', color: '#DC2626', bg: '#FEF2F2' },
-    irrigation:      { icon: 'water-outline',            color: '#2563EB', bg: '#EFF6FF' },
-    harvesting:      { icon: 'basket-outline',           color: '#B45309', bg: '#FFFBEB' },
-  };
-  const upcomingTasks = (() => {
+  // ── To do: the current PalayCheck step and the two after it (same rule as the Planting tab) ──
+  const tasks = (() => {
     const { current, next } = guideProgress(guideSteps(latestGuide), completedGuideSteps);
-    const currentDay = guideDay(latestGuide);
+    const today = guideDay(latestGuide);
     return [current, ...next].filter(st => !!st).slice(0, 3).map(st => ({
       id:     st!.id,
       title:  st!.title,
-      cat:    st!.category as TaskCat,
-      offset: st!.daysAfterPlanting - currentDay,
+      cat:    st!.category as string,
+      offset: st!.daysAfterPlanting - today,
       advice: adviceFor(st),
     }));
   })();
-  const taskDayLabel = (offset: number) =>
+  const dayLabel = (offset: number) =>
     offset < 0 ? tr.guideLate.replace('{n}', String(-offset))
     : offset === 0 ? tr.homeToday
     : offset === 1 ? tr.homeTomorrow
     : tr.homeInDays.replace('{n}', String(offset));
+  // Tapping a step opens the log form that finishes it
+  const logStep = (stepId: string) => {
+    useAppStore.getState().setPendingLogStep(stepId);
+    navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
+  };
 
-  const floodColor = liveFloodRisk === 'high' ? '#EF4444' : liveFloodRisk === 'moderate' ? '#D97706' : '#111111';
-  const floodBg    = liveFloodRisk === 'high' ? '#FFEBEE' : liveFloodRisk === 'moderate' ? '#FFF7ED' : '#F5F5F5';
-  const floodLabel = !wxCurrent ? '—'
-    : liveFloodRisk === 'high' ? tr.floodWarning : liveFloodRisk === 'moderate' ? tr.floodCaution : tr.floodSafe;
+  const sowingDue = sowingQuestionDue(latestGuide, completedGuideSteps);
+
+  // A farm tile shows that farm on every tab; its arrow opens the farm's pin
+  const [switching, setSwitching] = useState<number | null>(null);
+  const showFarm = async (farm: any) => {
+    if (farm.id === farmId || switching != null) return;
+    useAppStore.getState().selectFarm(farm.id);   // clears the old farm's data
+    setSwitching(farm.id);
+    try {
+      await loadFarmData(farm);
+      // A farm with a crop has a saved guide: load it so its tasks show here at once
+      // (otherwise only the Planting tab loads it)
+      const st = useAppStore.getState();
+      const recId = st.latestRecommendation?.id;
+      if (recId && st.activeCycle?.status === 'active') await loadGuide(recId, lang).catch(() => {});
+    } catch { /* each part falls back on its own */ }
+    setSwitching(null);
+  };
 
   return (
-    <SafeAreaView style={s.root}>
-
-      {/* App bar */}
-      <View style={s.appBar}>
-        <TouchableOpacity
-          style={s.avatar}
-          onPress={() => navigation.navigateDeprecated('ProfileTab')}
-          activeOpacity={0.85}
-        >
-          <Text style={s.avatarText}>{initials}</Text>
-        </TouchableOpacity>
-        <View style={s.appBarMid}>
-          <Text style={[s.appBarGreet, T && { fontSize: 17 }]}>{tr.homeGreeting} {greeting}</Text>
-          <Text style={[s.appBarSub, T && { fontSize: 14 }]}>{displayName}</Text>
-        </View>
-        <NotificationBell color="#059669" size={22} />
-      </View>
-
+    <SafeAreaView style={s.root} edges={['top']}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Farm switcher — only shows when the user has 2+ farms */}
-        <FarmSwitcher />
-
-        {/* â”€â”€ 1. Weather / Environmental Card â”€â”€ */}
-        <View style={s.wxCard}>
-          <TouchableOpacity
-            onPress={() => setShowHourly(v => !v)}
-            activeOpacity={0.97}
-          >
-          <View style={s.wxTopRow}>
-            <Text style={s.wxDate}>{formatDate(now, lang)}</Text>
-            <View style={s.wxTimeRow}>
-              <Text style={s.wxTime}>{formatTime(now)}</Text>
-            </View>
+        {/* Greeting */}
+        <View style={s.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.greet, T && { fontSize: 15 }]}>{tr.homeGreeting} {greeting}</Text>
+            <Text style={[s.name, T && { fontSize: 24 }]} numberOfLines={1}>{displayName}</Text>
           </View>
-
-          <View style={s.wxMidRow}>
-            <Image source={wxImage} style={{ width: 52, height: 52 }} resizeMode="contain" />
-            <View style={s.wxMidText}>
-              {wxCurrent == null ? (
-                <>
-                  <Skeleton w={88} h={26} br={6} style={{ marginBottom: 4 }} />
-                  <Skeleton w={120} h={14} br={4} />
-                </>
-              ) : (
-                <>
-                  <Text style={s.wxTempBig}>{liveTemp}°C</Text>
-                  <Text style={s.wxDescBig}>{wxDesc}</Text>
-                </>
-              )}
-            </View>
-            <Ionicons
-              name={showHourly ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color="#BBBBBB"
-            />
-          </View>
+          <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
+          <TouchableOpacity style={s.avatar} onPress={() => navigation.navigateDeprecated('ProfileTab')} activeOpacity={0.85}>
+            <Text style={s.avatarText}>{initials}</Text>
           </TouchableOpacity>
-
-          <View style={s.wxDivider} />
-
-          {/* Hourly forecast â€” visible only when tapped */}
-          {showHourly && (
-            <>
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={s.wxScrollContent}
-              >
-                {hourlyForecast.map((h, i) => (
-                  <View key={i} style={s.wxHourItem}>
-                    <Text style={s.wxHourTime}>{h.time}</Text>
-                    <Image source={h.img} style={{ width: 28, height: 28, marginBottom: 7 }} resizeMode="contain" />
-                    <Text style={s.wxHourTemp}>{h.temp}°C</Text>
-                  </View>
-                ))}
-              </ScrollView>
-              <View style={s.wxDivider} />
-            </>
-          )}
-
-          <View style={s.wxStatsRow}>
-            <View style={s.wxStatCol}>
-              {wxCurrent == null
-                ? <Skeleton w={40} h={14} br={4} style={{ marginBottom: 4 }} />
-                : <Text style={s.wxStatValue}>{liveRainPct}%</Text>
-              }
-              <Text style={s.wxStatLabel}>{tr.wxRain}</Text>
-            </View>
-            <View style={s.wxStatSep} />
-            <View style={s.wxStatCol}>
-              {wxCurrent == null
-                ? <Skeleton w={56} h={14} br={4} style={{ marginBottom: 4 }} />
-                : <Text style={s.wxStatValue}>{liveWindKph} kph</Text>
-              }
-              <Text style={s.wxStatLabel}>{tr.wxWind}</Text>
-            </View>
-            <View style={s.wxStatSep} />
-            <View style={s.wxStatCol}>
-              <Text style={[s.wxStatValue, { color: floodColor }]}>{floodLabel}</Text>
-              <Text style={s.wxStatLabel} numberOfLines={2}>{tr.wxFloodRisk}</Text>
-            </View>
-          </View>
         </View>
 
-        {/* "Did you sow already?" from the planned sowing day until answered */}
-        {sowingQuestionDue(latestGuide, completedGuideSteps) && (
-          <View style={s.section}>
-            <SowingQuestion />
-          </View>
-        )}
-
-        {/* ── 2. Susunod na Gawain (next AI guide steps) ── */}
-        {upcomingTasks.length > 0 && (
-          <View style={s.section}>
-            <View style={[s.card, { paddingTop: 14, paddingBottom: 4 }]}>
-              <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeUpcomingTasks}</Text>
-              {upcomingTasks.map((t, i) => {
-                const meta = TASK_META[t.cat] || TASK_META.planting;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    onPress={() => {
-                      useAppStore.getState().setPendingLogStep(t.id);
-                      navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
-                    }}
-                    activeOpacity={0.75}
-                    style={[s.taskRow, i < upcomingTasks.length - 1 && s.taskRowBorder]}
-                  >
-                    <View style={[s.taskIcon, { backgroundColor: meta.bg }]}>
-                      <Ionicons name={meta.icon} size={16} color={meta.color} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[s.taskTitle, T && { fontSize: 16 }]} numberOfLines={1}>{t.title}</Text>
-                      <Text style={[s.taskMeta, { color: t.offset < 0 ? '#D97706' : meta.color }]}>{taskDayLabel(t.offset)}</Text>
-                      {t.advice && (
-                        <View style={s.taskWeather}>
-                          <Ionicons name="rainy-outline" size={13} color={t.advice.level === 'stop' ? '#DC2626' : '#D97706'} />
-                          <Text
-                            style={[s.taskWeatherText, { color: t.advice.level === 'stop' ? '#B91C1C' : '#92400E' }, T && { fontSize: 13 }]}
-                            numberOfLines={2}
-                          >
-                            {(tr as any)[ADVICE_TEXT[t.advice.code]]}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
-                  </TouchableOpacity>
-                );
-              })}
+        {/* ── My crop ── */}
+        {cycle ? (
+          <TouchableOpacity
+            style={s.card}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' })}
+          >
+            <View style={s.cardHead}>
+              <Text style={[s.cardLabel, T && { fontSize: 15 }]}>{tr.homeMyCrop}</Text>
+              <ArrowBadge />
             </View>
-          </View>
-        )}
+            <View style={s.cropRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cropName, T && { fontSize: 22 }]} numberOfLines={2}>{cycle.variety_name ?? '—'}</Text>
+                {!!stageTxt && <Text style={[s.cropStage, T && { fontSize: 16 }]}>{stageTxt}</Text>}
+              </View>
+              {/* The rice plant at today's stage */}
+              {!!stageImage(stageNo) && <Image source={stageImage(stageNo)!} style={s.stagePic} resizeMode="contain" />}
+            </View>
 
-        {/* ── 3. My Farms ── */}
-        <View style={s.section}>
-          <View style={[s.card, { paddingTop: 14 }]}>
-            <Text style={[s.cardTitle, T && { fontSize: 19 }]}>{tr.homeMyFarms}</Text>
-
-            {/* Skeleton while farms list is still loading from backend */}
-            {!farmsLoaded && realFarms.length === 0 && (
+            {days && days.day >= 1 ? (
               <>
-                {[0, 1].map(i => (
-                  <View key={i} style={[s.bukidRow, i === 0 && s.bukidRowBorder]}>
-                    <View style={s.bukidIcon}>
-                      <Skeleton w={16} h={16} br={9999} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Skeleton w={120} h={13} br={4} style={{ marginBottom: 6 }} />
-                      <Skeleton w={180} h={11} br={4} />
-                    </View>
-                  </View>
-                ))}
+                <View style={s.dayRow}>
+                  <Text style={s.dayBig}>{days.day}</Text>
+                  {days.total != null && <Text style={s.daySmall}>/ {days.total} {tr.homeDaysUnit}</Text>}
+                </View>
+                {days.total != null && (
+                  <View style={s.track}><View style={[s.fill, { width: `${Math.round(days.share * 100)}%` }]} /></View>
+                )}
+                {!!cycle.expected_harvest_date && (
+                  <Text style={[s.cropMeta, T && { fontSize: 14 }]}>
+                    {tr.homeHarvestOn.replace('{date}', shortDate(cycle.expected_harvest_date, tr))}
+                  </Text>
+                )}
               </>
+            ) : !!cycle.planting_date && (
+              <Text style={[s.cropMeta, T && { fontSize: 14 }]}>
+                {tr.homeSowOn.replace('{date}', shortDate(cycle.planting_date, tr))}
+              </Text>
             )}
 
-            {(realFarms.length > 0 ? realFarms : []).map((f: any, i: number) => {
-              const isLast = i === realFarms.length - 1;
-              const location = [f.barangay, f.municipality].filter(Boolean).join(', ') || '—';
-              const area = f.area_hectares != null ? `${f.area_hectares} ha` : '—';
+            {harvestDue && (
+              <TouchableOpacity
+                style={[s.darkBtn, { marginTop: 16 }]}
+                onPress={() => navigation.navigateDeprecated('ProgressTab', { screen: 'YieldRecord' })}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="basket-outline" size={17} color="#FFFFFF" />
+                <Text style={s.darkBtnText}>{tr.harvestAskYes}</Text>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={s.card}
+            activeOpacity={0.9}
+            onPress={() => navigation.navigateDeprecated('RecommendationResults')}
+          >
+            <View style={s.cardHead}>
+              <Text style={[s.cardLabel, T && { fontSize: 15 }]}>{tr.homeMyCrop}</Text>
+              <ArrowBadge />
+            </View>
+            <View style={s.cropRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cropName, T && { fontSize: 22 }]}>{tr.homeNoCrop}</Text>
+                <Text style={[s.cropMeta, { marginTop: 4 }, T && { fontSize: 14 }]}>{tr.homeNoCropHint}</Text>
+              </View>
+              <Image source={empty.no_farm} style={s.stagePic} resizeMode="contain" />
+            </View>
+            {topResult && (
+              <View style={s.recRow}>
+                <View style={[s.taskIcon, { backgroundColor: '#E8F5EF' }]}>
+                  <Ionicons name="leaf-outline" size={18} color="#059669" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rowTitle, T && { fontSize: 16 }]} numberOfLines={1}>{topResult.variety.common_name}</Text>
+                  <Text style={s.rowMeta}>{topResult.variety.maturity_days} {tr.homeDaysUnit}</Text>
+                </View>
+                {topScore != null && <Text style={s.recScore}>{topScore}%</Text>}
+              </View>
+            )}
+            <View style={[s.darkBtn, { marginTop: 16 }]}>
+              <Text style={s.darkBtnText}>{tr.homeSeeVarieties}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ── "Did you sow already?" from the planned sowing day until answered ── */}
+        {sowingDue && <View style={s.block}><SowingQuestion /></View>}
+
+        {/* ── To do: the planting guide's next steps ── */}
+        {!sowingDue && tasks.length > 0 && (
+          <View style={s.card}>
+            <TouchableOpacity style={s.cardHead} onPress={() => navigation.navigateDeprecated('PlantingTab')} activeOpacity={0.7}>
+              <Text style={[s.cardLabel, T && { fontSize: 15 }]}>{tr.homeUpcomingTasks}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#111827" />
+            </TouchableOpacity>
+
+            {tasks.map((t, i) => {
+              const meta = TASK_META[t.cat] || TASK_META.planting;
+              const stop = t.advice?.level === 'stop';
               return (
-                <TouchableOpacity
-                  key={f.id ?? i}
-                  style={[s.bukidRow, !isLast && s.bukidRowBorder]}
-                  onPress={() => navigation.navigateDeprecated('GISPinning', { farmId: f.id })}
-                  activeOpacity={0.75}
-                >
-                  <View style={s.bukidIcon}>
-                    <Ionicons name="storefront-outline" size={16} color="#059669" />
+                <TouchableOpacity key={t.id} style={[s.taskRow, i > 0 && s.taskRowGap]} onPress={() => logStep(t.id)} activeOpacity={0.75}>
+                  <View style={[s.taskIcon, { backgroundColor: meta.bg }]}>
+                    <Image source={stepIcon(t.cat)} style={s.taskPic} resizeMode="contain" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.bukidName, T && { fontSize: 16 }]} numberOfLines={1}>{f.name}</Text>
-                    <Text style={s.bukidMeta} numberOfLines={1}>{location} · {area}</Text>
+                    <Text style={[s.rowMeta, { color: t.offset < 0 ? '#D97706' : '#6B7280' }, T && { fontSize: 13 }]}>{dayLabel(t.offset)}</Text>
+                    <Text style={[s.rowTitle, i === 0 && s.rowTitleNow, T && { fontSize: 16 }]} numberOfLines={2}>{t.title}</Text>
+                    {t.advice && (
+                      <View style={[s.advice, { backgroundColor: stop ? '#FDECEC' : '#FEF3DC' }]}>
+                        <Ionicons name="rainy-outline" size={14} color={stop ? '#DC2626' : '#B45309'} />
+                        <Text style={[s.adviceText, { color: stop ? '#B91C1C' : '#92400E' }, T && { fontSize: 13 }]} numberOfLines={2}>
+                          {(tr as any)[ADVICE_TEXT[t.advice.code]]}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                  <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />
                 </TouchableOpacity>
               );
             })}
 
-            {/* Empty state — only when load completed and there are still 0 farms */}
-            {farmsLoaded && realFarms.length === 0 && (
-              <View style={{ paddingVertical: 18, alignItems: 'center' }}>
-                <Ionicons name="leaf-outline" size={28} color="#D1D5DB" />
-                <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
-                  {tr.homeNoFarms}
-                </Text>
-              </View>
-            )}
-
-            {/* Add Farm action */}
-            <TouchableOpacity
-              style={s.bukidAddRow}
-              onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
-              activeOpacity={0.75}
-            >
-              <View style={s.bukidAddIcon}>
-                <Ionicons name="add" size={18} color="#059669" />
-              </View>
-              <Text style={s.bukidAddText}>{tr.homeAddFarm}</Text>
+            <TouchableOpacity style={[s.darkBtn, { marginTop: 16 }]} onPress={() => logStep(tasks[0].id)} activeOpacity={0.85}>
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+              <Text style={s.darkBtnText}>{tr.homeLogStep}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
-        {/* ── 4. Latest Logs ── */}
-        <View style={s.section}>
-          <Text style={[s.cardTitle, { paddingHorizontal: 4 }]}>{tr.homeLogsTitle}</Text>
-
-          {allLogs.length === 0 ? (
-            <View style={[s.card, { paddingVertical: 18, alignItems: 'center' }]}>
-              <Ionicons name="document-text-outline" size={28} color="#D1D5DB" />
-              <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8 }}>
-                {tr.homeNoLogs}
+        {/* ── Weather ── */}
+        <TouchableOpacity style={s.card} onPress={() => setShowHourly(v => !v)} activeOpacity={0.95}>
+          <View style={s.cardHead}>
+            <View style={s.place}>
+              <Ionicons name="location-sharp" size={14} color="#111827" />
+              <Text style={[s.placeText, T && { fontSize: 15 }]} numberOfLines={1}>
+                {(selectedFarm as any)?.barangay || (selectedFarm as any)?.name || '—'}
               </Text>
             </View>
-          ) : (
-            <ScrollView
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              style={allLogs.length > 3 ? { maxHeight: 232 } : undefined}
-            >
-              {allLogs.map((log) => {
-                const hasIssue = log.observedIssue && log.observedIssue !== 'None';
-                return (
-                  <TouchableOpacity
-                    key={log.id}
-                    style={s.logCard}
-                    onPress={() => navigation.navigateDeprecated('ProgressTab')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[s.logAccent, { backgroundColor: hasIssue ? '#D97706' : '#6BC99B' }]} />
-                    <View style={s.logBody}>
-                      <Text style={[s.logStage, T && { fontSize: 15 }]}>{log.growthStage}</Text>
-                      <Text style={[s.logNote, T && { fontSize: 14, lineHeight: 20 }]} numberOfLines={2}>
-                        {hasIssue ? log.observedIssue : log.notes}
-                      </Text>
-                    </View>
-                    <Text style={s.logDate}>{log.logDate}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <Ionicons name={showHourly ? 'chevron-up' : 'chevron-down'} size={18} color="#9CA3AF" />
+          </View>
+
+          <View style={s.wxMain}>
+            {wxCurrent == null ? (
+              <Skeleton w={110} h={48} br={8} />
+            ) : (
+              <Text style={s.temp}>{Math.round(wxCurrent.temperature)}<Text style={s.tempUnit}>°C</Text></Text>
+            )}
+            <Image source={weatherIcon(wxCurrent?.weather_code, panaboHour())} style={s.wxImg} resizeMode="contain" />
+          </View>
+
+          {showHourly && hourly.length > 0 && (
+            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={s.hours}>
+              {hourly.map((h, i) => (
+                <View key={i} style={s.hour}>
+                  <Text style={s.hourTime}>{h.time}</Text>
+                  <Image source={h.img} style={{ width: 26, height: 26, marginVertical: 6 }} resizeMode="contain" />
+                  <Text style={s.hourTemp}>{h.temp}°</Text>
+                </View>
+              ))}
             </ScrollView>
           )}
 
-          <TouchableOpacity
-            style={[s.logAddCard, { marginTop: 10 }]}
-            onPress={() => navigation.navigateDeprecated('ProgressTab')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="create-outline" size={16} color="#FFFFFF" />
-            <Text style={s.logAddText}>{tr.homeAddLog}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── 5. Top Recommendation ── */}
-        <View style={s.section}>
-          <Text style={[s.cardTitle, { paddingHorizontal: 4 }]}>{tr.homeRecTitle}</Text>
-          {latestRecommendation == null ? (
-            <View style={s.card}>
-              <View style={s.bukidRow}>
-                <View style={s.bukidIcon}>
-                  <Skeleton w={16} h={16} br={9999} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Skeleton w={140} h={14} br={4} style={{ marginBottom: 6 }} />
-                  <Skeleton w={200} h={11} br={4} />
-                </View>
-                <Skeleton w={42} h={16} br={4} />
+          <View style={s.divider} />
+          <View style={s.stats}>
+            {[
+              { label: tr.wxRain,     value: wxCurrent ? `${wxCurrent.rain_pct}%` : null },
+              { label: tr.wxHumidity, value: wxCurrent ? `${Math.round(wxCurrent.humidity)}%` : null },
+              { label: tr.wxWind,     value: wxCurrent ? `${Math.round(wxCurrent.wind_speed_kph)} kph` : null },
+            ].map(st => (
+              <View key={st.label} style={s.stat}>
+                <Text style={[s.statLabel, T && { fontSize: 13 }]} numberOfLines={1}>{st.label}</Text>
+                {st.value == null
+                  ? <Skeleton w={44} h={16} br={4} style={{ marginTop: 4 }} />
+                  : <Text style={[s.statValue, T && { fontSize: 18 }]}>{st.value}</Text>}
               </View>
-            </View>
-          ) : (() => {
-            const t = String((topVariety as any)?.floodTolerance ?? '').toLowerCase();
-            const tolLabel =
-              t === 'high'     ? tr.tolHigh
-              : t === 'moderate' ? tr.tolModerate
-              : t === 'low'      ? tr.tolLow
-              : '';
-            const metaLine = [
-              topVariety?.maturityDays ? `${topVariety.maturityDays} ${tr.homeDaysUnit}` : null,
-              tolLabel || null,
-            ].filter(Boolean).join(' · ');
+            ))}
+          </View>
+        </TouchableOpacity>
+
+        {/* ── My farms: tap one to show it, its arrow edits the pin; the last tile adds a farm ── */}
+        <Text style={[s.sectionTitle, T && { fontSize: 19 }]}>{tr.homeMyFarms}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.farms}>
+          {!farmsLoaded && farms.length === 0 && [0, 1].map(i => (
+            <View key={i} style={s.farmTile}><Skeleton w={110} h={14} br={4} /><Skeleton w={80} h={11} br={4} style={{ marginTop: 8 }} /></View>
+          ))}
+          {farms.map((f: any) => {
+            const isSel = f.id === selectedFarm?.id;
             return (
               <TouchableOpacity
-                style={s.card}
-                onPress={() => navigation.navigateDeprecated('RecommendationResults')}
-                activeOpacity={0.75}
+                key={f.id}
+                style={[s.farmTile, isSel && s.farmTileSel]}
+                onPress={() => showFarm(f)}
+                activeOpacity={0.85}
               >
-                <View style={s.bukidRow}>
-                  <View style={s.bukidIcon}>
-                    <Ionicons name="leaf-outline" size={16} color="#059669" />
-                  </View>
+                {/* A rice-field photo for looks only, not this farm's own field */}
+                <View style={s.farmArt}>
+                  <Image source={farmPhoto(f.id)} style={s.farmPhoto} resizeMode="cover" />
+                  {switching === f.id && (
+                    <View style={s.farmBusy}><ActivityIndicator color="#FFFFFF" /></View>
+                  )}
+                </View>
+                <View style={s.farmFoot}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.bukidName, T && { fontSize: 16 }]} numberOfLines={1}>
-                      {topVariety?.name ?? 'No recommendation yet'}
-                    </Text>
-                    <Text style={s.bukidMeta} numberOfLines={1}>{topVariety ? metaLine : 'Scan your farm to get one'}</Text>
+                    <Text style={[s.rowTitle, isSel && s.onDark, T && { fontSize: 16 }]} numberOfLines={1}>{f.name}</Text>
+                    <Text style={[s.rowMeta, isSel && s.onDarkSoft]} numberOfLines={1}>{f.barangay || '—'}</Text>
+                    {f.area_hectares != null && <Text style={[s.rowMeta, isSel && s.onDarkSoft]}>{f.area_hectares} ha</Text>}
                   </View>
-                  {topScore != null && <Text style={s.recScoreFlat}>{topScore}%</Text>}
+                  <TouchableOpacity
+                    onPress={() => navigation.navigateDeprecated('GISPinning', { farmId: f.id })}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[s.badge, isSel && s.badgeOnDark]}>
+                      <Ionicons name="arrow-forward" size={14} color={isSel ? '#FFFFFF' : '#111827'} style={{ transform: [{ rotate: '-45deg' }] }} />
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
-          })()}
-        </View>
+          })}
+          <TouchableOpacity style={[s.farmTile, s.farmAdd]} onPress={() => navigation.navigateDeprecated('FarmDetailsForm')} activeOpacity={0.85}>
+            <View style={[s.badge, s.badgeDark, { width: 40, height: 40, borderRadius: 20 }]}>
+              <Ionicons name="add" size={22} color="#FFFFFF" />
+            </View>
+            <Text style={[s.rowTitle, { marginTop: 10 }]}>{tr.homeAddFarm}</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 140 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
+const BG   = '#F1F2F1';
+const INK  = '#111827';
+const SOFT = '#6B7280';
+
+const card = {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 26,
+  shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+  elevation: 2,
+} as const;
+
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: '#F7F9F8' },
-  scroll: { paddingBottom: 16 },
+  root:   { flex: 1, backgroundColor: BG },
+  scroll: { paddingHorizontal: 16, paddingTop: 8 },
 
-  /* App bar */
-  appBar: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
-    gap: 12,
-  },
-  avatar: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  avatarText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  appBarMid: { flex: 1 },
-  appBarGreet: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  appBarSub:   { fontSize: 12, color: '#9CA3AF' },
-  bellBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  bellDot: {
-    position: 'absolute', top: 8, right: 8,
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: '#EF4444',
-    borderWidth: 1.5, borderColor: '#FFFFFF',
-  },
+  /* Greeting */
+  header:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 4, paddingVertical: 10 },
+  greet:      { fontSize: 13, color: SOFT, fontFamily: 'Inter_500Medium' },
+  name:       { fontSize: 21, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  headerBtn:  { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  avatar:     { width: 42, height: 42, borderRadius: 21, backgroundColor: INK, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
 
-  /* Weather card */
-  wxCard: {
-    marginHorizontal: 20, marginTop: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16, marginBottom: 4,
+  /* Cards */
+  card:      { ...card, padding: 20, marginTop: 12 },
+  block:     { marginTop: 12 },
+  cardHead:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  cardLabel: { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  badge:     { width: 30, height: 30, borderRadius: 15, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' },
+  badgeDark: { backgroundColor: INK },
+  darkBtn:   {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    height: 54, borderRadius: 18, backgroundColor: INK,
   },
-  wxTopRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  wxDate:    { fontSize: 12, color: '#9CA3AF', fontWeight: '500' },
-  wxTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  wxTime:    { fontSize: 12, color: '#9CA3AF' },
-  wxMidRow:  { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-  wxMidText: { flex: 1 },
-  wxTempBig: { fontSize: 36, fontWeight: '700', color: '#111827', letterSpacing: -1 },
-  wxDescBig: { fontSize: 14, color: '#6B7280' },
-  wxDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB', marginBottom: 14 },
-  wxScrollContent: { paddingVertical: 4, paddingHorizontal: 2, gap: 8 },
-  wxHourItem: { alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', paddingVertical: 10, paddingHorizontal: 12, minWidth: 62 },
-  wxHourTime: { fontSize: 11, color: '#9CA3AF', fontWeight: '600', marginBottom: 7 },
-  wxHourTemp: { fontSize: 13, fontWeight: '700', color: '#111827' },
-  wxStatsRow: { flexDirection: 'row', alignItems: 'stretch' },
-  wxStatCol:  {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    minHeight: 56, paddingHorizontal: 4,
-  },
-  wxStatSep:  { width: 1, backgroundColor: '#E5E7EB' },
-  wxStatValue:{ fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 4, textAlign: 'center' },
-  wxStatLabel:{ fontSize: 10.5, color: '#9CA3AF', textAlign: 'center', lineHeight: 13 },
+  darkBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 
-  /* Susunod na Gawain rows */
-  taskRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 12, paddingHorizontal: 4,
-  },
-  taskRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
-  taskIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  taskTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  taskMeta:  { fontSize: 11.5, fontWeight: '600' },
-  taskWeather:     { flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 4 },
-  taskWeatherText: { flex: 1, fontSize: 11.5, lineHeight: 16, fontWeight: '500' },
+  /* My crop */
+  cropRow:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stagePic:  { width: 76, height: 76 },
+  taskPic:   { width: 36, height: 36 },
+  cropName:  { fontSize: 20, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  cropStage: { fontSize: 14, color: '#059669', fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  dayRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 14 },
+  dayBig:    { fontSize: 44, lineHeight: 48, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -1.5 },
+  daySmall:  { fontSize: 14, color: SOFT, fontFamily: 'Inter_500Medium', marginBottom: 7 },
+  track:     { height: 10, borderRadius: 5, backgroundColor: BG, overflow: 'hidden', marginTop: 10 },
+  fill:      { height: 10, borderRadius: 5, backgroundColor: '#059669' },
+  cropMeta:  { fontSize: 13, color: SOFT, fontFamily: 'Inter_500Medium', marginTop: 10 },
+  recRow:    { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14, padding: 12, borderRadius: 18, backgroundColor: BG },
+  recScore:  { fontSize: 16, color: '#059669', fontFamily: 'Inter_700Bold' },
 
-  /* Mga Bukid list rows */
-  bukidRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 12, paddingHorizontal: 4,
-  },
-  bukidRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
-  bukidIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#D1FAE5',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  bukidName: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  bukidMeta: { fontSize: 11.5, color: '#9CA3AF' },
-  bukidAddRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 12, paddingHorizontal: 4,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#F3F4F6',
-  },
-  bukidAddIcon: {
-    width: 26, height: 26, borderRadius: 8,
-    backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  bukidAddText: { fontSize: 13, fontWeight: '700', color: '#059669' },
+  /* To do */
+  taskRow:     { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  taskRowGap:  { marginTop: 14 },
+  taskIcon:    { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  rowTitle:    { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold', marginTop: 1 },
+  rowTitleNow: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  rowMeta:     { fontSize: 12, color: SOFT, fontFamily: 'Inter_500Medium' },
+  advice:      { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 6, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 10 },
+  adviceText:  { flex: 1, fontSize: 12, lineHeight: 16, fontFamily: 'Inter_500Medium' },
 
-  /* Section */
-  section: { paddingHorizontal: 20, marginTop: 24 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 10 },
-  sectionLink: { fontSize: 13, color: '#059669', fontWeight: '700' },
-
-  /* Card */
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16,
-  },
-
-  /* Cycle */
-  cycleStatusRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  livePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#ECFDF5', borderRadius: 9999,
-    borderWidth: 1, borderColor: '#D1FAE5',
-    paddingVertical: 4, paddingHorizontal: 10,
-  },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
-  livePillText: { fontSize: 12, fontWeight: '600', color: '#065F46' },
-  stagePill: {
-    backgroundColor: '#FFF7ED', borderRadius: 9999,
-    borderWidth: 1, borderColor: '#FDE68A',
-    paddingVertical: 4, paddingHorizontal: 10,
-  },
-  stagePillText: { fontSize: 12, fontWeight: '600', color: '#D97706' },
-  cycleFarmName: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 14 },
-  cycleDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB', marginBottom: 14 },
-  cycleMetrics: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  metricMain: { flex: 1, alignItems: 'center' },
-  metricBig: { fontSize: 40, fontWeight: '700', color: '#D97706', letterSpacing: -1 },
-  metricBigLabel: { fontSize: 11, color: '#9CA3AF' },
-  metricVRule: { width: 1, height: 48, backgroundColor: '#E5E7EB', marginHorizontal: 12 },
-  metricSide: { flex: 1, gap: 8 },
-  metricRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  metricSideVal: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  metricSideLbl: { fontSize: 11, color: '#9CA3AF' },
-  progressTrack: {
-    height: 5, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden',
-  },
-  progressFill: { height: 5, backgroundColor: '#059669', borderRadius: 3 },
+  /* Weather */
+  place:     { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
+  placeText: { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  wxMain:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  temp:      { fontSize: 52, lineHeight: 58, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -2 },
+  tempUnit:  { fontSize: 22, fontFamily: 'Inter_600SemiBold', letterSpacing: 0 },
+  wxImg:     { width: 60, height: 60 },
+  hours:     { gap: 8, paddingTop: 12 },
+  hour:      { alignItems: 'center', backgroundColor: BG, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12, minWidth: 60 },
+  hourTime:  { fontSize: 11, color: SOFT, fontFamily: 'Inter_600SemiBold' },
+  hourTemp:  { fontSize: 13, color: INK, fontFamily: 'Inter_700Bold' },
+  divider:   { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB', marginVertical: 14 },
+  stats:     { flexDirection: 'row' },
+  stat:      { flex: 1 },
+  statLabel: { fontSize: 12, color: SOFT, fontFamily: 'Inter_500Medium' },
+  statValue: { fontSize: 16, color: INK, fontFamily: 'Inter_700Bold', marginTop: 4 },
 
   /* Farms */
-  mapArea: {
-    height: 120, backgroundColor: '#A8D3CE',
-    borderRadius: 10, borderWidth: 1, borderColor: '#89C4BE',
-    marginBottom: 12, overflow: 'hidden',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  mapPin1: {
-    position: 'absolute', top: '30%', left: '35%',
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  mapPin2: {
-    position: 'absolute', top: '55%', left: '58%',
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#3D9D5E80',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  mapSourceText: {
-    position: 'absolute', bottom: 6, left: 10,
-    fontSize: 10, color: '#9CA3AF',
-  },
-  farmRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  farmDot: { width: 10, height: 10, borderRadius: 5 },
-  farmInfo: { flex: 1 },
-  farmName: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  farmMeta: { fontSize: 12, color: '#9CA3AF' },
-  farmDivider: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB' },
-  condBadge: {
-    borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10,
-    borderWidth: 1, borderColor: '#E5E7EB',
-  },
-  condBadgeText: { fontSize: 12, fontWeight: '600' },
-
-  /* Logs */
-  logCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 14, marginBottom: 8, gap: 12,
-  },
-  logAccent: { width: 3, height: 36, borderRadius: 2 },
-  logBody: { flex: 1 },
-  logStage: { fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  logNote:  { fontSize: 12, color: '#6B7280', lineHeight: 17 },
-  logDate:  { fontSize: 11, color: '#D1D5DB' },
-  logAddCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, height: 48,
-    backgroundColor: '#059669', borderRadius: 12,
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  logAddText: { fontSize: 14, color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.2 },
-
-  /* Recommendation */
-  recRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  recRank: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#ECFDF5', borderWidth: 1.5, borderColor: '#D1FAE5',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  recRankText: { fontSize: 18, fontWeight: '800', color: '#065F46' },
-  recInfo: { flex: 1 },
-  recName: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  recTagRow: { flexDirection: 'row', gap: 6 },
-  recTag: {
-    backgroundColor: '#FFF7ED', borderRadius: 9999,
-    borderWidth: 1, borderColor: '#FDE68A',
-    paddingVertical: 3, paddingHorizontal: 8,
-  },
-  recTagText: { fontSize: 11, color: '#D97706', fontWeight: '600' },
-  recScore: { alignItems: 'center', marginRight: 4 },
-  recScoreNum: { fontSize: 18, fontWeight: '700', color: '#059669' },
-  recScoreLbl: { fontSize: 10, color: '#9CA3AF' },
-
-  recScoreFlat: { fontSize: 15, fontWeight: '700', color: '#059669' },
+  sectionTitle: { fontSize: 17, color: INK, fontFamily: 'Inter_700Bold', marginTop: 24, marginBottom: 10, paddingHorizontal: 4 },
+  farms:        { gap: 12, paddingRight: 4, paddingBottom: 6 },
+  farmTile:     { ...card, width: 170, padding: 10 },
+  farmTileSel:  { backgroundColor: INK },
+  onDark:       { color: '#FFFFFF' },
+  onDarkSoft:   { color: '#9CA3AF' },
+  badgeOnDark:  { backgroundColor: '#374151' },
+  farmArt:      { height: 96, borderRadius: 18, overflow: 'hidden', backgroundColor: '#E8F5EF' },
+  farmPhoto:    { width: '100%', height: '100%' },
+  farmBusy:     { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(17,24,39,0.35)', justifyContent: 'center', alignItems: 'center' },
+  farmFoot:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 4, paddingBottom: 2 },
+  farmAdd:      { justifyContent: 'center', alignItems: 'center', minHeight: 150 },
 });
