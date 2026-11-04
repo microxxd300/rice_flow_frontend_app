@@ -27,7 +27,7 @@ import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { cropDays } from '@/utils/cropDays';
 import { CAVAN_KG } from '@/utils/harvest';
-import { stageImage } from '@/assets/illustrations';
+import { empty, stageImage } from '@/assets/illustrations';
 import { seasonLabel } from '@/utils/formatting';
 import { ISSUE_TO_API, LOG_WORD_KEYS, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
@@ -1014,9 +1014,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               </View>
             ) : (
               <View style={s.logEmpty}>
-                <View style={s.logEmptyIconWrap}>
-                  <Ionicons name="document-text-outline" size={28} color="#9CA3AF" />
-                </View>
+                <Image source={empty.no_logs} style={{ width: 132, height: 132, marginBottom: 6 }} resizeMode="contain" />
                 <Text style={s.logEmptyTitle}>{tr.progressNoLogsTitle}</Text>
                 <Text style={s.logEmptySub}>
                   Log your first field observation{'\n'}to get started.
@@ -1049,7 +1047,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               <View style={[s.trendCard, { marginTop: 4 }]}>
                 <Text style={s.ovLabel}>{tr.trYieldTitle}</Text>
                 {bars.length === 0 ? (
-                  <Text style={[s.ovSub, { marginTop: 0 }]}>{tr.yieldNeedCycle}</Text>
+                  <View style={{ alignItems: 'center', paddingVertical: 6 }}>
+                    <Image source={empty.no_harvest} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
+                    <Text style={[s.ovSub, { marginTop: 0, textAlign: 'center' }]}>{tr.yieldNeedCycle}</Text>
+                  </View>
                 ) : (
                   <>
                     <View style={s.ovBigRow}>
@@ -1089,7 +1090,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 if (recentLogs.length === 0) {
                   return (
                     <View style={[s.trendCard, { alignItems: 'center', paddingVertical: 28 }]}>
-                      <View style={s.logEmptyIconWrap}><Ionicons name="shield-checkmark-outline" size={26} color="#059669" /></View>
+                      <Image source={empty.no_logs} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
                       <Text style={[s.logEmptySub, { color: '#111827' }]}>{tr.healthNoLogs}</Text>
                     </View>
                   );
@@ -1224,7 +1225,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 if (buckets.length === 0) {
                   return (
                     <View style={[s.trendCard, { alignItems: 'center', paddingVertical: 24 }]}>
-                      <View style={s.logEmptyIconWrap}><Ionicons name="book-outline" size={26} color="#059669" /></View>
+                      <Image source={empty.no_guide} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
                       <Text style={s.logEmptyTitle}>{tr.progressNoGuide}</Text>
                       <Text style={s.logEmptySub}>{tr.guideOpenTabHint}</Text>
                     </View>
@@ -1741,7 +1742,6 @@ const s = StyleSheet.create({
 
   /* Empty state — shows when there are no real logs yet */
   logEmpty: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 32, paddingHorizontal: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  logEmptyIconWrap: { width: 60, height: 60, borderRadius: 20, backgroundColor: PAGE, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   logEmptyTitle: { fontSize: 15, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
   logEmptySub: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19, fontFamily: 'Inter_500Medium' },
   logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, paddingHorizontal: 12, gap: 14 },

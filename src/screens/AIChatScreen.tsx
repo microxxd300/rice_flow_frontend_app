@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet,
+  View, Text, StyleSheet, Image,
   TouchableOpacity, TextInput, ScrollView,
   KeyboardAvoidingView, Platform, Animated, Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { empty } from '@/assets/illustrations';
 import { apiAI } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
 import { useAppStore } from '@/store/appStore';
@@ -308,9 +309,7 @@ export const AIChatScreen: React.FC = () => {
             {/* Empty / welcome state */}
             {isEmpty && (
               <View style={s.emptyWrap}>
-                <View style={s.emptyAvatar}>
-                  <Ionicons name="sparkles" size={30} color="#34D399" />
-                </View>
+                <Image source={empty.ai_chat} style={{ width: 150, height: 150, marginBottom: 8 }} resizeMode="contain" />
                 <Text style={s.emptyTitle}>{tr.aiHeaderTitle}</Text>
                 <Text style={s.emptyDesc}>
                   {tr.aiAskAnything}
@@ -438,7 +437,6 @@ const s = StyleSheet.create({
 
   /* Empty state */
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 24, paddingHorizontal: 2 },
-  emptyAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 24, color: '#111827', marginBottom: 8, letterSpacing: -0.4, textAlign: 'center', fontFamily: 'Inter_700Bold' },
   emptyDesc: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21, marginBottom: 24, paddingHorizontal: 12, fontFamily: 'Inter_500Medium' },
 

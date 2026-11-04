@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert, Image,
 } from 'react-native';
+import { empty } from '@/assets/illustrations';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -333,7 +334,7 @@ export const ReportsScreen: React.FC = () => {
           <Text style={s.cardLabel}>{tr.reportsHistoryTitle}</Text>
           {filteredHistory.length === 0 ? (
             <View style={s.emptyBox}>
-              <View style={s.emptyIcon}><Ionicons name="basket-outline" size={24} color="#059669" /></View>
+              <Image source={empty.no_harvest} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
               <Text style={s.emptyTitle}>{harvestHistory.length === 0 ? tr.reportsHistoryEmpty : tr.reportsRangeEmpty}</Text>
               <Text style={s.emptyHint}>{harvestHistory.length === 0 ? tr.reportsHistoryHint : tr.reportsRangeHint}</Text>
             </View>

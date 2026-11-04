@@ -1,4 +1,4 @@
-// RiceFlow's illustrations (cut from the ChatGPT sheets): growth stages and step icons.
+// RiceFlow's illustrations (cut from the ChatGPT sheets): growth stages, step icons and empty screens.
 import type { ImageSourcePropType } from 'react-native';
 
 /** Index 0..9 = stage 1..10 (seed → post-harvest). */
@@ -43,5 +43,12 @@ export function stepIcon(category?: string | null): ImageSourcePropType {
   }
 }
 
-// Empty-state pictures (no_farm, no_logs, no_harvest, no_guide, ai_chat, offline) come later
-// with the D_empty sheet.
+/** The pictures for screens with nothing on them yet. */
+export const empty = {
+  no_farm:    require('./empty/no_farm.png'),
+  no_logs:    require('./empty/no_logs.png'),
+  no_harvest: require('./empty/no_harvest.png'),
+  no_guide:   require('./empty/no_guide.png'),
+  ai_chat:    require('./empty/ai_chat.png'),
+  offline:    require('./empty/offline.png'),
+} satisfies Record<string, ImageSourcePropType>;

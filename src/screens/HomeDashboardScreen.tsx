@@ -22,7 +22,7 @@ import { useAccessibility } from '@/context/AccessibilityContext';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { loadFarmData } from '@/services/farmData';
 import { cropDays } from '@/utils/cropDays';
-import { stageImage, stepIcon } from '@/assets/illustrations';
+import { empty, stageImage, stepIcon } from '@/assets/illustrations';
 import { loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 
@@ -242,8 +242,13 @@ export const HomeDashboardScreen: React.FC = () => {
               <Text style={[s.cardLabel, T && { fontSize: 15 }]}>{tr.homeMyCrop}</Text>
               <ArrowBadge />
             </View>
-            <Text style={[s.cropName, T && { fontSize: 22 }]}>{tr.homeNoCrop}</Text>
-            <Text style={[s.cropMeta, { marginTop: 4 }, T && { fontSize: 14 }]}>{tr.homeNoCropHint}</Text>
+            <View style={s.cropRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cropName, T && { fontSize: 22 }]}>{tr.homeNoCrop}</Text>
+                <Text style={[s.cropMeta, { marginTop: 4 }, T && { fontSize: 14 }]}>{tr.homeNoCropHint}</Text>
+              </View>
+              <Image source={empty.no_farm} style={s.stagePic} resizeMode="contain" />
+            </View>
             {topResult && (
               <View style={s.recRow}>
                 <View style={[s.taskIcon, { backgroundColor: '#E8F5EF' }]}>

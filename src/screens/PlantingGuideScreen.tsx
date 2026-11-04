@@ -20,7 +20,7 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SowingQuestion } from '@/components/SowingQuestion';
-import { stepIcon } from '@/assets/illustrations';
+import { empty, stepIcon } from '@/assets/illustrations';
 
 // Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
 // farm's own monthly rainfall loads, or when the phone is offline.
@@ -285,9 +285,7 @@ export const PlantingGuideScreen: React.FC = () => {
             </>
           ) : genError ? (
             <>
-              <View style={s.emptyIcon}>
-                <Ionicons name="cloud-offline-outline" size={28} color="#D97706" />
-              </View>
+              <Image source={empty.offline} style={{ width: 140, height: 140, marginBottom: 6 }} resizeMode="contain" />
               <Text style={s.emptyTitle}>{tr.guideGenFailed}</Text>
               <TouchableOpacity
                 style={s.emptyCta}
@@ -300,9 +298,7 @@ export const PlantingGuideScreen: React.FC = () => {
             </>
           ) : (
             <>
-              <View style={s.emptyIcon}>
-                <Ionicons name="leaf-outline" size={28} color="#059669" />
-              </View>
+              <Image source={empty.no_farm} style={{ width: 140, height: 140, marginBottom: 6 }} resizeMode="contain" />
               <Text style={s.emptyTitle}>{tr.guideNoRecTitle}</Text>
               <Text style={s.emptyBody}>{tr.guideNoRecBody}</Text>
               <TouchableOpacity
