@@ -27,7 +27,7 @@ import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { seasonLabel } from '@/utils/formatting';
-import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
+import { ISSUE_TO_API, LOG_WORD_KEYS, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -71,15 +71,6 @@ const PROBLEM_OPTIONS: { value: string; icon: IoniconsName }[] = [
 
 // The words the farmer sees for each log choice. The saved values stay English: the
 // server and STAGE_NO / ISSUE_TO_API read them.
-const LOG_WORD_KEYS: Record<string, string> = {
-  'Land Prep & Planting': 'plogStLandPrep', 'Early Growth': 'plogStEarly', 'Tillering': 'plogStTiller',
-  'Stem Elongation': 'plogStStem', 'Panicle Initiation': 'plogStPanicle', 'Heading': 'plogStHeading',
-  'Grain Filling': 'plogStGrain', 'Ripening': 'plogStRipen', 'Harvesting': 'plogStHarvest',
-  'Post-Harvest': 'plogStPost',
-  None: 'plogIsNone', Insect: 'plogIsInsect', Disease: 'plogIsDisease', Drought: 'plogIsDrought',
-  Flood: 'plogIsFlood', Nutrient: 'plogIsYellow', Other: 'plogIsOther',
-  Low: 'plogSevLow', Medium: 'plogSevMedium', High: 'plogSevHigh',
-};
 
 
 // ── Animated empty-state for Kasaysayan ng Ani ──

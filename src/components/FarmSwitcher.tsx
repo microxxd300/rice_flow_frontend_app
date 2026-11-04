@@ -101,20 +101,22 @@ export const FarmSwitcher: React.FC = () => {
 };
 
 const s = StyleSheet.create({
-  section: { paddingHorizontal: 20, marginTop: 20 },
+  section: { paddingHorizontal: 20, marginTop: 8 },
 
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB',
+    borderRadius: 22,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
     paddingVertical: 12, paddingHorizontal: 14,
   },
   icon: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#D1FAE5',
+    width: 40, height: 40, borderRadius: 14,
+    backgroundColor: '#E8F5EF',
     justifyContent: 'center', alignItems: 'center',
   },
-  iconActive: { backgroundColor: '#059669', borderColor: '#059669' },
+  iconActive: { backgroundColor: '#059669' },
   name: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 2 },
   meta: { fontSize: 11.5, color: '#9CA3AF' },
 
