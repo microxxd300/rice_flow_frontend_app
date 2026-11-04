@@ -8,7 +8,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { PieChart } from 'react-native-gifted-charts';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle, Text as SvgText, Line } from 'react-native-svg';
 import { LinearGradient as ExpoGradient } from 'expo-linear-gradient';
 import { Skeleton } from '@/components/Skeleton';
@@ -82,6 +81,8 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 // The server's growth stages run 1..10; from Harvesting (9) on, the harvest is asked for
 const STAGE_COUNT      = 10;
+// Tallest bar in the Trends yield chart
+const BAR_MAX_H        = 120;
 const HARVEST_STAGE_NO = 9;
 
 const EmptyYieldChart: React.FC<{ width: number; onRecord: () => void }> = ({
@@ -528,25 +529,25 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
 
   // Real seasonal yields — one record per cycle that has a saved yield
-  const [realYields, setRealYields] = useState<{ season: string; yieldTons: number }[]>([]);
+  const [realYields, setRealYields] = useState<{ season: string; yieldTons: number; tHa: number | null }[]>([]);
   useEffect(() => {
     const load = async () => {
       try {
         const farmId    = selectedFarmId;
         const cyclesRes = await apiProgress.listCycles(farmId);
         const cycles    = cyclesRes.data ?? [];
-        const out: { season: string; yieldTons: number }[] = [];
+        const out: { season: string; yieldTons: number; tHa: number | null }[] = [];
         for (const c of cycles) {
           try {
             const y = await apiProgress.getYield(c.id);
             // The yield record carries kilograms (same field the Reports screen reads)
             const kg = y.data?.net_yield_kg;
             if (kg != null) {
-              out.push({ season: seasonLabel(c), yieldTons: +(kg / 1000).toFixed(1) });
+              out.push({ season: seasonLabel(c), yieldTons: +(kg / 1000).toFixed(1), tHa: c.yield_per_ha ?? null });
             }
           } catch {}
         }
-        setRealYields(out);
+        setRealYields(out.reverse());   // the server lists the newest first
       } catch {}
     };
     load();
@@ -1017,135 +1018,74 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           </>
         )}
 
-        {/* TAB 3: MGA TREND */}
+        {/* TAB 3: TRENDS: how this farm changes from season to season */}
         {selectedTab === 'trends' && (() => {
-          const chartW = Dimensions.get('window').width - 80;
           const shortLabel = (season: string) =>
             season.replace('Dry ', 'D').replace('Wet ', 'W').replace('20', "'");
-
-          const buildLine = (pts: { x: number; y: number }[]) => {
-            let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-            for (let i = 1; i < pts.length; i++) {
-              const cpx = ((pts[i - 1].x + pts[i].x) / 2).toFixed(1);
-              d += ` C${cpx},${pts[i - 1].y.toFixed(1)} ${cpx},${pts[i].y.toFixed(1)} ${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`;
-            }
-            return d;
-          };
-
-          const StatsRow = ({ items }: { items: { label: string; value: string; color: string }[] }) => (
-            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9FAFB', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', marginTop: 8 }}>
-              {items.map((stat, i) => (
-                <React.Fragment key={stat.label}>
-                  <View style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 15, fontWeight: '800', color: stat.color, letterSpacing: -0.3 }}>{stat.value}</Text>
-                    <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 2 }}>{stat.label}</Text>
-                  </View>
-                  {i < items.length - 1 && <View style={{ width: 1, height: 32, backgroundColor: '#E5E7EB' }} />}
-                </React.Fragment>
-              ))}
-            </View>
-          );
+          // Past harvests (t/ha, oldest first), then this season's expected yield
+          const past     = realYields.filter(y => y.tHa != null).slice(-5);
+          const thisTHa  = hasRealCycle && predictedYield != null && (currentCycle as any)?.yield_per_ha == null
+            ? +(predictedYield / Math.max(farmArea, 0.1)).toFixed(1) : null;
+          const bars = [
+            ...past.map((y, i) => ({ key: `p${i}`, label: shortLabel(y.season), value: y.tHa as number, now: false })),
+            ...(thisTHa != null ? [{ key: 'now', label: tr.trThisSeason, value: thisTHa, now: true }] : []),
+          ];
+          const maxV     = Math.max(1, ...bars.map(b => b.value));
+          const headline = thisTHa ?? (past.length ? past[past.length - 1].tHa as number : null);
+          const prev     = thisTHa != null ? past[past.length - 1]?.tHa : past[past.length - 2]?.tHa;
+          const delta    = headline != null && prev ? Math.round(((headline - prev) / prev) * 100) : null;
 
           return (
             <>
-              {/* ── Yield Forecast — only when a real cycle is running AND the LR model has responded ── */}
-              {(() => {
-                // No real cycle yet → show a clean "start a cycle" empty state instead of fabricated numbers
-                if (!hasRealCycle || predictedYield == null) {
-                  return (
-                    <View style={[s.trendCard, { marginTop: 4, alignItems: 'center', paddingVertical: 28 }]}>
-                      <Ionicons name="trending-up-outline" size={28} color="#D1D5DB" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }}>
-                        {tr.yieldNeedCycle}
-                      </Text>
-                    </View>
-                  );
-                }
-
-                const daysLeft      = Math.max(0, cycleDays - CURRENT_DAY);
-                const prevYield     = realYields.length > 0 ? realYields[realYields.length - 1].yieldTons : null;
-                const deltaPct      = prevYield != null && prevYield > 0
-                  ? +(((predictedYield - prevYield) / prevYield) * 100).toFixed(1)
-                  : null;
-                const varietyName   = (currentCycle as any)?.variety_name ?? variety?.common_name ?? '—';
-
-                return (
-                  <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 4 }]}
-                    onPress={() => navigation.navigateDeprecated('RecommendationResults')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' }}>{varietyName}</Text>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.progressExpected}</Text>
-                      </View>
-                      <View style={s.trendHarvestPill}>
-                        <Ionicons name="time-outline" size={12} color="#D97706" />
-                        <Text style={s.trendHarvestPillText}>{harvestLabel}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-                      <PieChart
-                        donut
-                        data={[
-                          { value: cyclePct,        color: '#059669' },
-                          { value: 100 - cyclePct,  color: '#F3F4F6' },
-                        ]}
-                        radius={58}
-                        innerRadius={44}
-                        strokeColor="#FFFFFF"
-                        strokeWidth={2}
-                        centerLabelComponent={() => (
-                          <View style={{ justifyContent: 'center', alignItems: 'center' }}>
-                            <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.5 }}>{predictedYield.toFixed(1)}t</Text>
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: '#9CA3AF', marginTop: 1 }}>{tr.donutPrediction}</Text>
-                          </View>
-                        )}
-                      />
-
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '600', marginBottom: 6 }}>{tr.donutCyclePct.replace('{p}', String(cyclePct))}</Text>
-
-                        <View style={{ marginBottom: 10 }}>
-                          <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5, lineHeight: 26 }}>
-                            {(predictedYield / Math.max(farmArea, 0.1)).toFixed(1)}<Text style={{ fontSize: 12, color: '#9CA3AF', fontWeight: '600' }}> t/ha</Text>
-                          </Text>
-                          <Text style={{ fontSize: 11, color: '#6B7280' }}>{tr.donutExpectedAni}</Text>
+              {/* ── Yield per season: bars like the reference's score chart ── */}
+              <View style={[s.trendCard, { marginTop: 4 }]}>
+                <Text style={s.ovLabel}>{tr.trYieldTitle}</Text>
+                {bars.length === 0 ? (
+                  <Text style={[s.ovSub, { marginTop: 0 }]}>{tr.yieldNeedCycle}</Text>
+                ) : (
+                  <>
+                    <View style={s.ovBigRow}>
+                      <Text style={s.ovBig}>{headline != null ? headline.toFixed(1) : '—'}</Text>
+                      <Text style={s.ovBigUnit}>t/ha</Text>
+                      {delta != null && (
+                        <View style={[s.deltaPill, { backgroundColor: delta >= 0 ? '#E8F5EF' : '#FDECEC' }]}>
+                          <Ionicons name={delta >= 0 ? 'arrow-up' : 'arrow-down'} size={12} color={delta >= 0 ? '#059669' : '#B91C1C'} />
+                          <Text style={[s.deltaText, { color: delta >= 0 ? '#059669' : '#B91C1C' }]}>{Math.abs(delta)}%</Text>
                         </View>
-
-                        {deltaPct != null && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name={deltaPct >= 0 ? 'arrow-up' : 'arrow-down'} size={11} color={deltaPct >= 0 ? '#059669' : '#DC2626'} />
-                            <Text style={{ fontSize: 11, color: deltaPct >= 0 ? '#059669' : '#DC2626', fontWeight: '600' }}>
-                              {tr.donutVsPrev.replace('{d}', `${deltaPct >= 0 ? '+' : ''}${deltaPct}`)}
-                            </Text>
-                          </View>
-                        )}
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>
-                          {tr.donutDaysLeft.replace('{n}', String(daysLeft))}
-                        </Text>
-                      </View>
+                      )}
                     </View>
-                  </TouchableOpacity>
-                );
-              })()}
+                    <Text style={[s.ovSub, T && { fontSize: 14 }]}>
+                      {thisTHa != null ? tr.trExpectedNow : tr.trLastHarvest}
+                      {delta != null ? ` · ${tr.trVsLast}` : ''}
+                    </Text>
+                    <View style={s.bars}>
+                      {bars.map(b => (
+                        <View key={b.key} style={s.barCol}>
+                          <Text style={[s.barVal, b.now && { color: '#059669' }]}>{b.value.toFixed(1)}</Text>
+                          <View style={[s.bar, {
+                            height: Math.max(8, Math.round((b.value / maxV) * BAR_MAX_H)),
+                            backgroundColor: b.now ? '#059669' : '#111827',
+                            opacity: b.now ? 0.85 : 1,
+                          }]} />
+                          <Text style={[s.barLbl, b.now && { color: '#059669' }]} numberOfLines={1}>{b.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    {past.length === 0 && <Text style={[s.ovSub, { marginTop: 12 }]}>{tr.trRecordToCompare}</Text>}
+                  </>
+                )}
+              </View>
 
-              {/* (Kasaysayan ng Ani lives in Buod — kept off Trends to avoid duplicate) */}
-
-              {/* ── Plant Health ── derived from real progressLogs (severity-weighted). Empty state when no logs. */}
+              {/* ── Plant health: one score, three things it watches ── */}
               {(() => {
                 if (recentLogs.length === 0) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 4, alignItems: 'center', paddingVertical: 28 }]}>
-                      <Ionicons name="shield-checkmark-outline" size={28} color="#D1D5DB" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }}>
-                        {tr.healthNoLogs}
-                      </Text>
+                    <View style={[s.trendCard, { alignItems: 'center', paddingVertical: 28 }]}>
+                      <View style={s.logEmptyIconWrap}><Ionicons name="shield-checkmark-outline" size={26} color="#059669" /></View>
+                      <Text style={[s.logEmptySub, { color: '#111827' }]}>{tr.healthNoLogs}</Text>
                     </View>
                   );
                 }
-
                 // Classify each recent log into one of 3 categories using the same regex as notifications
                 const SEV_RANK: Record<string, number> = { Low: 1, Medium: 2, High: 3 };
                 const worst = (cat: 'insekto' | 'sakit' | 'tubig'): string => {
@@ -1190,46 +1130,36 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   : hs >= 60 ? '#D97706'
                   :            '#DC2626';
 
-                const rows = [
+                const tiles = [
                   { icon: 'bug-outline'   as const, label: tr.healthInsect,  value: insekto },
                   { icon: 'leaf-outline'  as const, label: tr.healthDisease, value: sakit },
                   { icon: 'water-outline' as const, label: tr.healthWater,   value: labelFor('tubig', tubig) },
                 ];
-
                 return (
-                  <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 4 }]}
-                    onPress={() => setSelectedTab('logs')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' }}>{tr.progressPlantHealth}</Text>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.healthFromLogs.replace('{n}', String(recentLogs.length))}</Text>
-                      </View>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: overallColor }}>{overallLabel}</Text>
+                  <TouchableOpacity style={s.trendCard} onPress={() => setSelectedTab('logs')} activeOpacity={0.85}>
+                    <View style={s.ovHead}>
+                      <Text style={s.ovLabel}>{tr.progressPlantHealth}</Text>
+                      <Text style={[s.deltaText, { color: overallColor }]}>{overallLabel}</Text>
                     </View>
-                    {rows.map((row, i, arr) => (
-                      <View key={row.label} style={[s.listRow, i === arr.length - 1 && { borderBottomWidth: 0, marginBottom: 12 }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <Ionicons name={row.icon} size={16} color="#9CA3AF" />
-                          <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
+                    <View style={s.ovBigRow}>
+                      <Text style={s.ovBig}>{hs == null ? '—' : hs}</Text>
+                      {hs != null && <Text style={s.ovBigUnit}>/100</Text>}
+                    </View>
+                    <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.healthFromLogs.replace('{n}', String(recentLogs.length))}</Text>
+                    <View style={[s.tiles, { marginTop: 16, marginBottom: 0 }]}>
+                      {tiles.map(t => (
+                        <View key={t.label} style={s.innerTile}>
+                          <Ionicons name={t.icon} size={18} color="#111827" />
+                          <Text style={[s.tileLbl, { marginTop: 10 }, T && { fontSize: 13 }]} numberOfLines={1}>{t.label}</Text>
+                          <Text style={[s.innerTileVal, { color: colorFor(t.value) }]} numberOfLines={1}>{t.value}</Text>
                         </View>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colorFor(row.value) }}>{row.value}</Text>
-                      </View>
-                    ))}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <Text style={{ fontSize: 12, color: '#6B7280' }}>{tr.progressOverallHealth}</Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: overallColor }}>{hs == null ? '—' : `${hs}%`}</Text>
-                    </View>
-                    <View style={s.progBg}>
-                      <View style={[s.progFill, { width: `${hs ?? 0}%`, backgroundColor: overallColor }]} />
+                      ))}
                     </View>
                   </TouchableOpacity>
                 );
               })()}
 
-              {/* ── GABAY ── only counts steps the farmer ACTUALLY checked in the Gabay tab */}
+              {/* ── Guide on time: steps checked so far, by kind ── */}
               {(() => {
                 const steps: any[] = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
                 const checkedIds = new Set(completedSteps);
@@ -1285,67 +1215,54 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 if (buckets.length === 0) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 4, alignItems: 'center', paddingVertical: 24 }]}>
-                      <Ionicons name="book-outline" size={28} color="#D1D5DB" />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8 }}>{tr.progressNoGuide}</Text>
-                      <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4, textAlign: 'center' }}>
-                        {tr.guideOpenTabHint}
-                      </Text>
+                    <View style={[s.trendCard, { alignItems: 'center', paddingVertical: 24 }]}>
+                      <View style={s.logEmptyIconWrap}><Ionicons name="book-outline" size={26} color="#059669" /></View>
+                      <Text style={s.logEmptyTitle}>{tr.progressNoGuide}</Text>
+                      <Text style={s.logEmptySub}>{tr.guideOpenTabHint}</Text>
                     </View>
                   );
                 }
-
                 return (
-                  <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 4 }]}
-                    onPress={() => navigation.navigateDeprecated('PlantingTab')}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' }}>{tr.progressGuideAdh}</Text>
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}</Text>
-                      </View>
-                      <View style={{ backgroundColor: badge.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 }}>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: badge.color }}>{badge.label}</Text>
+                  <TouchableOpacity style={s.trendCard} onPress={() => navigation.navigateDeprecated('PlantingTab')} activeOpacity={0.85}>
+                    <View style={s.ovHead}>
+                      <Text style={s.ovLabel}>{tr.progressGuideAdh}</Text>
+                      <View style={[s.deltaPill, { backgroundColor: badge.bg }]}>
+                        <Text style={[s.deltaText, { color: badge.color }]}>{badge.label}</Text>
                       </View>
                     </View>
-                    {buckets.map((item, i, arr) => (
-                      <View key={item.cat} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}>
-                        <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: item.done ? '#E8F5EF' : PAGE, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-                          {item.done
-                            ? <Ionicons name="checkmark" size={14} color="#059669" />
-                            : <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#D1D5DB' }} />
-                          }
+                    <View style={s.ovBigRow}>
+                      <Text style={s.ovBig}>{adherence}</Text>
+                      <Text style={s.ovBigUnit}>%</Text>
+                    </View>
+                    <Text style={[s.ovSub, T && { fontSize: 14 }]}>
+                      {tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}
+                    </Text>
+                    <View style={{ marginTop: 14, gap: 14 }}>
+                      {buckets.map(item => (
+                        <View key={item.cat}>
+                          <View style={s.ovHead}>
+                            <Text style={[s.rowLabel, { fontFamily: 'Inter_600SemiBold' }, T && { fontSize: 15 }]}>{item.label}</Text>
+                            <Text style={[s.ovStatLbl, item.done && { color: '#059669' }]}>{item.doneCt}/{item.total} · {item.status}</Text>
+                          </View>
+                          <View style={[s.progBg, { marginTop: 6, height: 8 }]}>
+                            <View style={[s.progFill, { height: 8, width: `${Math.round((item.doneCt / item.total) * 100)}%` }]} />
+                          </View>
+                          <Text style={[s.ovStatLbl, { marginTop: 4 }]}>{item.detail}</Text>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>{item.label}</Text>
-                          <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{item.detail} · {item.doneCt}/{item.total}</Text>
-                        </View>
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: item.done ? '#059669' : '#9CA3AF' }}>{item.status}</Text>
-                      </View>
-                    ))}
-                    <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>{tr.progressOverallAdh}</Text>
-                        <Text style={{ fontSize: 16, color: '#111827', fontFamily: 'Inter_700Bold' }}>{adherence}%</Text>
-                      </View>
-                      <View style={s.progBg}>
-                        <View style={[s.progFill, { width: `${adherence}%` }]} />
-                      </View>
+                      ))}
                     </View>
                   </TouchableOpacity>
                 );
               })()}
 
-              {/* "Buong Kasaysayan" → goes to Reports screen (full historical view across all seasons/farms) */}
+              {/* The whole history, every season and farm */}
               <TouchableOpacity
                 onPress={() => navigation.navigateDeprecated('ReportsHome')}
                 activeOpacity={0.85}
-                style={{ height: 54, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827', marginTop: 4, flexDirection: 'row', gap: 8 }}
+                style={s.ovDarkBtn}
               >
                 <Ionicons name="document-text-outline" size={17} color="#FFFFFF" />
-                <Text style={{ fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{tr.progressFullReport}</Text>
+                <Text style={s.ovDarkBtnText}>{tr.progressFullReport}</Text>
               </TouchableOpacity>
             </>
           );
@@ -1688,6 +1605,15 @@ const s = StyleSheet.create({
   ovDarkBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: '#111827', marginTop: 16 },
   ovDarkBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
   tiles:       { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  innerTile:   { flex: 1, backgroundColor: PAGE, borderRadius: 18, padding: 12 },
+  innerTileVal:{ fontSize: 15, marginTop: 2, fontFamily: 'Inter_700Bold' },
+  deltaPill:   { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 10, paddingVertical: 5, paddingHorizontal: 9, marginLeft: 4, marginBottom: 9 },
+  deltaText:   { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  bars:        { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', marginTop: 18, minHeight: BAR_MAX_H + 44 },
+  barCol:      { alignItems: 'center', flex: 1, maxWidth: 64 },
+  barVal:      { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  bar:         { width: 28, borderRadius: 14 },
+  barLbl:      { fontSize: 11, color: '#6B7280', marginTop: 8, fontFamily: 'Inter_500Medium' },
   tile:        {
     flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 14, minHeight: 112, justifyContent: 'space-between',
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2,
