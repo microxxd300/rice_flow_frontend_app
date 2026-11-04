@@ -15,6 +15,8 @@ const FieldPhoto = require('../assets/bg/rice_field.jpg');
 type Nav = StackNavigationProp<any>;
 
 const LANGS: Language[] = ['fil', 'ceb', 'en'];
+// The photo is 1024 × 1536
+const PHOTO_RATIO = 1536 / 1024;
 
 /**
  * The first screen: a rice field photo, one line about the app, the language (picked
@@ -23,7 +25,7 @@ const LANGS: Language[] = ['fil', 'ceb', 'en'];
 export const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { top, bottom } = useSafeAreaInsets();
   const language    = useLanguageStore(st => st.language);
   const setLanguage = useLanguageStore(st => st.setLanguage);
@@ -37,7 +39,9 @@ export const WelcomeScreen: React.FC = () => {
 
         {/* Photo with the name on it */}
         <View style={[s.hero, { height: photoH }]}>
-          <Image source={FieldPhoto} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          {/* Pinned to the bottom at the screen's width: the photo's top half is sky,
+              so this keeps the horizon and the field in view */}
+          <Image source={FieldPhoto} style={[s.photo, { width, height: Math.max(width * PHOTO_RATIO, photoH) }]} resizeMode="cover" />
           <View style={[s.brand, { top: top + 18 }]}>
             <Ionicons name="leaf" size={26} color="#FFFFFF" />
             <Text style={s.brandText}>RiceFlow</Text>
@@ -95,6 +99,7 @@ const s = StyleSheet.create({
     borderBottomLeftRadius: 36, borderBottomRightRadius: 36,
     backgroundColor: '#1F2937',
   },
+  photo:     { position: 'absolute', left: 0, bottom: 0 },
   brand:     { position: 'absolute', left: 22, flexDirection: 'row', alignItems: 'center', gap: 8 },
   brandText: {
     fontSize: 24, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: -0.4,
