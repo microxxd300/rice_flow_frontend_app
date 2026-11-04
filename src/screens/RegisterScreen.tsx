@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, TextInput as RNTextInput, TouchableOpacity, Alert,
+  Platform, ScrollView, TouchableOpacity, Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuthStore } from '@/features/auth/store';
+import { useTranslation } from '@/i18n/useTranslation';
+import { AuthHeader, AuthField } from '@/components/AuthParts';
 
 type Nav = StackNavigationProp<any>;
 
 export const RegisterScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const { register } = useAuthStore();
+  const tr = useTranslation();
 
   const [fullName,        setFullName]        = useState('');
   const [email,           setEmail]           = useState('');
@@ -48,12 +50,6 @@ export const RegisterScreen: React.FC = () => {
     return fe;
   };
 
-  const isValid =
-    fullName.trim().length > 0 &&
-    email.trim().length > 0 &&
-    password.length >= 8 &&
-    password === confirmPassword &&
-    agreed;
 
   const handleRegister = async () => {
     setSubmitted(true);
@@ -129,271 +125,142 @@ export const RegisterScreen: React.FC = () => {
   const strengthLabel = tooCommon ? 'Too common' : ['', 'Weak', 'Fair', 'Strong', 'Very strong'][score];
   const strengthColor = ['', '#DC2626', '#D97706', '#059669', '#0F4C28'][score];
 
+  const clear = (k: keyof FieldErrors) => { if (fieldErrors[k]) setFieldErrors(e => ({ ...e, [k]: undefined })); };
+
   return (
-    <SafeAreaView style={s.root}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+    <View style={s.root}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false}>
 
-        {/* Header — minimal: back chevron + page title */}
-        <View style={s.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7} style={s.backBtn}>
-            <Ionicons name="chevron-back" size={22} color="#111827" />
-          </TouchableOpacity>
-          <Text style={s.headerTitle}>Create account</Text>
-          <View style={{ width: 32 }} />
-        </View>
+          <AuthHeader title={tr.authRegTitle} sub={tr.authRegSub} onBack={() => navigation.goBack()} />
 
-        <ScrollView
-          contentContainerStyle={s.scroll}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-
-          {/* Error banner */}
-          {error && (
-            <View style={s.errorBanner}>
-              <Ionicons name="alert-circle" size={18} color="#B91C1C" />
-              <Text style={s.errorText}>{error}</Text>
-            </View>
-          )}
-
-          {/* About you */}
-          <Field label="Full name" value={fullName} onChangeText={(v) => { setFullName(v); if (fieldErrors.fullName) setFieldErrors(e => ({ ...e, fullName: undefined })); }} placeholder="Juan Dela Cruz" autoCapitalize="words" error={fieldErrors.fullName} />
-          <Field label="Email" value={email} onChangeText={(v) => { setEmail(v); if (fieldErrors.email) setFieldErrors(e => ({ ...e, email: undefined })); }} placeholder="juan@example.com" autoCapitalize="none" keyboardType="email-address" error={fieldErrors.email} />
-
-          {/* Security */}
-          <View style={s.groupGap} />
-          <Field
-            label="Password"
-            value={password}
-            onChangeText={(v) => { setPassword(v); if (fieldErrors.password) setFieldErrors(e => ({ ...e, password: undefined })); }}
-            placeholder="At least 8 characters"
-            autoCapitalize="none"
-            secure={!showPw}
-            error={fieldErrors.password}
-            rightSlot={
-              <TouchableOpacity onPress={() => setShowPw(v => !v)} activeOpacity={0.7} style={s.eye}>
-                <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={18} color="#9CA3AF" />
-              </TouchableOpacity>
-            }
-          />
-
-          {password.length > 0 && (
-            <View style={s.strengthWrap}>
-              <View style={s.strengthBars}>
-                {[1, 2, 3, 4].map(i => (
-                  <View key={i} style={[s.strengthBar, { backgroundColor: i <= score ? strengthColor : '#E5E7EB' }]} />
-                ))}
+          <View style={s.form}>
+            {error && (
+              <View style={s.errorBanner}>
+                <Ionicons name="alert-circle" size={18} color="#B91C1C" />
+                <Text style={s.errorText}>{error}</Text>
               </View>
-              <Text style={[s.strengthText, { color: strengthColor }]}>{strengthLabel}</Text>
-            </View>
-          )}
+            )}
 
-          <Field
-            label="Confirm password"
-            value={confirmPassword}
-            onChangeText={(v) => { setConfirmPassword(v); if (fieldErrors.confirmPassword) setFieldErrors(e => ({ ...e, confirmPassword: undefined })); }}
-            placeholder="Re-enter password"
-            autoCapitalize="none"
-            secure={!showCPw}
-            error={fieldErrors.confirmPassword ?? (pwMismatch ? "Passwords don't match" : undefined)}
-            rightSlot={
-              <TouchableOpacity onPress={() => setShowCPw(v => !v)} activeOpacity={0.7} style={s.eye}>
-                <Ionicons name={showCPw ? 'eye-off-outline' : 'eye-outline'} size={18} color="#9CA3AF" />
-              </TouchableOpacity>
-            }
-          />
+            <AuthField label={tr.authNameLbl} icon="person-outline" value={fullName}
+              onChangeText={(v) => { setFullName(v); clear('fullName'); }}
+              placeholder="Juan Dela Cruz" autoCapitalize="words" error={fieldErrors.fullName} />
+            <AuthField label={tr.authEmailLbl} icon="mail-outline" value={email}
+              onChangeText={(v) => { setEmail(v); clear('email'); }}
+              placeholder="juan@example.com" autoCapitalize="none" keyboardType="email-address" error={fieldErrors.email} />
 
+            <AuthField
+              label={tr.authPwLbl}
+              icon="lock-closed-outline"
+              value={password}
+              onChangeText={(v) => { setPassword(v); clear('password'); }}
+              placeholder={tr.authPwRule}
+              autoCapitalize="none"
+              secure={!showPw}
+              error={fieldErrors.password}
+              rightSlot={
+                <TouchableOpacity onPress={() => setShowPw(v => !v)} activeOpacity={0.7} style={s.eye}>
+                  <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={19} color="#6B7280" />
+                </TouchableOpacity>
+              }
+            />
 
-          {/* Terms */}
-          <TouchableOpacity style={s.termsRow} onPress={() => { setAgreed(v => !v); if (fieldErrors.terms) setFieldErrors(e => ({ ...e, terms: undefined })); }} activeOpacity={0.7}>
-            <View style={[s.checkbox, agreed && s.checkboxActive, fieldErrors.terms && { borderColor: '#DC2626' }]}>
-              {agreed && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-            </View>
-            <Text style={s.termsText}>
-              I agree to the{' '}
-              <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Terms</Text>
-              {' '}and{' '}
-              <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Privacy Policy</Text>.
-            </Text>
-          </TouchableOpacity>
-          {fieldErrors.terms ? <Text style={s.termsError}>{fieldErrors.terms}</Text> : null}
+            {password.length > 0 && (
+              <View style={s.strengthWrap}>
+                <View style={s.strengthBars}>
+                  {[1, 2, 3, 4].map(i => (
+                    <View key={i} style={[s.strengthBar, { backgroundColor: i <= score ? strengthColor : '#E4E6E4' }]} />
+                  ))}
+                </View>
+                <Text style={[s.strengthText, { color: strengthColor }]}>{strengthLabel}</Text>
+              </View>
+            )}
 
-          {/* Submit + Cancel — same primary/ghost vocabulary as the rest of the app */}
-          <View style={s.actions}>
-            <TouchableOpacity
-              style={s.cancelBtn}
-              onPress={() => navigation.goBack()}
-              activeOpacity={0.7}
-              disabled={loading}
-            >
-              <Text style={s.cancelBtnText}>Cancel</Text>
+            <AuthField
+              label={tr.authPw2Lbl}
+              icon="lock-closed-outline"
+              value={confirmPassword}
+              onChangeText={(v) => { setConfirmPassword(v); clear('confirmPassword'); }}
+              placeholder={tr.authPw2Ph}
+              autoCapitalize="none"
+              secure={!showCPw}
+              error={fieldErrors.confirmPassword ?? (pwMismatch ? "Passwords don't match" : undefined)}
+              rightSlot={
+                <TouchableOpacity onPress={() => setShowCPw(v => !v)} activeOpacity={0.7} style={s.eye}>
+                  <Ionicons name={showCPw ? 'eye-off-outline' : 'eye-outline'} size={19} color="#6B7280" />
+                </TouchableOpacity>
+              }
+            />
+
+            {/* Terms */}
+            <TouchableOpacity style={s.termsRow} onPress={() => { setAgreed(v => !v); clear('terms'); }} activeOpacity={0.7}>
+              <View style={[s.checkbox, agreed && s.checkboxActive, !!fieldErrors.terms && { borderColor: '#DC2626' }]}>
+                {agreed && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
+              </View>
+              <Text style={s.termsText}>
+                {tr.authAgree}{' '}
+                <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Terms</Text>
+                {' '}{tr.authAnd}{' '}
+                <Text style={s.termsLink} onPress={() => navigation.navigate('PrivacyNotice')}>Privacy Policy</Text>.
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.saveBtn, loading && { opacity: 0.55 }]}
-              onPress={handleRegister}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
+            {fieldErrors.terms ? <Text style={s.termsError}>{fieldErrors.terms}</Text> : null}
+
+            <TouchableOpacity style={[s.darkBtn, loading && { opacity: 0.6 }]} onPress={handleRegister} disabled={loading} activeOpacity={0.85}>
               {loading
                 ? <Ionicons name="hourglass-outline" size={18} color="#FFFFFF" />
-                : <Text style={s.saveBtnText}>Create account</Text>
-              }
+                : <Text style={s.darkBtnText}>{tr.welCreate}</Text>}
             </TouchableOpacity>
-          </View>
 
-          {/* Login link */}
-          <View style={s.loginRow}>
-            <Text style={s.loginText}>Already have an account?  </Text>
-            <TouchableOpacity onPress={() => navigation.navigateDeprecated('Login')} activeOpacity={0.7}>
-              <Text style={s.loginLink}>Sign in</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={s.switchRow}>
+              <Text style={s.switchText}>{tr.authHaveAccount}</Text>
+              <TouchableOpacity onPress={() => navigation.navigateDeprecated('Login')} activeOpacity={0.7}>
+                <Text style={s.switchLink}>{tr.welLogin}</Text>
+              </TouchableOpacity>
+            </View>
 
-          <Text style={s.noteText}>
-            Your information stays private and is used only for farm recommendations.
-          </Text>
+            <View style={s.noteRow}>
+              <Ionicons name="lock-closed-outline" size={13} color="#6B7280" />
+              <Text style={s.noteText}>{tr.welPrivate}</Text>
+            </View>
+          </View>
 
         </ScrollView>
       </KeyboardAvoidingView>
-
-    </SafeAreaView>
-  );
-};
-
-/* ── Plain label-above input (no floating label gimmick, no decorative icons) ── */
-interface FieldProps {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  placeholder?: string;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
-  secure?: boolean;
-  autoCapitalize?: 'none' | 'words' | 'sentences';
-  rightSlot?: React.ReactNode;
-  error?: string;
-}
-
-const Field: React.FC<FieldProps> = ({
-  label, value, onChangeText, placeholder,
-  keyboardType, secure, autoCapitalize, rightSlot, error,
-}) => {
-  const [focused, setFocused] = useState(false);
-  return (
-    <View style={f.wrap}>
-      <Text style={f.label}>{label}</Text>
-      <View style={[f.box, focused && f.boxFocused, error && f.boxError]}>
-        <RNTextInput
-          style={f.input}
-          placeholder={placeholder}
-          placeholderTextColor="#D1D5DB"
-          value={value}
-          onChangeText={onChangeText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          keyboardType={keyboardType ?? 'default'}
-          secureTextEntry={secure}
-          autoCapitalize={autoCapitalize ?? 'sentences'}
-          autoCorrect={false}
-        />
-        {rightSlot}
-      </View>
-      {error && <Text style={f.errorText}>{error}</Text>}
     </View>
   );
 };
 
-const f = StyleSheet.create({
-  wrap:  { marginBottom: 14 },
-  label: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  box: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12,
-    paddingHorizontal: 14, minHeight: 50, backgroundColor: '#FFFFFF',
-  },
-  boxFocused: { borderColor: '#059669' },
-  boxError:   { borderColor: '#DC2626' },
-  input:      { flex: 1, fontSize: 14, color: '#111827', paddingVertical: 12 },
-  errorText:  { fontSize: 11, color: '#DC2626', marginTop: 4 },
-});
+const INK = '#111827';
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root:   { flex: 1, backgroundColor: '#F1F2F1' },
+  scroll: { flexGrow: 1, paddingBottom: 32 },
+  form:   { paddingHorizontal: 16 },
+  eye:    { padding: 6 },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  backBtn:     { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FDECEC', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14 },
+  errorText:   { flex: 1, fontSize: 13, color: '#B91C1C', fontFamily: 'Inter_600SemiBold' },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
+  darkBtn:     { height: 56, borderRadius: 20, backgroundColor: INK, justifyContent: 'center', alignItems: 'center', marginTop: 6 },
+  darkBtnText: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
 
-  /* Subtle spacing between field groups — replaces the old per-section titles */
-  groupGap: { height: 12 },
+  switchRow:  { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 20, gap: 6 },
+  switchText: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  switchLink: { fontSize: 14, color: INK, fontFamily: 'Inter_700Bold', textDecorationLine: 'underline' },
 
-  eye: { padding: 4 },
-
-  /* Password strength */
-  strengthWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: -8, marginBottom: 16 },
+  strengthWrap: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: -4, marginBottom: 16, paddingHorizontal: 4 },
   strengthBars: { flex: 1, flexDirection: 'row', gap: 4 },
-  strengthBar:  { flex: 1, height: 3, borderRadius: 2 },
-  strengthText: { fontSize: 11, fontWeight: '700', minWidth: 80, textAlign: 'right' },
+  strengthBar:  { flex: 1, height: 6, borderRadius: 3 },
+  strengthText: { fontSize: 12, minWidth: 80, textAlign: 'right', fontFamily: 'Inter_700Bold' },
 
-  /* Terms */
-  termsRow: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    marginTop: 22, marginBottom: 18,
-  },
-  checkbox: {
-    width: 20, height: 20, borderRadius: 5,
-    borderWidth: 1.5, borderColor: '#D1D5DB',
-    justifyContent: 'center', alignItems: 'center',
-    flexShrink: 0, marginTop: 1, backgroundColor: '#FFFFFF',
-  },
-  checkboxActive: { backgroundColor: '#059669', borderColor: '#059669' },
-  termsText:      { flex: 1, fontSize: 13, color: '#374151', lineHeight: 19 },
-  termsLink:      { color: '#059669', fontWeight: '600' },
-  termsError:     { fontSize: 12, color: '#DC2626', marginTop: 4, marginLeft: 30 },
+  termsRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, marginBottom: 16, paddingHorizontal: 2 },
+  checkbox:       { width: 26, height: 26, borderRadius: 8, borderWidth: 1.5, borderColor: '#9CA3AF', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' },
+  checkboxActive: { backgroundColor: INK, borderColor: INK },
+  termsText:      { flex: 1, fontSize: 14, color: '#374151', lineHeight: 20, fontFamily: 'Inter_500Medium' },
+  termsLink:      { color: INK, fontFamily: 'Inter_700Bold', textDecorationLine: 'underline' },
+  termsError:     { fontSize: 12, color: '#DC2626', marginTop: -8, marginBottom: 12, marginLeft: 40 },
 
-  /* Actions — primary/ghost pair, same as modal Save/Cancel */
-  actions:  { flexDirection: 'row', gap: 10, marginBottom: 24 },
-  cancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  saveBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
-
-  /* Login link */
-  loginRow:  { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
-  loginText: { fontSize: 13, color: '#6B7280' },
-  loginLink: { fontSize: 13, fontWeight: '700', color: '#059669' },
-
-  noteText: {
-    fontSize: 11, color: '#9CA3AF',
-    textAlign: 'center', lineHeight: 16, paddingHorizontal: 12,
-  },
-
-  errorBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1, borderColor: '#FECACA',
-    borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 14,
-  },
-  errorText: { flex: 1, fontSize: 13, color: '#B91C1C', fontWeight: '600' },
-
+  noteRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18 },
+  noteText: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
 });
