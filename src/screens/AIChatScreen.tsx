@@ -27,21 +27,6 @@ interface HistoryItem {
   preview: string;
 }
 
-const HISTORY_ITEMS = {
-  today: [
-    { id: 'h1', title: 'Fertilizer Schedule', preview: 'How much fertilizer should I apply?' },
-    { id: 'h2', title: 'Pest Control Tips',   preview: 'How do I control pests?' },
-  ],
-  yesterday: [
-    { id: 'h3', title: 'Harvest Timing',    preview: 'When is the right time to harvest?' },
-    { id: 'h4', title: 'Water Level Guide', preview: 'What water level should I keep?' },
-  ],
-  lastWeek: [
-    { id: 'h5', title: 'Flood Risk Tips',   preview: 'What if heavy rain is expected?' },
-    { id: 'h6', title: 'NSIC Rc160 Guide',  preview: 'Tell me about the NSIC Rc160 variety' },
-  ],
-};
-
 // Icon + translation key per suggestion; labels resolved from `tr` at render.
 const SUGGESTION_META: { key: 'aiSuggFertilizer' | 'aiSuggHarvest' | 'aiSuggPest' | 'aiSuggWater' | 'aiSuggRain'; icon: IoniconsName }[] = [
   { key: 'aiSuggFertilizer', icon: 'flask-outline' },
@@ -196,7 +181,7 @@ function TypingDots() {
   return (
     <View style={s.aiRow}>
       <View style={s.aiAvatar}>
-        <Ionicons name="sparkles" size={13} color="#fff" />
+        <Ionicons name="sparkles" size={14} color="#34D399" />
       </View>
       <View style={{ flexDirection: 'row', gap: 5, paddingVertical: 10 }}>
         {dots.map((dot, i) => (
@@ -209,18 +194,12 @@ function TypingDots() {
 
 export const AIChatScreen: React.FC = () => {
   const { bottom: bottomInset } = useSafeAreaInsets();
-  // Floating pill tab bar: bottom = max(insets.bottom, 8) + 12, pill height ≈ 62px, + 16px margin
-  const tabClearance = Math.max(bottomInset, 8) + 12 + 62 + 16;
+  // Floating tab bar: bottom = max(insets.bottom, 8) + 10, bar 72 px tall, + 12 px gap
+  const tabClearance = Math.max(bottomInset, 8) + 10 + 72 + 12;
 
   const language = useLanguageStore(s => s.language);
   const selectedFarmId = useAppStore(s => s.selectedFarmId);
   const tr = useTranslation();
-
-  const HISTORY_GROUPS = [
-    { group: tr.aiToday,    items: HISTORY_ITEMS.today },
-    { group: tr.aiYesterday,items: HISTORY_ITEMS.yesterday },
-    { group: tr.aiLastWeek, items: HISTORY_ITEMS.lastWeek },
-  ];
 
   // Suggestion chips in the current language — the label doubles as the message
   // sent to the AI, which now replies in the user's language.
@@ -300,7 +279,7 @@ export const AIChatScreen: React.FC = () => {
         {/* ── Header ─────────────────────────────────────────── */}
         <View style={s.header}>
           <TouchableOpacity style={s.headerIconBtn} onPress={openDrawer} activeOpacity={0.7}>
-            <Ionicons name="menu-outline" size={24} color="#374151" />
+            <Ionicons name="menu" size={22} color="#111827" />
           </TouchableOpacity>
 
           <View style={s.headerCenter}>
@@ -309,7 +288,7 @@ export const AIChatScreen: React.FC = () => {
           </View>
 
           <TouchableOpacity style={s.headerIconBtn} onPress={startNewChat} activeOpacity={0.7}>
-            <Ionicons name="create-outline" size={22} color="#374151" />
+            <Ionicons name="create-outline" size={21} color="#111827" />
           </TouchableOpacity>
         </View>
 
@@ -330,7 +309,7 @@ export const AIChatScreen: React.FC = () => {
             {isEmpty && (
               <View style={s.emptyWrap}>
                 <View style={s.emptyAvatar}>
-                  <Ionicons name="sparkles" size={26} color="#fff" />
+                  <Ionicons name="sparkles" size={30} color="#34D399" />
                 </View>
                 <Text style={s.emptyTitle}>{tr.aiHeaderTitle}</Text>
                 <Text style={s.emptyDesc}>
@@ -345,8 +324,9 @@ export const AIChatScreen: React.FC = () => {
                       onPress={() => sendMessage(label)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name={icon} size={15} color="#9CA3AF" />
+                      <View style={s.suggestionIcon}><Ionicons name={icon} size={17} color="#059669" /></View>
                       <Text style={s.suggestionText}>{label}</Text>
+                      <Ionicons name="arrow-forward" size={15} color="#9CA3AF" style={{ transform: [{ rotate: '-45deg' }] }} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -365,9 +345,9 @@ export const AIChatScreen: React.FC = () => {
               ) : (
                 <View key={msg.id} style={s.aiRow}>
                   <View style={s.aiAvatar}>
-                    <Ionicons name="sparkles" size={13} color="#fff" />
+                    <Ionicons name="sparkles" size={14} color="#34D399" />
                   </View>
-                  <View style={s.aiContent}>
+                  <View style={[s.aiContent, s.aiBubble]}>
                     <MarkdownMessage text={msg.text} />
                     <Text style={s.aiTime}>{msg.time}</Text>
                   </View>
@@ -421,7 +401,7 @@ export const AIChatScreen: React.FC = () => {
           <View style={s.drawerHeader}>
             <Text style={s.drawerTitle}>{tr.aiHistory}</Text>
             <TouchableOpacity style={s.drawerCloseBtn} onPress={closeDrawer} activeOpacity={0.7}>
-              <Ionicons name="close" size={20} color="#374151" />
+              <Ionicons name="close" size={20} color="#111827" />
             </TouchableOpacity>
           </View>
 
@@ -431,26 +411,11 @@ export const AIChatScreen: React.FC = () => {
             <Text style={s.newChatText}>{tr.aiNewChat}</Text>
           </TouchableOpacity>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {HISTORY_GROUPS.map(({ group, items }) => (
-              <View key={group} style={s.historyGroup}>
-                <Text style={s.historyGroupLabel}>{group}</Text>
-                {items.map(item => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={s.historyItem}
-                    onPress={closeDrawer}
-                    activeOpacity={0.65}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.historyItemTitle} numberOfLines={1}>{item.title}</Text>
-                      <Text style={s.historyItemPreview} numberOfLines={1}>{item.preview}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </ScrollView>
+          {/* Chats are not saved yet: say so instead of listing past chats */}
+          <View style={s.historyEmpty}>
+            <View style={s.historyEmptyIcon}><Ionicons name="chatbubbles-outline" size={22} color="#111827" /></View>
+            <Text style={s.historyItemPreview}>{tr.aiNoHistory}</Text>
+          </View>
         </SafeAreaView>
       </Animated.View>
     </View>
@@ -458,99 +423,60 @@ export const AIChatScreen: React.FC = () => {
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
 
   /* Header */
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 8, paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  headerIconBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 6 },
+  headerIconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   headerCenter:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerDot:     { width: 7, height: 7, borderRadius: 4, backgroundColor: '#059669' },
-  headerModel:   { fontSize: 15, fontWeight: '600', color: '#111827' },
+  headerModel: { fontSize: 16, color: '#111827', fontFamily: 'Inter_700Bold' },
 
   /* Chat */
-  messageContent:      { padding: 16, gap: 20, paddingBottom: 12 },
+  messageContent: { padding: 16, gap: 18, paddingBottom: 12 },
   messageContentEmpty: { flexGrow: 1 },
 
   /* Empty state */
-  emptyWrap: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingTop: 48, paddingHorizontal: 4,
-  },
-  emptyAvatar: {
-    width: 56, height: 56, borderRadius: 9999,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 14,
-  },
-  emptyTitle: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  emptyDesc:  { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 24, paddingHorizontal: 2 },
+  emptyAvatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 24, color: '#111827', marginBottom: 8, letterSpacing: -0.4, textAlign: 'center', fontFamily: 'Inter_700Bold' },
+  emptyDesc: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21, marginBottom: 24, paddingHorizontal: 12, fontFamily: 'Inter_500Medium' },
 
   /* Suggestions — compact ghost rows, no tinted icon boxes */
-  suggestionsBlock: { width: '100%', gap: 4 },
-  suggestionChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 14, paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  suggestionText: { flex: 1, fontSize: 14, color: '#374151', fontWeight: '500' },
+  suggestionsBlock: { width: '100%', gap: 10 },
+  suggestionChip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  suggestionText: { flex: 1, fontSize: 14, color: '#111827', lineHeight: 19, fontFamily: 'Inter_600SemiBold' },
 
   /* AI row */
   aiRow:    { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  aiAvatar: {
-    width: 28, height: 28, borderRadius: 9999, flexShrink: 0,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center', marginTop: 2,
-  },
+  aiAvatar: { width: 32, height: 32, borderRadius: 16, flexShrink: 0, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', marginTop: 2 },
   aiContent: { flex: 1, paddingTop: 2 },
-  aiText:    { fontSize: 13, color: '#374151', lineHeight: 20 },
-  aiTime:    { fontSize: 11, color: '#9CA3AF', marginTop: 8 },
+  aiText: { fontSize: 14, color: '#1F2937', lineHeight: 21 },
+  aiTime: { fontSize: 11, color: '#9CA3AF', marginTop: 8 },
   typingDot: { width: 7, height: 7, borderRadius: 9999, backgroundColor: '#9CA3AF' },
 
+  aiBubble:  { backgroundColor: '#FFFFFF', borderRadius: 20, borderTopLeftRadius: 6, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  suggestionIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
+
   /* Markdown renderer */
-  mdH2:       { fontSize: 13, fontWeight: '700', color: '#111827' },
+  mdH2: { fontSize: 14, color: '#111827', fontFamily: 'Inter_700Bold' },
   mdBold:     { fontWeight: '600', color: '#111827' },
   mdCode:     { fontFamily: 'monospace', fontSize: 11, backgroundColor: '#F3F4F6', color: '#374151', paddingHorizontal: 3, borderRadius: 3 },
   mdBulletRow:{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   mdDot:      { width: 4, height: 4, borderRadius: 9999, backgroundColor: '#6B7280', marginTop: 7, flexShrink: 0 },
-  mdNum:      { fontSize: 13, fontWeight: '500', color: '#6B7280', minWidth: 18, flexShrink: 0 },
+  mdNum: { fontSize: 14, color: '#6B7280', minWidth: 18, flexShrink: 0, fontFamily: 'Inter_600SemiBold' },
 
   /* User row */
   userRow:   { alignItems: 'flex-end' },
-  userBubble: {
-    maxWidth: '78%',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 18, borderBottomRightRadius: 4,
-    paddingHorizontal: 14, paddingVertical: 11,
-  },
-  userText: { fontSize: 15, color: '#111827', lineHeight: 23 },
+  userBubble: { maxWidth: '80%', backgroundColor: '#111827', borderRadius: 20, borderBottomRightRadius: 6, paddingHorizontal: 16, paddingVertical: 12 },
+  userText: { fontSize: 15, color: '#FFFFFF', lineHeight: 22 },
   userTime: { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
 
   /* Input bar */
-  inputBar: {
-    paddingHorizontal: 14, paddingTop: 8,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1, borderTopColor: '#F3F4F6',
-  },
-  inputWrap: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
-    backgroundColor: '#F9FAFB', borderRadius: 22,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    paddingLeft: 16, paddingRight: 6, paddingVertical: 6,
-    minHeight: 48,
-  },
-  input: {
-    flex: 1, fontSize: 15, color: '#111827',
-    maxHeight: 120, paddingTop: 6, paddingBottom: 6,
-  },
-  sendBtn: {
-    width: 36, height: 36, borderRadius: 9999,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center', flexShrink: 0,
-  },
+  inputBar: { paddingHorizontal: 16, paddingTop: 8, backgroundColor: 'transparent' },
+  inputWrap: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 26, paddingLeft: 18, paddingRight: 6, paddingVertical: 6, minHeight: 54, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  input: { flex: 1, fontSize: 15, color: '#111827', maxHeight: 120, paddingTop: 9, paddingBottom: 9, fontFamily: 'Inter_500Medium' },
+  sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
   sendBtnOff: { backgroundColor: '#D1D5DB' },
 
   /* Drawer backdrop */
@@ -560,34 +486,18 @@ const s = StyleSheet.create({
   },
 
   /* Drawer */
-  drawer: {
-    position: 'absolute', left: 0, top: 0, bottom: 0,
-    width: 280, backgroundColor: '#FFFFFF',
-    borderRightWidth: 1, borderRightColor: '#E5E7EB',
-    zIndex: 30,
-  },
-  drawerHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
-  },
-  drawerTitle:    { fontSize: 16, fontWeight: '700', color: '#111827' },
-  drawerCloseBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
+  drawer: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 290, backgroundColor: '#FFFFFF', borderTopRightRadius: 28, borderBottomRightRadius: 28, zIndex: 30, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  drawerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14 },
+  drawerTitle: { fontSize: 20, color: '#111827', fontFamily: 'Inter_700Bold' },
+  drawerCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
 
-  newChatBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#059669', borderRadius: 10,
-    paddingVertical: 10, paddingHorizontal: 16,
-    margin: 14,
-  },
-  newChatText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
+  newChatBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#111827', borderRadius: 18, height: 52, marginHorizontal: 16, marginTop: 4 },
+  newChatText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+
+  /* No saved chats yet */
+  historyEmpty:     { alignItems: 'center', gap: 10, paddingHorizontal: 24, paddingTop: 28 },
+  historyEmptyIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
 
   /* History list — sentence-case heading, no decorative icon boxes */
-  historyGroup:      { paddingHorizontal: 14, marginBottom: 4 },
-  historyGroupLabel: { fontSize: 13, fontWeight: '700', color: '#111827', marginBottom: 4, marginTop: 12 },
-  historyItem: {
-    paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8,
-  },
-  historyItemTitle:   { fontSize: 13, fontWeight: '600', color: '#111827' },
-  historyItemPreview: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
+  historyItemPreview: { fontSize: 13, color: '#6B7280', lineHeight: 19, textAlign: 'center' },
 });

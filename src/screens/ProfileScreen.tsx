@@ -32,6 +32,9 @@ type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 const CONTENT_MODALS = ['privacy', 'dataManagement', 'help', 'userGuide', 'about', 'terms'];
 
 /** One heading + paragraph block, the shared shape of every content sheet. */
+/** "MY FARMS" -> "My farms": card titles read like the rest of the app */
+const sentence = (t: string) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+
 const InfoBlock: React.FC<{ heading: string; body: string; large?: boolean }> = ({ heading, body, large }) => (
   <View style={s.infoBlock}>
     <Text style={[s.infoHeading, large && { fontSize: 16 }]}>{heading}</Text>
@@ -228,59 +231,57 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
       {/* Header */}
       <View style={s.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <View style={s.titleIcon}>
-            <Ionicons name="person-outline" size={16} color="#FFFFFF" />
-          </View>
-          <View>
-            <Text style={s.headerTitle}>{tr.profileTitle}</Text>
-            <Text style={s.headerSub} numberOfLines={1}>{displayName}</Text>
-          </View>
-        </View>
-        <NotificationBell color="#059669" size={22} />
+        <Text style={[s.headerTitle, { flex: 1 }, T && { fontSize: 24 }]}>{tr.profileTitle}</Text>
+        <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Profile card — clean, no role chip, no decorative tinted boxes */}
+        {/* Who, where, and the farms in three tiles */}
         <View style={s.profileCard}>
           <View style={s.profileRow}>
             <View style={s.avatar}>
               <Text style={s.avatarText}>{initials}</Text>
             </View>
             <View style={s.profileInfo}>
-              <Text style={[s.profileName, T && { fontSize: 19 }]} numberOfLines={1}>{displayName}</Text>
+              <Text style={[s.profileName, T && { fontSize: 21 }]} numberOfLines={1}>{displayName}</Text>
               <Text style={[s.profileEmail, T && { fontSize: 14 }]} numberOfLines={1}>{displayEmail}</Text>
             </View>
             <TouchableOpacity style={s.editIconBtn} onPress={openEdit} activeOpacity={0.7}>
-              <Ionicons name="pencil-outline" size={16} color="#374151" />
+              <Ionicons name="pencil" size={16} color="#111827" />
             </TouchableOpacity>
+          </View>
+          <View style={s.placeRow}>
+            <Ionicons name="location-sharp" size={15} color="#111827" />
+            <Text style={[s.placeText, T && { fontSize: 15 }]} numberOfLines={2}>
+              {[displayBaran, displayMunic, displayProv].filter(Boolean).join(', ') || tr.profileLocation}
+            </Text>
+          </View>
+          <View style={s.tiles}>
+            {[
+              { lbl: sentence(tr.profileFarms), val: String(farmList.length) },
+              { lbl: tr.profileTotalArea, val: `${farmList.reduce((a: number, f: any) => a + (Number(f.area_hectares ?? f.areaHectares) || 0), 0).toFixed(1)} ha` },
+              { lbl: tr.profileEditBarangay, val: displayBaran || '—' },
+            ].map(t => (
+              <View key={t.lbl} style={s.tile}>
+                <Text style={s.tileLbl} numberOfLines={1}>{t.lbl}</Text>
+                <Text style={[s.tileVal, T && { fontSize: 19 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{t.val}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* Location — internal title, hairline rows, no tinted icons */}
-        <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileLocation}</Text>
-          {[
-            { label: tr.profileEditBarangay,     value: displayBaran  || '—' },
-            { label: tr.profileEditMunicipality, value: displayMunic  || '—' },
-            { label: tr.profileEditProvince,     value: displayProv   || '—' },
-          ].map((row, i, arr) => (
-            <View key={row.label} style={[s.simpleRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-              <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
-              <Text style={[s.rowValue, T && { fontSize: 15 }]} numberOfLines={1}>{row.value}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Farms — real farms with mock fallback, clean rows */}
-        <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileFarms}</Text>
+        <View style={[s.card, { marginTop: 12 }]}>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{sentence(tr.profileFarms)}</Text>
           {farmList.map((farm: any, i: number, arr: any[]) => {
             const area = farm.area_hectares ?? farm.areaHectares ?? null;
             const location = [farm.barangay, farm.municipality].filter(Boolean).join(', ') || '—';
             return (
               <View key={farm.id ?? i} style={[s.simpleRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                <View style={[s.iconTile, { backgroundColor: '#E8F5EF' }]}>
+                  <Ionicons name="leaf" size={18} color="#059669" />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.farmName, T && { fontSize: 16 }]} numberOfLines={1}>{farm.name}</Text>
                   <Text style={[s.farmMeta, T && { fontSize: 14 }]} numberOfLines={1}>
@@ -296,10 +297,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
         </View>
 
         {/* Notifications + Accessibility — combined card with toggle rows */}
-        <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileSettings}</Text>
+        <View style={[s.card, { marginTop: 12 }]}>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{sentence(tr.profileSettings)}</Text>
 
           <View style={s.toggleRow}>
+            <View style={s.iconTile}><Ionicons name="notifications-outline" size={18} color="#111827" /></View>
             <View style={{ flex: 1 }}>
               <Text style={[s.toggleTitle, T && { fontSize: 16 }]}>{tr.profilePushNotif}</Text>
               <Text style={[s.toggleDesc, T && { fontSize: 14, lineHeight: 19 }]}>{tr.profilePushNotifDesc}</Text>
@@ -307,12 +309,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             <Switch
               value={notificationsEnabled}
               onValueChange={setNotificationsEnabled}
-              trackColor={{ false: '#E5E7EB', true: '#059669' }}
+              trackColor={{ false: '#D1D5DB', true: '#059669' }}
               thumbColor="#FFFFFF"
             />
           </View>
 
           <View style={s.toggleRow}>
+            <View style={s.iconTile}><Ionicons name="rainy-outline" size={18} color="#111827" /></View>
             <View style={{ flex: 1 }}>
               <Text style={[s.toggleTitle, T && { fontSize: 16 }]}>{tr.profileWeather}</Text>
               <Text style={[s.toggleDesc, T && { fontSize: 14, lineHeight: 19 }]}>{tr.profileWeatherDesc}</Text>
@@ -320,12 +323,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             <Switch
               value={weatherAlertsEnabled}
               onValueChange={setWeatherAlertsEnabled}
-              trackColor={{ false: '#E5E7EB', true: '#059669' }}
+              trackColor={{ false: '#D1D5DB', true: '#059669' }}
               thumbColor="#FFFFFF"
             />
           </View>
 
           <View style={[s.toggleRow, { borderBottomWidth: 0 }]}>
+            <View style={s.iconTile}><Ionicons name="text-outline" size={18} color="#111827" /></View>
             <View style={{ flex: 1 }}>
               <Text style={[s.toggleTitle, T && { fontSize: 16 }]}>{tr.profileLargeText}</Text>
               <Text style={[s.toggleDesc, T && { fontSize: 14, lineHeight: 19 }]}>{tr.profileLargeTextDesc}</Text>
@@ -333,15 +337,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             <Switch
               value={isLargeText}
               onValueChange={toggleLargeText}
-              trackColor={{ false: '#E5E7EB', true: '#059669' }}
+              trackColor={{ false: '#D1D5DB', true: '#059669' }}
               thumbColor="#FFFFFF"
             />
           </View>
         </View>
 
         {/* Preferences */}
-        <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profilePrefs}</Text>
+        <View style={[s.card, { marginTop: 12 }]}>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{sentence(tr.profilePrefs)}</Text>
           {PREFERENCES.map((item, i, arr) => (
             <TouchableOpacity
               key={item.id}
@@ -349,19 +353,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
               onPress={() => { setDataStatus(null); setActiveModal(item.id); }}
               activeOpacity={0.65}
             >
-              <Ionicons name={item.iconName} size={17} color="#6B7280" />
+              <View style={s.iconTile}><Ionicons name={item.iconName} size={18} color="#111827" /></View>
               <Text style={[s.menuLabel, T && { fontSize: 16 }]}>{item.label}</Text>
               {item.id === 'language' && (
                 <Text style={s.menuValue}>{LANGUAGE_LABELS[language]}</Text>
               )}
-              <Ionicons name="chevron-forward" size={15} color="#D1D5DB" />
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Support */}
-        <View style={[s.card, { marginTop: 16 }]}>
-          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{tr.profileSupport}</Text>
+        <View style={[s.card, { marginTop: 12 }]}>
+          <Text style={[s.cardTitle, T && { fontSize: 17 }]}>{sentence(tr.profileSupport)}</Text>
           {SUPPORT.map((item, i, arr) => (
             <TouchableOpacity
               key={item.id}
@@ -369,9 +373,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
               onPress={() => { setDataStatus(null); setActiveModal(item.id); }}
               activeOpacity={0.65}
             >
-              <Ionicons name={item.iconName} size={17} color="#6B7280" />
+              <View style={s.iconTile}><Ionicons name={item.iconName} size={18} color="#111827" /></View>
               <Text style={[s.menuLabel, T && { fontSize: 16 }]}>{item.label}</Text>
-              <Ionicons name="chevron-forward" size={15} color="#D1D5DB" />
+              <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
             </TouchableOpacity>
           ))}
         </View>
@@ -649,129 +653,98 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 };
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F9F8' },
+  container: { flex: 1, backgroundColor: '#F1F2F1' },
   veil:      { flex: 1, backgroundColor: 'rgba(17,24,39,0.55)', justifyContent: 'center', alignItems: 'center', padding: 32 },
   veilCard:  { width: '100%', maxWidth: 340, backgroundColor: '#FFFFFF', borderRadius: 20, paddingVertical: 28, paddingHorizontal: 24, alignItems: 'center', gap: 12 },
   veilTitle: { fontSize: 17, fontWeight: '700', color: '#111827', textAlign: 'center' },
   veilBody:  { fontSize: 14, color: '#6B7280', lineHeight: 20, textAlign: 'center' },
-  scroll:    { paddingHorizontal: 20, paddingBottom: 48 },
+  scroll: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 48 },
 
   /* Header */
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
-  },
-  titleIcon:   { width: 34, height: 34, borderRadius: 17, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  headerSub:   { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4 },
+  headerTitle: { fontSize: 21, color: '#111827', letterSpacing: -0.4, fontFamily: 'Inter_700Bold' },
 
   /* Profile card */
-  profileCard: {
-    marginTop: 20, backgroundColor: '#FFFFFF',
-    borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16,
-  },
-  profileRow:  { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar:      { width: 56, height: 56, borderRadius: 28, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-  avatarText:  { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
+  profileCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  profileRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
+  avatarText: { fontSize: 22, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
   profileInfo: { flex: 1 },
-  profileName: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  profileEmail:{ fontSize: 12, color: '#6B7280' },
-  editIconBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
+  profileName: { fontSize: 19, color: '#111827', marginBottom: 2, letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  profileEmail: { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  editIconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
 
   /* Card */
-  card: {
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB', padding: 16,
-  },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 4 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingHorizontal: 20, paddingVertical: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  cardTitle: { fontSize: 14, color: '#111827', marginBottom: 4, fontFamily: 'Inter_600SemiBold' },
 
   /* Simple data rows */
-  simpleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
+  simpleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
   rowLabel:  { fontSize: 13, color: '#6B7280', flex: 1 },
   rowValue:  { fontSize: 13, fontWeight: '600', color: '#111827', flexShrink: 1 },
-  farmName:  { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 2 },
-  farmMeta:  { fontSize: 12, color: '#9CA3AF' },
+  farmName: { fontSize: 15, color: '#111827', marginBottom: 2, fontFamily: 'Inter_600SemiBold' },
+  farmMeta: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
   emptyHint: { fontSize: 12, color: '#9CA3AF', paddingVertical: 16, textAlign: 'center' },
 
+  headerBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  iconTile:  { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
+  placeRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
+  placeText: { flex: 1, fontSize: 13, color: '#111827', fontFamily: 'Inter_500Medium' },
+  tiles:     { flexDirection: 'row', gap: 8, marginTop: 14 },
+  tile:      { flex: 1, backgroundColor: '#F1F2F1', borderRadius: 18, padding: 12 },
+  tileLbl:   { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  tileVal:   { fontSize: 17, color: '#111827', marginTop: 6, fontFamily: 'Inter_700Bold' },
+
   /* Toggle rows */
-  toggleRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  toggleTitle: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 2 },
-  toggleDesc:  { fontSize: 12, color: '#9CA3AF', lineHeight: 16 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  toggleTitle: { fontSize: 15, color: '#111827', marginBottom: 2, fontFamily: 'Inter_600SemiBold' },
+  toggleDesc: { fontSize: 12, color: '#6B7280', lineHeight: 17 },
 
   /* Menu rows */
-  menuRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  menuLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: '#111827' },
-  menuValue: { fontSize: 13, color: '#9CA3AF', marginRight: 2 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  menuLabel: { flex: 1, fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  menuValue: { fontSize: 13, color: '#6B7280', marginRight: 2, fontFamily: 'Inter_500Medium' },
 
   /* Version */
   versionCard: {
     alignItems: 'center', paddingVertical: 22, marginTop: 24, gap: 4,
   },
-  versionNum:  { fontSize: 11, color: '#9CA3AF' },
+  versionNum: { fontSize: 12, color: '#6B7280' },
 
   /* Logout — ghost style */
-  logoutBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: 50, marginTop: 4,
-    borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  logoutBtnText: { fontSize: 14, fontWeight: '600', color: '#DC2626' },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, marginTop: 4, borderRadius: 18, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  logoutBtnText: { fontSize: 15, color: '#DC2626', fontFamily: 'Inter_600SemiBold' },
 
   /* Modal */
   mOverlay:  { flex: 1, justifyContent: 'flex-end' },
   mBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-  mSheet:    { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 10, maxHeight: '85%' },
-  mHandle:   { width: 36, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 18 },
+  mSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 40, paddingTop: 10, maxHeight: '85%' },
+  mHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#E5E7EB', alignSelf: 'center', marginBottom: 18 },
 
   mHeader:    { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18 },
-  mTitle:     { flex: 1, fontSize: 16, fontWeight: '700', color: '#111827' },
-  mClose:     { width: 30, height: 30, borderRadius: 9999, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  mTitle: { flex: 1, fontSize: 20, color: '#111827', letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  mClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
 
-  mFieldWrap:  { marginBottom: 14 },
-  mFieldLabel: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  mFieldHint:  { fontSize: 11, color: '#9CA3AF', marginTop: 4 },
-  mInput:      { flexDirection: 'row', alignItems: 'center', gap: 10, height: 50, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
-  mInputText:  { flex: 1, fontSize: 14, color: '#111827' },
+  mFieldWrap: { marginBottom: 16 },
+  mFieldLabel: { fontSize: 14, color: '#111827', marginBottom: 8, fontFamily: 'Inter_700Bold' },
+  mFieldHint: { fontSize: 12, color: '#6B7280', marginTop: 6 },
+  mInput: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 52, borderRadius: 16, paddingHorizontal: 16, backgroundColor: '#F1F2F1' },
+  mInputText: { flex: 1, fontSize: 15, color: '#111827', fontFamily: 'Inter_500Medium' },
 
   mBodyText:   { fontSize: 13, color: '#6B7280', lineHeight: 19, marginBottom: 16 },
   mChipGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  mSelChip:    { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
-  mSelChipActive:     { borderColor: '#059669', backgroundColor: '#ECFDF5' },
-  mSelChipText:       { fontSize: 13, fontWeight: '500', color: '#6B7280' },
-  mSelChipTextActive: { color: '#059669', fontWeight: '700' },
+  mSelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 46, paddingHorizontal: 16, borderRadius: 14, backgroundColor: '#F1F2F1' },
+  mSelChipActive: { backgroundColor: '#111827' },
+  mSelChipText: { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  mSelChipTextActive: { color: '#FFFFFF' },
 
   mNote: { fontSize: 11, color: '#9CA3AF', marginBottom: 14, marginTop: -4, fontStyle: 'italic' },
 
   mActionsRow: { flexDirection: 'row', gap: 10, marginTop: 4, marginBottom: 8 },
-  mCancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  mCancelBtnText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  mSaveBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, height: 50, borderRadius: 12, backgroundColor: '#059669',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  mSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  mCancelBtn: { flex: 1, height: 54, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F2F1' },
+  mCancelBtnText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  mSaveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: '#111827' },
+  mSaveBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 
   /* ── Content sheets (Privacy / Data / Help / Guide / About / Terms) ────── */
   mScroll: { marginBottom: 14 },
@@ -782,13 +755,7 @@ const s = StyleSheet.create({
   infoBody:    { fontSize: 13, color: '#6B7280', lineHeight: 20 },
 
   /* Data management actions */
-  dataAction: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#F9FAFB', borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    paddingVertical: 14, paddingHorizontal: 14, marginBottom: 10,
-    minHeight: 60,
-  },
+  dataAction: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F1F2F1', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 14, marginBottom: 10, minHeight: 60 },
   dataActionTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 2 },
   dataActionDesc:  { fontSize: 12, color: '#9CA3AF', lineHeight: 17 },
   dataStatus:      { fontSize: 12.5, color: '#059669', fontWeight: '600', marginTop: 4, marginBottom: 6 },
@@ -801,10 +768,7 @@ const s = StyleSheet.create({
 
   /* User guide steps */
   ugStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 18 },
-  ugIcon: {
-    width: 34, height: 34, borderRadius: 11,
-    backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center',
-  },
+  ugIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
   ugTitle: { fontSize: 13.5, fontWeight: '700', color: '#111827', marginBottom: 3 },
   ugDesc:  { fontSize: 13, color: '#6B7280', lineHeight: 20 },
 
@@ -814,12 +778,7 @@ const s = StyleSheet.create({
   aboutVer:  { fontSize: 12, color: '#9CA3AF', fontWeight: '600' },
   aboutTag:  { fontSize: 13, color: '#6B7280', textAlign: 'center', marginTop: 2 },
 
-  noteBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 9,
-    backgroundColor: '#EFF6FF', borderRadius: 12,
-    borderWidth: 1, borderColor: '#BFDBFE',
-    padding: 13, marginBottom: 6,
-  },
+  noteBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, backgroundColor: '#EAF1FD', borderRadius: 16, padding: 14, marginBottom: 6 },
   noteBoxText: { flex: 1, fontSize: 12.5, color: '#1E40AF', lineHeight: 18, fontWeight: '500' },
 
   termsUpdated: { fontSize: 12, color: '#9CA3AF', fontWeight: '600', marginTop: 2 },
