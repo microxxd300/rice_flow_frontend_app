@@ -18,12 +18,16 @@ import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
 import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
+import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
+import { useLanguageStore } from '@/store/languageStore';
+import { shortDate } from '@/components/SowingQuestion';
+import { SOWING_KEY, daysAgoISO } from '@/utils/sowing';
 import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { seasonLabel } from '@/utils/formatting';
-import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
+import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -45,19 +49,35 @@ const CROP_STAGES = [
 
 const GROWTH_STAGES = [
   'Land Prep & Planting', 'Early Growth', 'Tillering', 'Stem Elongation',
-  'Panicle Initiation', 'Heading', 'Grain Filling',
+  'Panicle Initiation', 'Heading', 'Grain Filling', 'Ripening', 'Harvesting', 'Post-Harvest',
 ];
 
-const ISSUE_OPTIONS = ['None', 'Insect', 'Disease', 'Drought', 'Flood', 'Other'];
+// The log form: what the farmer logs decides which fields show
+type LogKind = '' | 'step' | 'problem' | 'note';
+const LOG_KINDS: { key: Exclude<LogKind, ''>; icon: IoniconsName; label: string }[] = [
+  { key: 'step',    icon: 'checkmark-done-outline', label: 'plogKindStep' },
+  { key: 'problem', icon: 'warning-outline',        label: 'plogKindProblem' },
+  { key: 'note',    icon: 'create-outline',         label: 'plogKindNote' },
+];
+// What the problem is (values stay English: ISSUE_TO_API sends them to the server)
+const PROBLEM_OPTIONS: { value: string; icon: IoniconsName }[] = [
+  { value: 'Insect',   icon: 'bug-outline' },
+  { value: 'Disease',  icon: 'medkit-outline' },
+  { value: 'Flood',    icon: 'water-outline' },
+  { value: 'Drought',  icon: 'sunny-outline' },
+  { value: 'Nutrient', icon: 'color-palette-outline' },
+  { value: 'Other',    icon: 'help-circle-outline' },
+];
 
 // The words the farmer sees for each log choice. The saved values stay English: the
 // server and STAGE_NO / ISSUE_TO_API read them.
 const LOG_WORD_KEYS: Record<string, string> = {
   'Land Prep & Planting': 'plogStLandPrep', 'Early Growth': 'plogStEarly', 'Tillering': 'plogStTiller',
   'Stem Elongation': 'plogStStem', 'Panicle Initiation': 'plogStPanicle', 'Heading': 'plogStHeading',
-  'Grain Filling': 'plogStGrain',
+  'Grain Filling': 'plogStGrain', 'Ripening': 'plogStRipen', 'Harvesting': 'plogStHarvest',
+  'Post-Harvest': 'plogStPost',
   None: 'plogIsNone', Insect: 'plogIsInsect', Disease: 'plogIsDisease', Drought: 'plogIsDrought',
-  Flood: 'plogIsFlood', Other: 'plogIsOther',
+  Flood: 'plogIsFlood', Nutrient: 'plogIsYellow', Other: 'plogIsOther',
   Low: 'plogSevLow', Medium: 'plogSevMedium', High: 'plogSevHigh',
 };
 
@@ -231,24 +251,30 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // refreshed quietly, so the tab does not flash skeletons on every visit
   const cached = cachedActiveCycleLogs(selectedFarmId);
   // Real active cycle only (null until loaded or when there is none) — never a sample cycle
-  const [currentCycle, setCurrentCycle] = useState<any>(cached?.cycle ?? null);
+  const [loadedCycle,  setCurrentCycle] = useState<any>(cached?.cycle ?? null);
   const [logStage,     setLogStage]     = useState('');
-  const [logDate,      setLogDate]      = useState(new Date().toISOString().split('T')[0]);
+  const [logDate,      setLogDate]      = useState(daysAgoISO(0));   // the phone's day, not UTC's
+  const [pickDate,     setPickDate]     = useState(false);
   const [logIssue,     setLogIssue]     = useState('');
   const [logSeverity,  setLogSeverity]  = useState<'' | 'Low' | 'Medium' | 'High'>('');
   const [logAction,    setLogAction]    = useState('');
   const [logNotes,     setLogNotes]     = useState('');
   const [openStage,    setOpenStage]    = useState(false);
-  const [openIssue,    setOpenIssue]    = useState(false);
   const [growthStages, setGrowthStages] = useState<any[]>(cached?.stages ?? []);
   const [savingLog,    setSavingLog]    = useState(false);
-  // The guide step this log finishes: opened from "Log this step" (on), or the current step (off)
+  // The guide step this log finishes: opened from "Log this step", or the current step
   const [logStep,      setLogStep]      = useState<string | null>(null);
-  const [finishesStep, setFinishesStep] = useState(false);
-
-  const hasIssue = logIssue && logIssue !== 'None';
+  const [logKind,      setLogKind]      = useState<LogKind>('');
+  const finishesStep = logKind === 'step';
 
   const { activeCycle, farms } = useAppStore();
+  // A newer copy of this cycle in the store (refreshCycle, after a log or a sowing answer)
+  // wins, so its stage and dates change at once
+  const currentCycle = activeCycle && loadedCycle && activeCycle.id === loadedCycle.id ? activeCycle : loadedCycle;
+  // The log's growth stage fills in from the crop's stage (the cycle follows the guide);
+  // the farmer only picks one to correct it
+  const autoStage  = stageLabel((currentCycle as any)?.stage?.stage_no);
+  const shownStage = logStage || autoStage;
   // Skeletons only when there is nothing to show yet
   const [cycleLoading, setCycleLoading] = useState(!cached);
 
@@ -403,7 +429,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     : serverHarvest && !isNaN(serverHarvest.getTime()) ? serverHarvest
     : new Date(plannedStart.getTime() + cycleDays * 86400000);
   const harvestLabel    = harvestDate ? `${MONTHS_SHORT[harvestDate.getMonth()]} ${harvestDate.getDate()}` : 'Oct 9';
-  const activeStage     = (() => {
+  // The server's stage: days since sowing or the guide steps logged, whichever is further
+  const serverStage     = stageLabel((currentCycle as any)?.stage?.stage_no);
+  const activeStage     = serverStage ? logWord(serverStage) : (() => {
     const i = Math.min(CROP_STAGES.length - 1, Math.floor((cyclePct / 100) * CROP_STAGES.length));
     return CROP_STAGES[i]?.stage ?? 'Panicle Initiation';
   })();
@@ -482,13 +510,15 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // "Log this step" opens the form for one step; a closed form forgets it
   const openLogFor = (stepId: string) => {
     setLogStep(stepId);
-    setFinishesStep(true);
+    setLogKind('step');
     setShowAddLog(true);
   };
   const closeLog = () => {
     setShowAddLog(false);
     setLogStep(null);
-    setFinishesStep(false);
+    setLogKind('');
+    setLogDate(daysAgoISO(0));
+    setPickDate(false);
   };
   // Sent from the Planting tab or Home's Upcoming Tasks
   const pendingLogStep = useAppStore(s => s.pendingLogStep);
@@ -546,21 +576,31 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       Alert.alert(tr.plogNoSeasonT, tr.plogNoSeasonB);
       return;
     }
-    const issueClean = logIssue.trim();
-    const issueIsReal = !!issueClean && issueClean !== 'Wala' && issueClean !== 'None';
+    if (logKind === 'problem' && !logIssue) {
+      Alert.alert(tr.plogKindProblem, tr.plogNeedIssue);
+      return;
+    }
+    if (logKind === 'note' && !logNotes.trim()) {
+      Alert.alert(tr.plogKindNote, tr.plogNeedNote);
+      return;
+    }
+    // Only a problem log has an issue
+    const issueClean = logKind === 'problem' ? logIssue.trim() : '';
+    const issueIsReal = !!issueClean;
+    const stageName   = shownStage;
     const doneStep    = finishesStep && logStepTarget && !isNaN(Number(logStepTarget.id)) ? logStepTarget : null;
 
     // Save to the server first; the log only shows in the app once the server has it.
     // Notes are required by the server, so a log without notes falls back to its step/stage/issue.
     const observation = logNotes.trim() || doneStep?.title
-      || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check';
+      || [stageName, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check';
     let saved: any;
     setSavingLog(true);
     try {
       const res = await apiProgress.createLog({
         farm_cycle:   currentCycle.id,
         log_date:     logDate,
-        growth_stage: growthStages.find((g: any) => g.stage_no === STAGE_NO[logStage])?.id ?? null,
+        growth_stage: growthStages.find((g: any) => g.stage_no === STAGE_NO[stageName])?.id ?? null,
         issue_type:   issueIsReal ? (ISSUE_TO_API[issueClean] ?? 'other') : '',
         severity:     issueIsReal ? (logSeverity || 'Low').toLowerCase() : '',
         action_taken: issueIsReal ? logAction.trim() : '',
@@ -579,7 +619,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       id:            String(saved.id),
       cycleId:       String(currentCycle.id),
       logDate,
-      growthStage:   logStage,
+      growthStage:   stageName,
       observedIssue: issueClean || 'None',
       severity:      issueIsReal ? (logSeverity || 'Low') : '',
       actionTaken:   issueIsReal ? logAction.trim() : '',
@@ -614,6 +654,35 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     setLogIssue(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
     setLogStage(''); closeLog();
+    afterGuideLog(doneStep?.key, saved?.sowing_estimate);
+  };
+
+  // The crop cycle follows the guide: after a step is logged, its stage (and, for the
+  // sowing step, every date) comes back from the server
+  const afterGuideLog = (stepKey: string | undefined, sowingEstimate: string | undefined) => {
+    const language = useLanguageStore.getState().language;
+    const recId = useAppStore.getState().latestRecommendation?.id;
+    if (stepKey === SOWING_KEY && recId) {
+      loadGuide(recId, language).catch(() => {});   // the plan moved to the real sowing day
+    }
+    void refreshCycle();
+    if (sowingEstimate) {
+      // A later step logged before sowing: confirm the sowing day it implies
+      const date = shortDate(sowingEstimate, tr);
+      Alert.alert(tr.sowEstTitle.replace('{date}', date), tr.sowEstBody.replace('{date}', date), [
+        { text: tr.sowLater, style: 'cancel' },
+        { text: tr.sowEstChange, onPress: () => navigation.navigateDeprecated('PlantingTab') },
+        { text: tr.sowEstYes, onPress: () => {
+          answerSowing(true, sowingEstimate, language).catch(() => Alert.alert(tr.sowAskTitle, tr.sowFailed));
+        } },
+      ]);
+    } else if (stepKey === 'harvest') {
+      // The season ends when its yield is saved
+      Alert.alert(tr.harvestAskTitle, tr.harvestAskBody, [
+        { text: tr.sowLater, style: 'cancel' },
+        { text: tr.harvestAskYes, onPress: () => navigation.navigateDeprecated('YieldRecord') },
+      ]);
+    }
   };
 
   // Format ISO date → "Jun 15" (short month + day)
@@ -1406,21 +1475,34 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-              {/* Finishes a PalayCheck step: the guide moves on once this log is saved */}
-              {!!logStepTarget && (
-                <TouchableOpacity
-                  style={[s.stepToggle, finishesStep && s.stepToggleOn]}
-                  onPress={() => setFinishesStep(v => !v)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[s.stepCheck, finishesStep && s.stepCheckOn]}>
-                    {finishesStep && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
-                  </View>
+              {/* What is this log? Only that kind's fields follow */}
+              <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogWhat}</Text>
+              <View style={s.kindRow}>
+                {LOG_KINDS.filter(k => k.key !== 'step' || !!logStepTarget).map(k => {
+                  const active = logKind === k.key;
+                  return (
+                    <TouchableOpacity
+                      key={k.key}
+                      style={[s.kindBtn, active && s.kindBtnOn]}
+                      onPress={() => setLogKind(k.key)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={k.icon} size={20} color={active ? '#FFFFFF' : '#059669'} />
+                      <Text style={[s.kindText, active && s.kindTextOn, T && { fontSize: 14 }]}>{(tr as any)[k.label]}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Finished a step: the guide moves on once this log is saved */}
+              {logKind === 'step' && !!logStepTarget && (
+                <View style={[s.stepToggle, s.stepToggleOn]}>
+                  <Ionicons name="checkmark-circle" size={20} color="#059669" />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.stepToggleLabel, T && { fontSize: 13 }]}>{tr.plogFinishesStep}</Text>
                     <Text style={[s.stepToggleTitle, T && { fontSize: 15 }]} numberOfLines={2}>{logStepTarget.title}</Text>
                   </View>
-                </TouchableOpacity>
+                </View>
               )}
               {logWeather && (
                 <View style={[s.logWeather, logWeather.level === 'stop' && s.logWeatherStop]}>
@@ -1435,100 +1517,36 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 </View>
               )}
 
-              {/* Petsa ng Tala */}
-              <View style={s.mFieldWrap}>
-                <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogDate} <Text style={s.mReq}>*</Text></Text>
-                <View style={s.mInputBox}>
-                  <Ionicons name="calendar-outline" size={16} color="#9CA3AF" />
-                  <TextInput
-                    style={[s.mInput, T && { fontSize: 16 }]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#D1D5DB"
-                    value={logDate}
-                    onChangeText={setLogDate}
-                  />
-                </View>
-              </View>
-
-              {/* Yugto ng Paglaki */}
-              <View style={s.mFieldWrap}>
-                <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogStage} <Text style={s.mReq}>*</Text></Text>
-                <View>
-                  <TouchableOpacity
-                    style={s.mInputBox}
-                    onPress={() => { setOpenStage(v => !v); setOpenIssue(false); }}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="leaf-outline" size={16} color="#9CA3AF" />
-                    <Text style={[s.mInput, { color: logStage ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logStage ? logWord(logStage) : tr.plogStagePh}
-                    </Text>
-                    <Ionicons name={openStage ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
-                  </TouchableOpacity>
-                  {openStage && (
-                    <View style={s.mDropMenu}>
-                      {GROWTH_STAGES.map((opt, i) => (
-                        <TouchableOpacity
-                          key={opt}
-                          style={[s.mDropItem, i < GROWTH_STAGES.length - 1 && s.mDropItemBorder]}
-                          onPress={() => { setLogStage(opt); setOpenStage(false); }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.mDropItemText, logStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
-                          {logStage === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Nakitang Isyu */}
-              <View style={s.mFieldWrap}>
-                <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogIssue} <Text style={s.mReq}>*</Text></Text>
-                <View>
-                  <TouchableOpacity
-                    style={s.mInputBox}
-                    onPress={() => { setOpenIssue(v => !v); setOpenStage(false); }}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="warning-outline" size={16} color="#9CA3AF" />
-                    <Text style={[s.mInput, { color: logIssue ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logIssue ? logWord(logIssue) : tr.plogIssuePh}
-                    </Text>
-                    <Ionicons name={openIssue ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
-                  </TouchableOpacity>
-                  {openIssue && (
-                    <View style={s.mDropMenu}>
-                      {ISSUE_OPTIONS.map((opt, i) => (
-                        <TouchableOpacity
-                          key={opt}
-                          style={[s.mDropItem, i < ISSUE_OPTIONS.length - 1 && s.mDropItemBorder]}
-                          onPress={() => {
-                            setLogIssue(opt);
-                            setOpenIssue(false);
-                            if (opt === 'Wala') { setLogSeverity(''); setLogAction(''); }
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.mDropItemText, logIssue === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
-                          {logIssue === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Conditional: only show severity + aksyon when there's an actual issue */}
-              {hasIssue && (
+              {/* A problem: what it is, how bad, what was done */}
+              {logKind === 'problem' && (
                 <>
-                  {/* Gaano kalala? — segmented control, matches the Buod/Tala/Trends tabs */}
                   <View style={s.mFieldWrap}>
-                    <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogSeverity} <Text style={s.mReq}>*</Text></Text>
+                    <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogWhatIssue} <Text style={s.mReq}>*</Text></Text>
+                    <View style={s.issueGrid}>
+                      {PROBLEM_OPTIONS.map(opt => {
+                        const active = logIssue === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[s.issueBtn, active && s.issueBtnOn]}
+                            onPress={() => setLogIssue(opt.value)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name={opt.icon} size={20} color={active ? '#B45309' : '#6B7280'} />
+                            <Text style={[s.issueText, active && s.issueTextOn, T && { fontSize: 13 }]} numberOfLines={2}>
+                              {logWord(opt.value)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  <View style={s.mFieldWrap}>
+                    <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogSeverity}</Text>
                     <View style={[s.segWrap, { marginTop: 0, marginBottom: 0 }]}>
                       {(['Low', 'Medium', 'High'] as const).map(opt => {
-                        const active = logSeverity === opt;
+                        const active = (logSeverity || 'Low') === opt;
                         const activeColor =
                           opt === 'Low'     ? '#059669'
                           : opt === 'Medium' ? '#D97706'
@@ -1549,7 +1567,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                     </View>
                   </View>
 
-                  {/* Aksyon na Ginawa */}
                   <View style={s.mFieldWrap}>
                     <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogAction}</Text>
                     <View style={s.mInputBox}>
@@ -1566,30 +1583,101 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 </>
               )}
 
-              {/* Mga Tala */}
-              <View style={[s.mFieldWrap, { marginBottom: 0 }]}>
-                <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogNotes}</Text>
-                <View style={[s.mInputBox, { alignItems: 'flex-start', paddingTop: 14, height: undefined, minHeight: 90 }]}>
-                  <Ionicons name="document-text-outline" size={16} color="#9CA3AF" style={{ marginTop: 2 }} />
-                  <TextInput
-                    style={[s.mInput, { textAlignVertical: 'top', minHeight: 70 }, T && { fontSize: 16 }]}
-                    placeholder={tr.plogNotesPh}
-                    placeholderTextColor="#D1D5DB"
-                    value={logNotes}
-                    onChangeText={setLogNotes}
-                    multiline
-                  />
-                </View>
-              </View>
+              {!!logKind && (
+                <>
+                  {/* The note: the whole log for a note, optional otherwise */}
+                  <View style={s.mFieldWrap}>
+                    <Text style={[s.mLabel, T && { fontSize: 14 }]}>
+                      {logKind === 'note' ? tr.plogNotes : tr.plogNoteOpt}
+                      {logKind === 'note' && <Text style={s.mReq}> *</Text>}
+                    </Text>
+                    <View style={[s.mInputBox, { alignItems: 'flex-start', paddingTop: 14, height: undefined, minHeight: 80 }]}>
+                      <Ionicons name="document-text-outline" size={16} color="#9CA3AF" style={{ marginTop: 2 }} />
+                      <TextInput
+                        style={[s.mInput, { textAlignVertical: 'top', minHeight: 60 }, T && { fontSize: 16 }]}
+                        placeholder={tr.plogNotesPh}
+                        placeholderTextColor="#D1D5DB"
+                        value={logNotes}
+                        onChangeText={setLogNotes}
+                        multiline
+                      />
+                    </View>
+                  </View>
+
+                  {/* The day: one tap for today or yesterday, typing only for another day */}
+                  <View style={s.mFieldWrap}>
+                    <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogDate}</Text>
+                    <View style={s.dateRow}>
+                      {[{ label: tr.plogToday, value: daysAgoISO(0) }, { label: tr.plogYesterday, value: daysAgoISO(1) }].map(d => {
+                        const active = !pickDate && logDate === d.value;
+                        return (
+                          <TouchableOpacity
+                            key={d.value}
+                            style={[s.dateChip, active && s.dateChipOn]}
+                            onPress={() => { setLogDate(d.value); setPickDate(false); }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[s.dateChipText, active && s.dateChipTextOn, T && { fontSize: 14 }]}>{d.label}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      <TouchableOpacity
+                        style={[s.dateChip, pickDate && s.dateChipOn]}
+                        onPress={() => setPickDate(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="calendar-outline" size={14} color={pickDate ? '#FFFFFF' : '#059669'} />
+                        <Text style={[s.dateChipText, pickDate && s.dateChipTextOn, T && { fontSize: 14 }]}>{tr.plogPickDate}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {pickDate && (
+                      <View style={[s.mInputBox, { marginTop: 8 }]}>
+                        <Ionicons name="calendar-outline" size={16} color="#9CA3AF" />
+                        <TextInput
+                          style={[s.mInput, T && { fontSize: 16 }]}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor="#D1D5DB"
+                          value={logDate}
+                          onChangeText={setLogDate}
+                        />
+                      </View>
+                    )}
+                  </View>
+
+                  {/* The stage fills in from the crop; one line, changed only if wrong */}
+                  <TouchableOpacity style={s.stageLine} onPress={() => setOpenStage(v => !v)} activeOpacity={0.75}>
+                    <Ionicons name="leaf-outline" size={14} color="#6B7280" />
+                    <Text style={[s.stageLineText, T && { fontSize: 13 }]} numberOfLines={1}>
+                      {tr.plogStageLine.replace('{stage}', shownStage ? logWord(shownStage) : '—')}
+                    </Text>
+                    <Text style={[s.stageLineChange, T && { fontSize: 13 }]}>{tr.plogChange}</Text>
+                  </TouchableOpacity>
+                  {openStage && (
+                    <View style={s.mDropMenu}>
+                      {GROWTH_STAGES.map((opt, i) => (
+                        <TouchableOpacity
+                          key={opt}
+                          style={[s.mDropItem, i < GROWTH_STAGES.length - 1 && s.mDropItemBorder]}
+                          onPress={() => { setLogStage(opt); setOpenStage(false); }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[s.mDropItemText, shownStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
+                          {shownStage === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 8 }}>
                 <TouchableOpacity style={s.mCancelBtn} onPress={closeLog} activeOpacity={0.7}>
                   <Text style={[s.mCancelBtnText, T && { fontSize: 15 }]}>{tr.cancel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[s.mSaveBtn, savingLog && { opacity: 0.6 }]}
+                  style={[s.mSaveBtn, (savingLog || !logKind) && { opacity: 0.5 }]}
                   onPress={handleSaveLog}
-                  disabled={savingLog}
+                  disabled={savingLog || !logKind}
                   activeOpacity={0.85}
                 >
                   <Ionicons name="checkmark" size={18} color="#FFFFFF" />
@@ -1935,6 +2023,37 @@ const s = StyleSheet.create({
   mFieldWrap:  { marginBottom: 20 },
   mLabel:      { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 8 },
   mReq:        { color: '#EF4444' },
+  mHint:       { fontSize: 11.5, color: '#6B7280', marginTop: -4, marginBottom: 8, lineHeight: 16 },
+  kindRow:     { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  kindBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 4,
+    borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0', backgroundColor: '#FFFFFF',
+  },
+  kindBtnOn:   { backgroundColor: '#059669', borderColor: '#059669' },
+  kindText:    { fontSize: 12.5, fontWeight: '700', color: '#065F46', textAlign: 'center' },
+  kindTextOn:  { color: '#FFFFFF' },
+  issueGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  issueBtn: {
+    width: '31%', alignItems: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 4,
+    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
+  },
+  issueBtnOn:  { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
+  issueText:   { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center' },
+  issueTextOn: { color: '#B45309' },
+  dateRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dateChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9999, borderWidth: 1,
+    borderColor: '#A7F3D0', backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 14,
+  },
+  dateChipOn:     { backgroundColor: '#059669', borderColor: '#059669' },
+  dateChipText:   { fontSize: 13, fontWeight: '600', color: '#065F46' },
+  dateChipTextOn: { color: '#FFFFFF' },
+  stageLine: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 12,
+    borderRadius: 10, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 4,
+  },
+  stageLineText:   { flex: 1, fontSize: 12, color: '#374151' },
+  stageLineChange: { fontSize: 12, fontWeight: '700', color: '#059669' },
   mInputBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,

@@ -41,6 +41,7 @@ export const API_ROUTES = {
     detail:       (id: number) => `guides/${id}/`,
     generate:     (recId: number) => `guides/generate/${recId}/`,
     stepComplete: (stepId: number) => `guides/steps/${stepId}/complete/`,
+    sowing:       (guideId: number) => `guides/${guideId}/sowing/`,
   },
   progress: {
     cycles:  'progress/cycles/',

@@ -19,6 +19,7 @@ import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
+import { SowingQuestion } from '@/components/SowingQuestion';
 
 // Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
 // farm's own monthly rainfall loads, or when the phone is offline.
@@ -357,6 +358,9 @@ export const PlantingGuideScreen: React.FC = () => {
             </Text>
           </View>
         )}
+
+        {/* From the planned sowing day until answered: the plan follows the real sowing day */}
+        <SowingQuestion />
 
         {/* The current PalayCheck step — the only step shown. Logging it moves the guide on. */}
         <View style={s.stepHead}>
