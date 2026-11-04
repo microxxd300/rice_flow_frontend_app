@@ -8,6 +8,7 @@ import { colors, spacing, radius } from '../theme';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useAppStore } from '@/store/appStore';
 import type { RecommendationResult } from '@/services/apiService';
+import { suitabilityText } from '@/utils/suitability';
 
 // The farm's latest real recommendation (from the store). This screen used to show a
 // hard-coded prototype list, so every farmer saw the same three varieties and scores.
@@ -70,7 +71,7 @@ export const RecommendationResultsScreen: React.FC = () => {
                     <Text style={s.scoreLabel}>RSI</Text>
                   </View>
                 </View>
-                <Text style={s.cls}>{r.suitability_class}</Text>
+                <Text style={s.cls}>{suitabilityText(r.suitability_class)}</Text>
                 <View style={s.facts}>
                   <Fact label="Days to harvest" value={`${r.variety.maturity_days}`} />
                   <Fact label="Avg. yield" value={`${r.variety.avg_yield_t_ha} t/ha`} />

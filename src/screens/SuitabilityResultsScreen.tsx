@@ -7,6 +7,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useTranslation } from '@/i18n/useTranslation';
 import type { Recommendation } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
+import { suitabilityText } from '@/utils/suitability';
 import { useAccessibility } from '@/context/AccessibilityContext';
 
 type Nav = StackNavigationProp<any>;
@@ -43,20 +44,6 @@ const TOLERANCE_LABEL: Record<string, string> = {
 };
 function tolLabel(v?: string): string {
   return TOLERANCE_LABEL[(v ?? '').toLowerCase()] ?? (v || '—');
-}
-
-function classCode(full?: string): string {
-  return (full ?? '').trim().split(/[\s-]/)[0] || '—';
-}
-const CLASS_LABEL: Record<string, string> = {
-  S1: 'Highly suitable',
-  S2: 'Moderately suitable',
-  S3: 'Marginally suitable',
-  N1: 'Currently unsuitable',
-  N2: 'Permanently unsuitable',
-};
-function classLabel(full?: string): string {
-  return CLASS_LABEL[classCode(full)] ?? 'Suitable';
 }
 
 function shortName(name: string): string {
@@ -180,8 +167,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
     .map((r, i) => ({ ...r, rank: i + 1 }));
 
   const fieldScore = ranked[0]?.suitabilityScore ?? 0;
-  const fieldClass = classCode(ranked[0]?.suitabilityClass);
-  const fieldLabel = classLabel(ranked[0]?.suitabilityClass);
+  const fieldClass = suitabilityText(ranked[0]?.suitabilityClass);   // "Highly Suitable [S1]"
   const allTied    = ranked.length > 1 &&
     ranked.every(r => r.suitabilityScore === ranked[0].suitabilityScore);
 
@@ -230,7 +216,6 @@ export const SuitabilityResultsScreen: React.FC = () => {
           <Text style={s.fieldLead}>Your field is</Text>
           <View style={s.fieldVerdict}>
             <Text style={s.fieldClass}>{fieldClass}</Text>
-            <Text style={s.fieldLabel}>{fieldLabel}</Text>
           </View>
 
           {/* RSI score + thin horizontal bar showing where the score sits 0–100 */}
@@ -375,7 +360,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
 
           {[
             { label: 'RSI score',   values: ranked.map(r => `${r.rsiScore}`) },
-            { label: 'Class',       values: ranked.map(r => classCode(r.suitabilityClass)) },
+            { label: 'Class',       values: ranked.map(r => suitabilityText(r.suitabilityClass)) },
             { label: 'Days',        values: ranked.map(r => `${r.variety.maturityDays}`) },
             { label: 'Yield (t/ha)',values: ranked.map(r => `${r.variety.avgYield}`) },
             { label: 'Flood tol.',  values: ranked.map(r => tolLabel(r.variety.floodTolerance)) },
@@ -387,7 +372,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
               </View>
               {row.values.map((val, vi) => (
                 <View key={vi} style={s.tCell}>
-                  <Text style={[s.tVal, vi === 0 && s.tValTop]}>{val}</Text>
+                  <Text style={[s.tVal, vi === 0 && s.tValTop, { textAlign: 'center' }]}>{val}</Text>
                 </View>
               ))}
             </View>
@@ -431,8 +416,7 @@ const s = StyleSheet.create({
   },
   fieldLead: { fontSize: 12, color: '#9CA3AF', fontWeight: '600', marginBottom: 4 },
   fieldVerdict: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginBottom: 14 },
-  fieldClass: { fontSize: 28, fontWeight: '800', color: '#059669', letterSpacing: -1, lineHeight: 32 },
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  fieldClass: { fontSize: 24, fontWeight: '800', color: '#059669', letterSpacing: -0.5, lineHeight: 30 },
 
   fieldScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 },
   fieldScore:    { fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
