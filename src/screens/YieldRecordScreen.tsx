@@ -13,6 +13,8 @@ import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
+import { daysAgoISO } from '@/utils/sowing';
+import { CAVAN_KG, DRY_MOISTURE, FRESH_MOISTURE, harvestFigures } from '@/utils/harvest';
 
 interface YieldRecordScreenProps {
   onSaveYield?: (yieldData: any) => void;
@@ -20,46 +22,36 @@ interface YieldRecordScreenProps {
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-const QUALITY_OPTIONS = ['Good', 'Average', 'Poor'];
-const METHOD_OPTIONS  = ['Manual', 'Mechanical'];
+// Optional details, kept in the record's notes (the model does not read them)
+const QUALITY_OPTIONS = [{ value: 'Good', key: 'yhGood' }, { value: 'Average', key: 'yhAverage' }, { value: 'Poor', key: 'yhPoor' }];
+const METHOD_OPTIONS  = [{ value: 'Manual', key: 'yhManual' }, { value: 'Mechanical', key: 'yhMachine' }];
 
-function Dropdown({
-  placeholder, value, options, open, onToggle, onSelect, T,
-}: {
-  icon?: IoniconsName; placeholder: string; value: string;
-  options: string[]; open: boolean;
-  onToggle: () => void; onSelect: (v: string) => void; T: boolean;
+/** A row of tap-to-choose chips. */
+function Chips({ options, value, onSelect, T }: {
+  options: { value: string; label: string; icon?: IoniconsName }[];
+  value: string; onSelect: (v: string) => void; T: boolean;
 }) {
   return (
-    <View>
-      <TouchableOpacity style={s.inputBox} onPress={onToggle} activeOpacity={0.75}>
-        <Text style={[s.input, { color: value ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-          {value || placeholder}
-        </Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
-      </TouchableOpacity>
-
-      {open && (
-        <View style={s.dropMenu}>
-          {options.map((opt, i) => (
-            <TouchableOpacity
-              key={opt}
-              style={[s.dropItem, i < options.length - 1 && s.dropItemBorder]}
-              onPress={() => onSelect(opt)}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.dropItemText, value === opt && s.dropItemTextActive, T && { fontSize: 15 }]}>
-                {opt}
-              </Text>
-              {value === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
+    <View style={s.chipRow}>
+      {options.map(o => {
+        const active = value === o.value;
+        return (
+          <TouchableOpacity key={o.value} style={[s.chip, active && s.chipOn]} onPress={() => onSelect(o.value)} activeOpacity={0.8}>
+            {o.icon && <Ionicons name={o.icon} size={14} color={active ? '#FFFFFF' : '#059669'} />}
+            <Text style={[s.chipText, active && s.chipTextOn, T && { fontSize: 14 }]}>{o.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
+/**
+ * Record the harvest, the DA way: sacks × kg per sack, dried or fresh, over the area
+ * actually harvested → dry palay t/ha and cavans/ha (utils/harvest). The season, barangay,
+ * ecosystem and seed type come from the farm and the crop, so each harvest is a clean row
+ * for the yield model.
+ */
 export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYield }) => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isLargeText } = useAccessibility();
@@ -67,58 +59,49 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
   const tr = useTranslation();
 
   const route       = useRoute<any>();
-  const activeCycle = useAppStore(s => s.activeCycle);
-  const latestRec   = useAppStore(s => s.latestRecommendation);
+  const activeCycle = useAppStore(s => s.activeCycle) as any;
+  const latestRec   = useAppStore(s => s.latestRecommendation) as any;
   const cycleId     = route.params?.cycleId ?? activeCycle?.id ?? null;
+  const farm        = useSelectedFarm() as any;
 
-  // Auto-fill variety from the cycle's recommendation (no free-text typing → no typos)
-  const recVariety   = (latestRec as any)?.results?.[0]?.variety;
-  const cycleVariety = recVariety?.common_name ?? '—';
-  const farm         = useSelectedFarm() as any;
+  // The variety actually planted (the crop cycle's), not just the top-ranked one
+  const results     = (latestRec?.results ?? []) as any[];
+  const plantedVar  = results.map(r => r.variety).find(v => v?.id === activeCycle?.variety) ?? results[0]?.variety;
+  const variety     = activeCycle?.variety_name ?? plantedVar?.common_name ?? '—';
 
-  const [saved,            setSaved]            = useState(false);
-  const [loading,          setLoading]          = useState(false);
-  const [predictedYield,   setPredictedYield]   = useState<number | null>(null);
-  const [modelUsed,        setModelUsed]        = useState('');
-  const [harvestDate,      setHarvestDate]      = useState('');
-  const [areaHarvested, setAreaHarvested] = useState('');
-  const [actualYield,   setActualYield]   = useState('');
-  const [sacks,         setSacks]         = useState('');     // Bilang ng sako (50 kg each)
-  const [netYield,      setNetYield]      = useState('');     // Optional; computed if blank
-  const [moisturePct,   setMoisturePct]   = useState('14');   // Default to 14% (standard)
-  const [grainQuality,  setGrainQuality]  = useState('');
-  const [harvestMethod, setHarvestMethod] = useState('');
-  const [openQuality,   setOpenQuality]   = useState(false);
-  const [openMethod,    setOpenMethod]    = useState(false);
-  const variety = cycleVariety;
+  const [saved,          setSaved]          = useState(false);
+  const [loading,        setLoading]        = useState(false);
+  const [predictedYield, setPredictedYield] = useState<number | null>(null);
+  const [modelUsed,      setModelUsed]      = useState('');
+  const [harvestDate,    setHarvestDate]    = useState(daysAgoISO(0));
+  const [pickDate,       setPickDate]       = useState(false);
+  const [areaHarvested,  setAreaHarvested]  = useState(farm?.area_hectares ? String(farm.area_hectares) : '');
+  const [sacks,          setSacks]          = useState('');
+  const [kgPerSack,      setKgPerSack]      = useState(String(CAVAN_KG));
+  const [moisture,       setMoisture]       = useState(DRY_MOISTURE);
+  const [grainQuality,   setGrainQuality]   = useState('');
+  const [harvestMethod,  setHarvestMethod]  = useState('');
 
-  // Auto-convert sacks → kg when user types in sacks
-  const handleSacksChange = (v: string) => {
-    setSacks(v);
-    const n = parseFloat(v);
-    if (!isNaN(n) && n > 0) setActualYield(String(Math.round(n * 50)));
-  };
+  const figures = harvestFigures(parseFloat(sacks), parseFloat(kgPerSack), parseFloat(areaHarvested), moisture);
 
   const handleSave = async () => {
-    if (!harvestDate || !actualYield) {
-      Alert.alert('Missing details', 'Enter the harvest date and the yield.');
+    if (!figures) {
+      Alert.alert(tr.yieldRecordHeader, tr.yhNeed);
       return;
     }
     setLoading(true);
     try {
-      const grossYieldKg = parseFloat(actualYield) || 0;
-      const areaN        = parseFloat(areaHarvested) || 1;
-      const moistureN    = parseFloat(moisturePct) || 14;
-      // If farmer didn't enter net yield, derive from gross using moisture loss.
-      // Standard formula: net = gross × (100 − moisture) / 86  (normalized to 14% MC)
-      const netN = parseFloat(netYield) || +(grossYieldKg * (100 - moistureN) / 86).toFixed(0);
+      const area  = parseFloat(areaHarvested);
+      const notes = [grainQuality && `Quality: ${grainQuality}`, harvestMethod && `Method: ${harvestMethod}`,
+                     `${sacks} sacks × ${kgPerSack} kg`].filter(Boolean).join(' · ');
       if (cycleId) {
         await apiProgress.createYield(cycleId, {
           harvest_date:      harvestDate,
-          area_harvested_ha: areaN,
-          gross_yield_kg:    grossYieldKg,
-          net_yield_kg:      netN,
-          moisture_pct:      moistureN,
+          area_harvested_ha: area,
+          gross_yield_kg:    figures.totalKg,
+          net_yield_kg:      figures.dryKg,     // dry palay at 14%, the DA basis
+          moisture_pct:      moisture,
+          notes,
         });
       }
       try {
@@ -127,7 +110,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
         const scanRes = farm?.id ? await apiScan.history(farm.id) : null;
         const scan: any = (scanRes?.data ?? [])[0] ?? null;
         const predRes = await apiPredictions.predict({
-          area_ha:           areaN,
+          area_ha:           area,
           soil_ph:           scan?.soil_ph,
           organic_matter:    scan?.organic_matter,
           avg_temperature:   scan?.avg_temperature,
@@ -136,31 +119,28 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           elevation_m:       scan?.elevation_m,
           flood_risk:        scan?.flood_risk,
           ecosystem:         farm?.ecosystem,
-          maturity_days:     recVariety?.maturity_days,
-          variety_avg_yield: recVariety?.avg_yield_t_ha,
+          maturity_days:     plantedVar?.maturity_days,
+          variety_avg_yield: plantedVar?.avg_yield_t_ha,
           farm_id:           farm?.id,
-          variety_id:        (activeCycle as any)?.variety ?? recVariety?.id,
-          season:            (activeCycle as any)?.season,
+          variety_id:        activeCycle?.variety ?? plantedVar?.id,
+          season:            activeCycle?.season,
         });
         setPredictedYield(predRes.data.predicted_yield_t_ha);
         setModelUsed(predRes.data.model_used);
       } catch {}
-      onSaveYield?.({ harvestDate, variety, areaHarvested, actualYield, grainQuality, harvestMethod });
+      onSaveYield?.({ harvestDate, variety, areaHarvested, actualYield: figures.dryKg, grainQuality, harvestMethod });
       setSaved(true);
     } catch {
-      Alert.alert('Harvest not saved', 'Check your internet connection and try again.');
+      Alert.alert(tr.yhNotSavedT, tr.plogNotSavedB);
     } finally {
       setLoading(false);
     }
   };
 
-  const yieldNum   = parseFloat(actualYield)   || 0;
-  const areaNum    = parseFloat(areaHarvested) || 1;
-  const yieldPerHa = (yieldNum / areaNum / 1000).toFixed(2);
-
   // Without a prediction, compare with the variety's average yield instead of a fixed number
-  const expectedYield = predictedYield ?? recVariety?.avg_yield_t_ha ?? 6.5;
-  const yieldPct      = Math.round((parseFloat(yieldPerHa) / expectedYield) * 100);
+  const yieldPerHa    = figures?.tHa ?? 0;
+  const expectedYield = predictedYield ?? plantedVar?.avg_yield_t_ha ?? 6.5;
+  const yieldPct      = Math.round((yieldPerHa / expectedYield) * 100);
   const perfStatus    = yieldPct >= 100 ? 'success' : yieldPct >= 80 ? 'warning' : 'error';
   const perfLabel     = yieldPct >= 100 ? 'Excellent' : yieldPct >= 80 ? 'Good' : 'Below Expected';
 
@@ -170,6 +150,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
     error:   { bg: '#FEF2F2', border: '#FECACA', text: '#EF4444' },
   };
   const pc = perfColors[perfStatus as keyof typeof perfColors];
+  const word = (key: string) => (tr as any)[key] as string;
 
   // ── Success screen ──────────────────────────────────────────────────────────
   if (saved) {
@@ -180,24 +161,22 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           <View style={s.successAvatar}>
             <Ionicons name="checkmark" size={40} color="#fff" />
           </View>
-          <Text style={[s.successTitle, T && { fontSize: 28 }]}>Harvest Recorded!</Text>
-          <Text style={[s.successSub, T && { fontSize: 16 }]}>
-            Matagumpay na na-save ang rekord ng inyong ani para sa season na ito.
-          </Text>
+          <Text style={[s.successTitle, T && { fontSize: 28 }]}>{tr.yhSavedTitle}</Text>
+          <Text style={[s.successSub, T && { fontSize: 16 }]}>{tr.yhSavedSub}</Text>
 
           <View style={[s.section, { width: '100%', marginTop: 20 }]}>
             <View style={s.card}>
               <Text style={s.cardTitleNew}>{tr.yieldSummary}</Text>
               {([
-                { icon: 'calendar-outline'  as IoniconsName, label: tr.yieldHarvestDate, value: harvestDate   || '—' },
-                { icon: 'leaf-outline'      as IoniconsName, label: 'Rice Variety',      value: variety       || '—' },
-                { icon: 'resize-outline'    as IoniconsName, label: 'Area Harvested',    value: areaHarvested ? `${areaHarvested} ha` : '—' },
-                { icon: 'cube-outline'      as IoniconsName, label: 'Total Yield',       value: actualYield   ? `${actualYield} kg`   : '—' },
-                { icon: 'star-outline'      as IoniconsName, label: 'Grain Quality',     value: grainQuality  || '—' },
-                { icon: 'construct-outline' as IoniconsName, label: 'Harvest Method',    value: harvestMethod || '—' },
+                { icon: 'calendar-outline'  as IoniconsName, label: tr.yieldHarvestDate, value: harvestDate || '—' },
+                { icon: 'leaf-outline'      as IoniconsName, label: tr.yieldVarietyLbl,  value: variety || '—' },
+                { icon: 'resize-outline'    as IoniconsName, label: tr.yhArea,           value: areaHarvested ? `${areaHarvested} ha` : '—' },
+                { icon: 'cube-outline'      as IoniconsName, label: tr.yhDryTotal,       value: figures ? `${figures.dryKg} kg` : '—' },
+                { icon: 'star-outline'      as IoniconsName, label: tr.yhQuality,        value: grainQuality ? word(QUALITY_OPTIONS.find(q => q.value === grainQuality)!.key) : '—' },
+                { icon: 'construct-outline' as IoniconsName, label: tr.yhMethod,         value: harvestMethod ? word(METHOD_OPTIONS.find(m => m.value === harvestMethod)!.key) : '—' },
               ]).map((row, i, arr) => (
                 <View key={row.label} style={[s.listRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                     <Ionicons name={row.icon} size={14} color="#9CA3AF" />
                     <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
                   </View>
@@ -214,7 +193,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
             />
             <View style={{ flex: 1 }}>
               <Text style={[s.perfBannerTitle, { color: pc.text }]}>{perfLabel}</Text>
-              <Text style={s.perfBannerSub}>{yieldPct}% ng inaasahang ani ({yieldPerHa} t/ha)</Text>
+              <Text style={s.perfBannerSub}>
+                {tr.yhResult.replace('{tha}', yieldPerHa.toFixed(2)).replace('{cav}', String(figures?.cavansHa ?? 0))} · {yieldPct}%
+              </Text>
             </View>
           </View>
 
@@ -262,13 +243,13 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
         <NotificationBell color="#059669" size={22} />
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         <View style={s.section}>
           <View style={s.card}>
             <Text style={s.cardTitleNew}>{tr.yieldForm}</Text>
 
-            {/* Read-only variety from cycle */}
+            {/* The variety planted, from the crop cycle */}
             <View style={s.readOnlyRow}>
               <View>
                 <Text style={s.readOnlyLabel}>{tr.yieldVarietyLbl}</Text>
@@ -277,27 +258,40 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
               <Ionicons name="lock-closed-outline" size={14} color="#9CA3AF" />
             </View>
 
-            {/* Harvest Date */}
+            {/* Harvest day: one tap for today or yesterday */}
             <View style={s.fieldWrap}>
-              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yieldHarvestDate} <Text style={s.req}>*</Text></Text>
-              <View style={s.inputBox}>
-                <RNTextInput
-                  style={[s.input, T && { fontSize: 16 }]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#D1D5DB"
-                  value={harvestDate}
-                  onChangeText={setHarvestDate}
-                />
-              </View>
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhDay}</Text>
+              <Chips
+                T={T}
+                value={pickDate ? 'pick' : harvestDate}
+                options={[
+                  { value: daysAgoISO(0), label: tr.plogToday },
+                  { value: daysAgoISO(1), label: tr.plogYesterday },
+                  { value: 'pick', label: tr.plogPickDate, icon: 'calendar-outline' },
+                ]}
+                onSelect={v => { if (v === 'pick') setPickDate(true); else { setHarvestDate(v); setPickDate(false); } }}
+              />
+              {pickDate && (
+                <View style={[s.inputBox, { marginTop: 8 }]}>
+                  <RNTextInput
+                    style={[s.input, T && { fontSize: 16 }]}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#D1D5DB"
+                    value={harvestDate}
+                    onChangeText={setHarvestDate}
+                  />
+                </View>
+              )}
             </View>
 
-            {/* Lugar na Inani */}
+            {/* Area actually harvested (the DA's yield is per area harvested) */}
             <View style={s.fieldWrap}>
-              <Text style={[s.label, T && { fontSize: 14 }]}>Area Harvested <Text style={s.req}>*</Text></Text>
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhArea} <Text style={s.req}>*</Text></Text>
+              <Text style={[s.hint, T && { fontSize: 13 }]}>{tr.yhAreaHint}</Text>
               <View style={s.inputBox}>
                 <RNTextInput
                   style={[s.input, T && { fontSize: 16 }]}
-                  placeholder="e.g. 2.5"
+                  placeholder="e.g. 1.5"
                   placeholderTextColor="#D1D5DB"
                   value={areaHarvested}
                   onChangeText={setAreaHarvested}
@@ -307,98 +301,75 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
               </View>
             </View>
 
-            {/* Bag count + Total Yield (linked) */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={[s.fieldWrap, { flex: 1 }]}>
-                <Text style={[s.label, T && { fontSize: 14 }]}>Number of bags</Text>
-                <View style={s.inputBox}>
+            {/* How much: sacks × kg per sack */}
+            <View style={s.fieldWrap}>
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhHowMuch} <Text style={s.req}>*</Text></Text>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <View style={[s.inputBox, { flex: 1 }]}>
                   <RNTextInput
                     style={[s.input, T && { fontSize: 16 }]}
-                    placeholder="e.g. 165"
+                    placeholder="e.g. 100"
                     placeholderTextColor="#D1D5DB"
                     value={sacks}
-                    onChangeText={handleSacksChange}
+                    onChangeText={setSacks}
                     keyboardType="decimal-pad"
                   />
-                  <Text style={s.unit}>sako</Text>
+                  <Text style={s.unit}>{tr.yhSacks}</Text>
                 </View>
-              </View>
-              <View style={[s.fieldWrap, { flex: 1.2 }]}>
-                <Text style={[s.label, T && { fontSize: 14 }]}>Total Yield <Text style={s.req}>*</Text></Text>
-                <View style={s.inputBox}>
+                <Text style={s.times}>×</Text>
+                <View style={[s.inputBox, { flex: 1 }]}>
                   <RNTextInput
                     style={[s.input, T && { fontSize: 16 }]}
-                    placeholder="e.g. 8250"
-                    placeholderTextColor="#D1D5DB"
-                    value={actualYield}
-                    onChangeText={(v) => { setActualYield(v); setSacks(''); }}
+                    value={kgPerSack}
+                    onChangeText={setKgPerSack}
                     keyboardType="decimal-pad"
                   />
-                  <Text style={s.unit}>kg</Text>
+                  <Text style={s.unit}>{tr.yhKgPerSack}</Text>
                 </View>
               </View>
+              {figures && (
+                <Text style={[s.hint, { marginTop: 6, marginBottom: 0 }]}>{tr.yhTotal.replace('{kg}', figures.totalKg.toLocaleString())}</Text>
+              )}
             </View>
 
-            {/* Moisture + Net yield row */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={[s.fieldWrap, { flex: 1 }]}>
-                <Text style={[s.label, T && { fontSize: 14 }]}>Moisture</Text>
-                <View style={s.inputBox}>
-                  <RNTextInput
-                    style={[s.input, T && { fontSize: 16 }]}
-                    placeholder="14"
-                    placeholderTextColor="#D1D5DB"
-                    value={moisturePct}
-                    onChangeText={setMoisturePct}
-                    keyboardType="decimal-pad"
-                  />
-                  <Text style={s.unit}>%</Text>
-                </View>
-              </View>
-              <View style={[s.fieldWrap, { flex: 1.2 }]}>
-                <Text style={[s.label, T && { fontSize: 14 }]}>Net Yield</Text>
-                <View style={s.inputBox}>
-                  <RNTextInput
-                    style={[s.input, T && { fontSize: 16 }]}
-                    placeholder="auto"
-                    placeholderTextColor="#D1D5DB"
-                    value={netYield}
-                    onChangeText={setNetYield}
-                    keyboardType="decimal-pad"
-                  />
-                  <Text style={s.unit}>kg</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Kalidad ng Bigas */}
+            {/* Dried or fresh: the DA counts dry palay at 14% moisture */}
             <View style={s.fieldWrap}>
-              <Text style={[s.label, T && { fontSize: 14 }]}>Rice Quality</Text>
-              <Dropdown
-                icon="star-outline"
-                placeholder="Select quality..."
-                value={grainQuality}
-                options={QUALITY_OPTIONS}
-                open={openQuality}
-                onToggle={() => { setOpenQuality(v => !v); setOpenMethod(false); }}
-                onSelect={v => { setGrainQuality(v); setOpenQuality(false); }}
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhDried}</Text>
+              <Chips
                 T={T}
+                value={String(moisture)}
+                options={[
+                  { value: String(DRY_MOISTURE),   label: tr.yhDry },
+                  { value: String(FRESH_MOISTURE), label: tr.yhFresh },
+                ]}
+                onSelect={v => setMoisture(Number(v))}
               />
             </View>
 
-            {/* Paraan ng Pag-ani */}
+            {/* The yield as the DA reports it, worked out as the farmer types */}
+            {figures && (
+              <View style={[s.resultBox, figures.unusual && s.resultBoxWarn]}>
+                <Ionicons name={figures.unusual ? 'alert-circle-outline' : 'stats-chart-outline'} size={18}
+                          color={figures.unusual ? '#B45309' : '#059669'} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.resultText, figures.unusual && { color: '#92400E' }, T && { fontSize: 16 }]}>
+                    {tr.yhResult.replace('{tha}', figures.tHa.toFixed(2)).replace('{cav}', String(figures.cavansHa))}
+                  </Text>
+                  <Text style={s.resultNote}>{figures.unusual ? tr.yhCheck : tr.yhResultNote}</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Optional details */}
+            <View style={s.fieldWrap}>
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhQuality}</Text>
+              <Chips T={T} value={grainQuality} onSelect={setGrainQuality}
+                     options={QUALITY_OPTIONS.map(q => ({ value: q.value, label: word(q.key) }))} />
+            </View>
             <View style={[s.fieldWrap, { marginBottom: 0 }]}>
-              <Text style={[s.label, T && { fontSize: 14 }]}>Harvest Method</Text>
-              <Dropdown
-                icon="construct-outline"
-                placeholder="Select method..."
-                value={harvestMethod}
-                options={METHOD_OPTIONS}
-                open={openMethod}
-                onToggle={() => { setOpenMethod(v => !v); setOpenQuality(false); }}
-                onSelect={v => { setHarvestMethod(v); setOpenMethod(false); }}
-                T={T}
-              />
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhMethod}</Text>
+              <Chips T={T} value={harvestMethod} onSelect={setHarvestMethod}
+                     options={METHOD_OPTIONS.map(m => ({ value: m.value, label: word(m.key) }))} />
             </View>
 
           </View>
@@ -410,13 +381,13 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
             <Text style={[s.cancelBtnText, T && { fontSize: 15 }]}>{tr.cancel}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[s.saveBtn, loading && { opacity: 0.6 }]}
+            style={[s.saveBtn, (loading || !figures) && { opacity: 0.5 }]}
             onPress={handleSave}
-            disabled={loading}
+            disabled={loading || !figures}
             activeOpacity={0.85}
           >
             <Ionicons name={loading ? 'hourglass-outline' : 'checkmark'} size={18} color="#FFFFFF" />
-            <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>{loading ? 'Sine-save...' : 'I-save'}</Text>
+            <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>{loading ? tr.yhSaving : tr.save}</Text>
           </TouchableOpacity>
         </View>
 
@@ -446,8 +417,6 @@ const s = StyleSheet.create({
   titleIcon:   { width: 34, height: 34, borderRadius: 17, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
   headerSub:   { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  headerBtn:   { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  bellDot:     { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' },
 
   /* Section */
   section:    { paddingHorizontal: 20, marginTop: 24 },
@@ -463,6 +432,7 @@ const s = StyleSheet.create({
   /* Form */
   fieldWrap: { marginBottom: 20 },
   label:   { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 8 },
+  hint:    { fontSize: 11.5, color: '#6B7280', marginTop: -4, marginBottom: 8, lineHeight: 16 },
   req:     { color: '#EF4444' },
   inputBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -471,20 +441,26 @@ const s = StyleSheet.create({
   },
   input:   { flex: 1, fontSize: 15, color: '#111827' },
   unit:    { fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
+  times:   { fontSize: 16, fontWeight: '700', color: '#9CA3AF' },
 
-  /* Dropdown */
-  dropMenu: {
-    marginTop: 4, backgroundColor: '#FFFFFF',
-    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden',
+  /* Chips */
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9999, borderWidth: 1,
+    borderColor: '#A7F3D0', backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 14,
   },
-  dropItem: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, paddingHorizontal: 16,
+  chipOn:     { backgroundColor: '#059669', borderColor: '#059669' },
+  chipText:   { fontSize: 13, fontWeight: '600', color: '#065F46' },
+  chipTextOn: { color: '#FFFFFF' },
+
+  /* The worked-out yield */
+  resultBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1,
+    borderColor: '#A7F3D0', backgroundColor: '#ECFDF5', padding: 12, marginBottom: 20,
   },
-  dropItemBorder:     { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
-  dropItemText:       { fontSize: 14, color: '#6B7280', fontWeight: '500' },
-  dropItemTextActive: { color: '#059669', fontWeight: '700' },
+  resultBoxWarn: { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
+  resultText:    { fontSize: 15, fontWeight: '800', color: '#065F46' },
+  resultNote:    { fontSize: 11.5, color: '#6B7280', marginTop: 2, lineHeight: 16 },
 
   /* List rows */
   listRow: {
