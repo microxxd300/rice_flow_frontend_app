@@ -1,4 +1,5 @@
-// RiceFlow's illustrations (cut from the ChatGPT sheets): growth stages, step icons and empty screens.
+// RiceFlow's illustrations (cut from the ChatGPT sheets): growth stages, step icons, empty screens,
+// weather icons and the farm tiles' photos.
 import type { ImageSourcePropType } from 'react-native';
 
 /** Index 0..9 = stage 1..10 (seed → post-harvest). */
@@ -52,3 +53,52 @@ export const empty = {
   ai_chat:    require('./empty/ai_chat.png'),
   offline:    require('./empty/offline.png'),
 } satisfies Record<string, ImageSourcePropType>;
+
+export const weather = {
+  clear_day:           require('./weather/clear_day.png'),
+  clear_night:         require('./weather/clear_night.png'),
+  mostly_sunny:        require('./weather/mostly_sunny.png'),
+  mostly_clear_night:  require('./weather/mostly_clear_night.png'),
+  partly_cloudy_day:   require('./weather/partly_cloudy_day.png'),
+  partly_cloudy_night: require('./weather/partly_cloudy_night.png'),
+  cloudy:              require('./weather/cloudy.png'),
+  fog:                 require('./weather/fog.png'),
+  drizzle:             require('./weather/drizzle.png'),
+  rain:                require('./weather/rain.png'),
+  heavy_rain:          require('./weather/heavy_rain.png'),
+  thunder:             require('./weather/thunder.png'),
+} satisfies Record<string, ImageSourcePropType>;
+
+/** Night in Panabo: 6 PM to 6 AM. */
+export const isNightHour = (hour: number): boolean => hour >= 18 || hour < 6;
+
+/** The hour (0..23) in Panabo, UTC+8 all year, whatever the phone's own time zone. */
+export const panaboHour = (d: Date = new Date()): number => (d.getUTCHours() + 8) % 24;
+
+/**
+ * The weather picture for a WMO weather code (Open-Meteo) at an hour of the day in
+ * Panabo: the sun by day, the moon from 6 PM to 6 AM for clear and partly cloudy skies.
+ */
+export function weatherIcon(code: number | null | undefined, hour: number): ImageSourcePropType {
+  const night = isNightHour(hour);
+  if (code === 0)                     return night ? weather.clear_night : weather.clear_day;
+  if (code === 1)                     return night ? weather.mostly_clear_night : weather.mostly_sunny;
+  if (code === 2)                     return night ? weather.partly_cloudy_night : weather.partly_cloudy_day;
+  if (code === 3)                     return weather.cloudy;
+  if (code === 45 || code === 48)     return weather.fog;
+  if (code != null && code >= 51 && code <= 57) return weather.drizzle;
+  if (code === 65 || code === 67 || code === 82) return weather.heavy_rain;
+  if (code != null && code >= 61 && code <= 81) return weather.rain;
+  if (code != null && code >= 95)     return weather.thunder;
+  return night ? weather.partly_cloudy_night : weather.partly_cloudy_day;
+}
+
+const FARM_PHOTOS: ImageSourcePropType[] = [
+  require('./farms/farm_1.jpg'), require('./farms/farm_2.jpg'), require('./farms/farm_3.jpg'),
+  require('./farms/farm_4.jpg'), require('./farms/farm_5.jpg'), require('./farms/farm_6.jpg'),
+];
+
+/** A rice-field photo for a farm's tile, decoration only (not the farm itself); a farm keeps its photo. */
+export function farmPhoto(farmId: number): ImageSourcePropType {
+  return FARM_PHOTOS[Math.abs(Math.trunc(farmId)) % FARM_PHOTOS.length];
+}

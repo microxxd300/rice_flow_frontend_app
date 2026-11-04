@@ -22,7 +22,7 @@ import { useAccessibility } from '@/context/AccessibilityContext';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { loadFarmData } from '@/services/farmData';
 import { cropDays } from '@/utils/cropDays';
-import { empty, stageImage, stepIcon } from '@/assets/illustrations';
+import { empty, farmPhoto, panaboHour, stageImage, stepIcon, weatherIcon } from '@/assets/illustrations';
 import { loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 
@@ -31,34 +31,15 @@ type Nav = StackNavigationProp<any>;
 // The stages from Harvesting on: Home asks for the harvest until it is recorded
 const HARVEST_STAGE_NO = 9;
 
-const WX_IMAGES = {
-  heavy_rain:    require('../assets/weather_icons/weather/heavy_rain.png'),
-  light_rain:    require('../assets/weather_icons/weather/light_rain.png'),
-  drizzle:       require('../assets/weather_icons/weather/Drizzle_rain.png'),
-  partly_cloudy: require('../assets/weather_icons/weather/partly_cloudy.png'),
-  partly_sunny:  require('../assets/weather_icons/weather/partly_sunny.png'),
-  mostly_sunny:  require('../assets/weather_icons/weather/Mostly_sunny.png'),
-  sunny:         require('../assets/weather_icons/weather/sunny.png'),
-  cloudy:        require('../assets/weather_icons/weather/cloudy.png'),
-};
-
-// WMO weather code -> our local image
-function codeToImage(code?: number) {
-  if (code === 0)                       return WX_IMAGES.sunny;
-  if (code === 1)                       return WX_IMAGES.mostly_sunny;
-  if (code === 2)                       return WX_IMAGES.partly_sunny;
-  if (code === 3 || code === 45 || code === 48) return WX_IMAGES.cloudy;
-  if (code !== undefined && code >= 51 && code <= 57) return WX_IMAGES.drizzle;
-  if (code === 61 || code === 80 || code === 63 || code === 81) return WX_IMAGES.light_rain;
-  if (code === 65 || code === 82)       return WX_IMAGES.heavy_rain;
-  if (code !== undefined && code >= 95) return WX_IMAGES.heavy_rain;
-  return WX_IMAGES.partly_cloudy;
+// The forecast's hours are Panabo time ("yyyy-MM-ddTHH:00"): read the hour as written,
+// so the label and the day/night picture don't shift on a phone set to another zone
+function forecastHour(iso: string): number {
+  const h = Number(String(iso).slice(11, 13));
+  return Number.isFinite(h) ? h : new Date(iso).getHours();
 }
-
 function hourFmt(iso: string) {
-  const d = new Date(iso);
-  let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-  return `${h}${ampm}`;
+  const h = forecastHour(iso);
+  return `${h % 12 || 12}${h >= 12 ? 'PM' : 'AM'}`;
 }
 
 // The PalayCheck step's kind -> its tile colour (the icon comes from stepIcon)
@@ -107,7 +88,7 @@ export const HomeDashboardScreen: React.FC = () => {
   const forecast  = useAppStore(st => st.forecast);
   const wxData    = forecast && forecast.key === farmKey(selectedFarm) ? forecast.data : null;
   const wxCurrent = wxData?.current ?? null;
-  const hourly    = (wxData?.hourly ?? []).map(h => ({ time: hourFmt(h.time), img: codeToImage(h.weather_code), temp: Math.round(h.temp) }));
+  const hourly    = (wxData?.hourly ?? []).map(h => ({ time: hourFmt(h.time), img: weatherIcon(h.weather_code, forecastHour(h.time)), temp: Math.round(h.temp) }));
   const { adviceFor } = useStepWeather();
 
   // ── My crop ──
@@ -327,7 +308,7 @@ export const HomeDashboardScreen: React.FC = () => {
             ) : (
               <Text style={s.temp}>{Math.round(wxCurrent.temperature)}<Text style={s.tempUnit}>°C</Text></Text>
             )}
-            <Image source={codeToImage(wxCurrent?.weather_code)} style={s.wxImg} resizeMode="contain" />
+            <Image source={weatherIcon(wxCurrent?.weather_code, panaboHour())} style={s.wxImg} resizeMode="contain" />
           </View>
 
           {showHourly && hourly.length > 0 && (
@@ -374,10 +355,12 @@ export const HomeDashboardScreen: React.FC = () => {
                 onPress={() => showFarm(f)}
                 activeOpacity={0.85}
               >
-                <View style={[s.farmArt, isSel && s.farmArtSel]}>
-                  {switching === f.id
-                    ? <ActivityIndicator color="#059669" />
-                    : <Ionicons name="leaf" size={22} color={isSel ? '#FFFFFF' : '#059669'} />}
+                {/* A rice-field photo for looks only, not this farm's own field */}
+                <View style={s.farmArt}>
+                  <Image source={farmPhoto(f.id)} style={s.farmPhoto} resizeMode="cover" />
+                  {switching === f.id && (
+                    <View style={s.farmBusy}><ActivityIndicator color="#FFFFFF" /></View>
+                  )}
                 </View>
                 <View style={s.farmFoot}>
                   <View style={{ flex: 1 }}>
@@ -495,11 +478,12 @@ const s = StyleSheet.create({
   farms:        { gap: 12, paddingRight: 4, paddingBottom: 6 },
   farmTile:     { ...card, width: 170, padding: 10 },
   farmTileSel:  { backgroundColor: INK },
-  farmArtSel:   { backgroundColor: '#1F2937' },
   onDark:       { color: '#FFFFFF' },
   onDarkSoft:   { color: '#9CA3AF' },
   badgeOnDark:  { backgroundColor: '#374151' },
-  farmArt:      { height: 84, borderRadius: 18, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
+  farmArt:      { height: 96, borderRadius: 18, overflow: 'hidden', backgroundColor: '#E8F5EF' },
+  farmPhoto:    { width: '100%', height: '100%' },
+  farmBusy:     { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(17,24,39,0.35)', justifyContent: 'center', alignItems: 'center' },
   farmFoot:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 4, paddingBottom: 2 },
   farmAdd:      { justifyContent: 'center', alignItems: 'center', minHeight: 150 },
 });
