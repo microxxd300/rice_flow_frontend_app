@@ -9,14 +9,14 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { LANGUAGE_LABELS, type Language } from '@/i18n/translations';
+import { welcomePhotoHeight, PHOTO_RATIO } from '@/utils/welcomeLayout';
 
 const FieldPhoto = require('../assets/bg/rice_field.jpg');
+const LogoWhite  = require('../assets/logo/logo_white.png');
 
 type Nav = StackNavigationProp<any>;
 
 const LANGS: Language[] = ['fil', 'ceb', 'en'];
-// The photo is 1024 × 1536
-const PHOTO_RATIO = 1536 / 1024;
 
 /**
  * The first screen: a rice field photo, one line about the app, the language (picked
@@ -30,8 +30,8 @@ export const WelcomeScreen: React.FC = () => {
   const language    = useLanguageStore(st => st.language);
   const setLanguage = useLanguageStore(st => st.setLanguage);
 
-  // The photo takes a little over half the screen; less on short phones
-  const photoH = Math.round(Math.min(Math.max(height * 0.52, 300), 520));
+  // The same size the opening animation drops the photo in at
+  const photoH = welcomePhotoHeight(height);
 
   return (
     <View style={s.root}>
@@ -42,10 +42,7 @@ export const WelcomeScreen: React.FC = () => {
           {/* Pinned to the bottom at the screen's width: the photo's top half is sky,
               so this keeps the horizon and the field in view */}
           <Image source={FieldPhoto} style={[s.photo, { width, height: Math.max(width * PHOTO_RATIO, photoH) }]} resizeMode="cover" />
-          <View style={[s.brand, { top: top + 18 }]}>
-            <Ionicons name="leaf" size={26} color="#FFFFFF" />
-            <Text style={s.brandText}>RiceFlow</Text>
-          </View>
+          <Image source={LogoWhite} style={[s.brand, { top: top + 14 }]} resizeMode="contain" />
         </View>
 
         <View style={s.body}>
@@ -100,11 +97,8 @@ const s = StyleSheet.create({
     backgroundColor: '#1F2937',
   },
   photo:     { position: 'absolute', left: 0, bottom: 0 },
-  brand:     { position: 'absolute', left: 22, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandText: {
-    fontSize: 24, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: -0.4,
-    textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 },
-  },
+  // the white logo: 720 × 515
+  brand:     { position: 'absolute', left: 18, width: 116, height: 116 * (515 / 720) },
 
   body:     { paddingHorizontal: 24, paddingTop: 28 },
   headline: { fontSize: 36, lineHeight: 42, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -1 },

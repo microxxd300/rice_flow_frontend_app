@@ -5,11 +5,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { PHOTO_RATIO } from '@/utils/welcomeLayout';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const FieldPhoto  = require('../assets/bg/rice_field.jpg');
-const PHOTO_RATIO = 1536 / 1024;   // the photo is 1024 × 1536
+const LogoWhite   = require('../assets/logo/logo_white.png');
 const BANNER_H    = 170;
 const HORIZON     = 0.6;           // how far down the photo the horizon sits
 
@@ -30,10 +31,7 @@ export const AuthHeader: React.FC<{ title: string; sub: string; onBack: () => vo
         <TouchableOpacity style={[h.back, { top: top + 12 }]} onPress={onBack} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <View style={[h.brand, { top: top + 20 }]}>
-          <Ionicons name="leaf" size={20} color="#FFFFFF" />
-          <Text style={h.brandText}>RiceFlow</Text>
-        </View>
+        <Image source={LogoWhite} style={[h.brand, { top: top + 10 }]} resizeMode="contain" />
       </View>
       <View style={h.titles}>
         <Text style={h.title}>{title}</Text>
@@ -90,8 +88,8 @@ const h = StyleSheet.create({
   banner:    { width: '100%', overflow: 'hidden', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, backgroundColor: '#1F2937' },
   photo:     { position: 'absolute', left: 0 },
   back:      { position: 'absolute', left: 16, width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
-  brand:     { position: 'absolute', right: 20, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  brandText: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Inter_700Bold', textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } },
+  // the white logo: 720 × 515
+  brand:     { position: 'absolute', right: 18, width: 84, height: 84 * (515 / 720) },
   titles:    { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 18 },
   title:     { fontSize: 32, lineHeight: 38, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.8 },
   sub:       { fontSize: 15, color: '#6B7280', fontFamily: 'Inter_500Medium', marginTop: 6, lineHeight: 21 },
