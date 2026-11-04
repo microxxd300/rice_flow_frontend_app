@@ -22,11 +22,11 @@ import { useAccessibility } from '@/context/AccessibilityContext';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { loadFarmData } from '@/services/farmData';
 import { cropDays } from '@/utils/cropDays';
+import { stageImage, stepIcon } from '@/assets/illustrations';
 import { loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 
 type Nav = StackNavigationProp<any>;
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 // The stages from Harvesting on: Home asks for the harvest until it is recorded
 const HARVEST_STAGE_NO = 9;
@@ -61,13 +61,13 @@ function hourFmt(iso: string) {
   return `${h}${ampm}`;
 }
 
-// The PalayCheck step's kind -> its icon tile
-const TASK_META: Record<string, { icon: IconName; color: string; bg: string }> = {
-  planting:        { icon: 'leaf-outline',             color: '#059669', bg: '#E8F5EF' },
-  fertilizer:      { icon: 'flask-outline',            color: '#D97706', bg: '#FEF3DC' },
-  pest_prevention: { icon: 'shield-checkmark-outline', color: '#DC2626', bg: '#FDECEC' },
-  irrigation:      { icon: 'water-outline',            color: '#2563EB', bg: '#EAF1FD' },
-  harvesting:      { icon: 'basket-outline',           color: '#B45309', bg: '#FDF3E1' },
+// The PalayCheck step's kind -> its tile colour (the icon comes from stepIcon)
+const TASK_META: Record<string, { color: string; bg: string }> = {
+  planting:        { color: '#059669', bg: '#E8F5EF' },
+  fertilizer:      { color: '#D97706', bg: '#FEF3DC' },
+  pest_prevention: { color: '#DC2626', bg: '#FDECEC' },
+  irrigation:      { color: '#2563EB', bg: '#EAF1FD' },
+  harvesting:      { color: '#B45309', bg: '#FDF3E1' },
 };
 
 /** The small round arrow in a card's corner (the card itself is the button). */
@@ -191,8 +191,14 @@ export const HomeDashboardScreen: React.FC = () => {
               <Text style={[s.cardLabel, T && { fontSize: 15 }]}>{tr.homeMyCrop}</Text>
               <ArrowBadge />
             </View>
-            <Text style={[s.cropName, T && { fontSize: 22 }]} numberOfLines={1}>{cycle.variety_name ?? '—'}</Text>
-            {!!stageTxt && <Text style={[s.cropStage, T && { fontSize: 16 }]}>{stageTxt}</Text>}
+            <View style={s.cropRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cropName, T && { fontSize: 22 }]} numberOfLines={2}>{cycle.variety_name ?? '—'}</Text>
+                {!!stageTxt && <Text style={[s.cropStage, T && { fontSize: 16 }]}>{stageTxt}</Text>}
+              </View>
+              {/* The rice plant at today's stage */}
+              {!!stageImage(stageNo) && <Image source={stageImage(stageNo)!} style={s.stagePic} resizeMode="contain" />}
+            </View>
 
             {days && days.day >= 1 ? (
               <>
@@ -273,7 +279,7 @@ export const HomeDashboardScreen: React.FC = () => {
               return (
                 <TouchableOpacity key={t.id} style={[s.taskRow, i > 0 && s.taskRowGap]} onPress={() => logStep(t.id)} activeOpacity={0.75}>
                   <View style={[s.taskIcon, { backgroundColor: meta.bg }]}>
-                    <Ionicons name={meta.icon} size={18} color={meta.color} />
+                    <Image source={stepIcon(t.cat)} style={s.taskPic} resizeMode="contain" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.rowMeta, { color: t.offset < 0 ? '#D97706' : '#6B7280' }, T && { fontSize: 13 }]}>{dayLabel(t.offset)}</Text>
@@ -438,6 +444,9 @@ const s = StyleSheet.create({
   darkBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 
   /* My crop */
+  cropRow:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stagePic:  { width: 76, height: 76 },
+  taskPic:   { width: 36, height: 36 },
   cropName:  { fontSize: 20, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
   cropStage: { fontSize: 14, color: '#059669', fontFamily: 'Inter_600SemiBold', marginTop: 2 },
   dayRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginTop: 14 },

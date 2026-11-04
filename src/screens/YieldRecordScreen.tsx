@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput as RNTextInput, Alert,
+  TextInput as RNTextInput, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,6 +21,8 @@ interface YieldRecordScreenProps {
 }
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const HarvestPhoto = require('../assets/bg/harvest.jpg');
 
 // Optional details, kept in the record's notes (the model does not read them)
 const QUALITY_OPTIONS = [{ value: 'Good', key: 'yhGood' }, { value: 'Average', key: 'yhAverage' }, { value: 'Poor', key: 'yhPoor' }];
@@ -241,6 +243,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
         <View style={s.section}>
+          <Image source={HarvestPhoto} style={s.harvestPhoto} resizeMode="cover" />
           <View style={s.card}>
             <Text style={s.cardTitleNew}>{tr.yieldForm}</Text>
 
@@ -409,6 +412,7 @@ const s = StyleSheet.create({
 
   /* Section */
   section: { paddingHorizontal: 16, marginTop: 12 },
+  harvestPhoto: { width: '100%', height: 150, borderRadius: 24, marginBottom: 12, backgroundColor: '#E4E6E4' },
   cardTitleNew: { fontSize: 16, color: '#111827', marginBottom: 14, fontFamily: 'Inter_700Bold' },
 
   /* Card */

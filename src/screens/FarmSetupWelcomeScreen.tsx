@@ -1,25 +1,24 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, type ImageSourcePropType,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { SetupHeader } from '@/components/SetupHeader';
+import { icons } from '@/assets/illustrations';
 
 type Nav = StackNavigationProp<any>;
-type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 interface FarmSetupWelcomeScreenProps {
   onSkip?: () => void;
 }
 
-const STEPS: { iconName: IoniconsName; title: string; text: string }[] = [
-  { iconName: 'create-outline',   title: 'Farm details',     text: "Your farm's name and area"           },
-  { iconName: 'navigate-outline', title: 'GPS location',     text: 'Tag your farm on the map'            },
-  { iconName: 'leaf-outline',     title: 'Top 3 varieties',  text: 'Rice varieties matched to your land' },
-  { iconName: 'book-outline',     title: 'Planting guide',   text: 'Step-by-step plan for the season'    },
+const STEPS: { image: ImageSourcePropType; title: string; text: string }[] = [
+  { image: icons.farm,      title: 'Farm details',     text: "Your farm's name and area"           },
+  { image: icons.gps,       title: 'GPS location',     text: 'Tag your farm on the map'            },
+  { image: icons.varieties, title: 'Top 3 varieties',  text: 'Rice varieties matched to your land' },
+  { image: icons.guide,     title: 'Planting guide',   text: 'Step-by-step plan for the season'    },
 ];
 
 export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () => {
@@ -45,7 +44,7 @@ export const FarmSetupWelcomeScreen: React.FC<FarmSetupWelcomeScreenProps> = () 
                 <Text style={s.stepTitle}>{step.title}</Text>
                 <Text style={s.stepText}>{step.text}</Text>
               </View>
-              <Ionicons name={step.iconName} size={20} color="#059669" />
+              <Image source={step.image} style={s.stepPic} resizeMode="contain" />
             </View>
           ))}
         </View>
@@ -88,6 +87,7 @@ const s = StyleSheet.create({
   stepRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
   stepNumTile: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
   stepNum: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
+  stepPic:   { width: 44, height: 44 },
   stepTitle: { fontSize: 15, color: '#111827', marginBottom: 2, fontFamily: 'Inter_700Bold' },
   stepText: { fontSize: 13, color: '#6B7280', lineHeight: 18, fontFamily: 'Inter_500Medium' },
 

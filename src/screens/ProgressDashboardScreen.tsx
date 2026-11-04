@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert, ActivityIndicator,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -27,6 +27,7 @@ import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { cropDays } from '@/utils/cropDays';
 import { CAVAN_KG } from '@/utils/harvest';
+import { stageImage } from '@/assets/illustrations';
 import { seasonLabel } from '@/utils/formatting';
 import { ISSUE_TO_API, LOG_WORD_KEYS, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
@@ -791,12 +792,19 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   <Text style={s.ovLabel}>{tr.ovStageNow}</Text>
                   {cycleLoading && <ActivityIndicator size="small" color="#059669" />}
                 </View>
-                {cycleLoading
-                  ? <SkelBar w={190} h={26} br={6} />
-                  : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{currentCycle ? activeStage : tr.plogNoCycle}</Text>}
-                {!!nextStage && !cycleLoading && (
-                  <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.ovNext.replace('{stage}', nextStage)}</Text>
-                )}
+                <View style={s.ovStageRow}>
+                  <View style={{ flex: 1 }}>
+                    {cycleLoading
+                      ? <SkelBar w={190} h={26} br={6} />
+                      : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{currentCycle ? activeStage : tr.plogNoCycle}</Text>}
+                    {!!nextStage && !cycleLoading && (
+                      <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.ovNext.replace('{stage}', nextStage)}</Text>
+                    )}
+                  </View>
+                  {!cycleLoading && !!stageImage(stageNo) && (
+                    <Image source={stageImage(stageNo)!} style={s.ovStagePic} resizeMode="contain" />
+                  )}
+                </View>
                 <View style={s.stageTrack}>
                   {Array.from({ length: STAGE_COUNT }, (_, i) => i + 1).map(no => (
                     <View
@@ -1590,6 +1598,8 @@ const s = StyleSheet.create({
   ovCard:      { padding: 20, marginTop: 4 },
   ovHead:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   ovLabel:     { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold', marginBottom: 8 },
+  ovStageRow:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  ovStagePic:  { width: 84, height: 84 },
   ovStage:     { fontSize: 22, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
   ovSub:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium', marginTop: 4 },
   stageTrack:  { flexDirection: 'row', gap: 4, marginTop: 16 },

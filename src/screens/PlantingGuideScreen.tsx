@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,6 +20,7 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SowingQuestion } from '@/components/SowingQuestion';
+import { stepIcon } from '@/assets/illustrations';
 
 // Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
 // farm's own monthly rainfall loads, or when the phone is offline.
@@ -377,7 +378,7 @@ export const PlantingGuideScreen: React.FC = () => {
             <View style={s.card}>
               <View style={s.stepTop}>
                 <View style={[s.catTile, { backgroundColor: cfg.bg }]}>
-                  <Ionicons name={cfg.icon} size={22} color={cfg.color} />
+                  <Image source={stepIcon(current.category)} style={{ width: 38, height: 38 }} resizeMode="contain" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[s.catLabel, { color: cfg.color }]}>{cfg.label}</Text>
@@ -475,7 +476,7 @@ export const PlantingGuideScreen: React.FC = () => {
               return (
                 <View key={st.id} style={s.nextRow}>
                   <View style={[s.catTile, { width: 44, height: 44, borderRadius: 14, backgroundColor: cfg.bg }]}>
-                    <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+                    <Image source={stepIcon(st.category)} style={{ width: 32, height: 32 }} resizeMode="contain" />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.nextTitle, T && { fontSize: 16 }]} numberOfLines={2}>{st.title}</Text>

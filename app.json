@@ -19,7 +19,11 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/icon/adaptive-icon.png",
+        "backgroundColor": "#111827"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -38,12 +42,20 @@
           "locationWhenInUsePermission": "RiceFlow uses your location to put your farm on the map and recommend rice varieties for it."
         }
       ],
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./src/assets/icon/adaptive-icon.png",
+          "imageWidth": 160,
+          "backgroundColor": "#F1F2F1"
+        }
+      ],
       "expo-secure-store",
       "expo-notifications"
     ],
     "experiments": {
       "tsconfigPaths": true
-    }
+    },
+    "icon": "./src/assets/icon/icon.png"
   }
 }
