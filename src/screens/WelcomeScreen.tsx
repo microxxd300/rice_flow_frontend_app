@@ -1,144 +1,124 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Image,
-  useWindowDimensions,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { useLanguageStore } from '@/store/languageStore';
+import { useTranslation } from '@/i18n/useTranslation';
+import { LANGUAGE_LABELS, type Language } from '@/i18n/translations';
 
-const LogoImage = require('../assets/icons/welcome_screen_logo.png');
+const FieldPhoto = require('../assets/bg/rice_field.jpg');
 
 type Nav = StackNavigationProp<any>;
 
-const clamp = (val: number, min: number, max: number) =>
-  Math.min(Math.max(val, min), max);
+const LANGS: Language[] = ['fil', 'ceb', 'en'];
 
+/**
+ * The first screen: a rice field photo, one line about the app, the language (picked
+ * before anything else is read; a new account keeps it), then log in or sign up.
+ */
 export const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
-  const { width, height } = useWindowDimensions();
+  const tr = useTranslation();
+  const { height } = useWindowDimensions();
+  const { top, bottom } = useSafeAreaInsets();
+  const language    = useLanguageStore(st => st.language);
+  const setLanguage = useLanguageStore(st => st.setLanguage);
 
-  // Logo scales with the smaller dimension so it looks right in both
-  // orientations. Clamped so tiny phones stay readable and tablets don't blow it up.
-  const logoSize = clamp(Math.min(width, height) * 0.26, 100, 160);
-
-  // Top padding above the logo — pushes the whole brand block down from the header.
-  const topPad   = clamp(height * 0.16, 100, 200);
-
-  // Vertical space below the logo scales with screen height — taller screens
-  // push "Get started" lower without crowding small phones.
-  const brandGap = clamp(height * 0.18, 100, 200);
+  // The photo takes a little over half the screen; less on short phones
+  const photoH = Math.round(Math.min(Math.max(height * 0.52, 300), 520));
 
   return (
-    <SafeAreaView style={s.root}>
+    <View style={s.root}>
+      <ScrollView contentContainerStyle={{ paddingBottom: bottom + 24 }} bounces={false} showsVerticalScrollIndicator={false}>
 
-      {/* Header — minimal: page title only, matches Login / Register */}
-      <View style={s.header}>
-        <View style={{ width: 32 }} />
-        <Text style={s.headerTitle}>Welcome</Text>
-        <View style={{ width: 32 }} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={[s.scroll, { paddingTop: topPad }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-
-        {/* Brand mark */}
-        <View style={[s.brand, { marginBottom: brandGap }]}>
-          <Image
-            source={LogoImage}
-            style={{ width: logoSize, height: logoSize }}
-            resizeMode="contain"
-          />
+        {/* Photo with the name on it */}
+        <View style={[s.hero, { height: photoH }]}>
+          <Image source={FieldPhoto} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <View style={[s.brand, { top: top + 18 }]}>
+            <Ionicons name="leaf" size={26} color="#FFFFFF" />
+            <Text style={s.brandText}>RiceFlow</Text>
+          </View>
         </View>
 
-        {/* Headline */}
-        <Text style={s.title}>Get started</Text>
-        <Text style={s.sub}>
-          Free for Filipino rice farmers — built to help you decide,
-          plan, and harvest with confidence.
-        </Text>
+        <View style={s.body}>
+          <Text style={s.headline}>{tr.welHeadline}</Text>
+          <Text style={s.sub}>{tr.welSub}</Text>
 
-        <View style={{ height: 28 }} />
+          {/* Language first: everything after this reads in it */}
+          <View style={s.langs}>
+            {LANGS.map(l => {
+              const on = language === l;
+              return (
+                <TouchableOpacity
+                  key={l}
+                  style={[s.lang, on && s.langOn]}
+                  onPress={() => { setLanguage(l).catch(() => {}); }}
+                  activeOpacity={0.8}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[s.langText, on && s.langTextOn]}>{LANGUAGE_LABELS[l]}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-        {/* Primary action */}
-        <TouchableOpacity
-          style={s.saveBtn}
-          onPress={() => navigation.navigateDeprecated('Login')}
-          activeOpacity={0.85}
-        >
-          <Text style={s.saveBtnText}>Log in</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={s.darkBtn} onPress={() => navigation.navigateDeprecated('Login')} activeOpacity={0.85}>
+            <Text style={s.darkBtnText}>{tr.welLogin}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.whiteBtn} onPress={() => navigation.navigateDeprecated('Register')} activeOpacity={0.85}>
+            <Text style={s.whiteBtnText}>{tr.welCreate}</Text>
+          </TouchableOpacity>
 
-        <View style={{ height: 10 }} />
-
-        {/* Secondary action */}
-        <TouchableOpacity
-          style={s.cancelBtn}
-          onPress={() => navigation.navigateDeprecated('Register')}
-          activeOpacity={0.7}
-        >
-          <Text style={s.cancelBtnText}>Create an account</Text>
-        </TouchableOpacity>
-
-        <Text style={s.noteText}>
-          Your information stays private and secure.
-        </Text>
-
+          <View style={s.noteRow}>
+            <Ionicons name="lock-closed-outline" size={13} color="#6B7280" />
+            <Text style={s.noteText}>{tr.welPrivate}</Text>
+          </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
+const INK  = '#111827';
+const PAGE = '#F1F2F1';
+
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: PAGE },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
+  hero: {
+    width: '100%', overflow: 'hidden',
+    borderBottomLeftRadius: 36, borderBottomRightRadius: 36,
+    backgroundColor: '#1F2937',
   },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+  brand:     { position: 'absolute', left: 22, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandText: {
+    fontSize: 24, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: -0.4,
+    textShadowColor: 'rgba(0,0,0,0.25)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 },
   },
 
-  brand: { alignItems: 'center' },
+  body:     { paddingHorizontal: 24, paddingTop: 28 },
+  headline: { fontSize: 36, lineHeight: 42, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -1 },
+  sub:      { fontSize: 15, color: '#6B7280', fontFamily: 'Inter_500Medium', marginTop: 10, lineHeight: 22 },
 
-  title: {
-    fontSize: 22, fontWeight: '700',
-    color: '#111827', letterSpacing: -0.4,
-    marginBottom: 8,
-  },
-  sub: {
-    fontSize: 13, color: '#6B7280',
-    lineHeight: 20,
-  },
+  langs:      { flexDirection: 'row', gap: 10, marginTop: 24, marginBottom: 24 },
+  lang:       { flex: 1, height: 46, borderRadius: 23, backgroundColor: '#E4E6E4', justifyContent: 'center', alignItems: 'center' },
+  langOn:     { backgroundColor: INK },
+  langText:   { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  langTextOn: { color: '#FFFFFF' },
 
-  saveBtn: {
-    height: 52, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  darkBtn:      { height: 56, borderRadius: 20, backgroundColor: INK, justifyContent: 'center', alignItems: 'center' },
+  darkBtnText:  { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
+  whiteBtn:     {
+    height: 56, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginTop: 12,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2,
   },
-  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  whiteBtnText: { fontSize: 16, color: INK, fontFamily: 'Inter_700Bold' },
 
-  cancelBtn: {
-    height: 52, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  cancelBtnText: { fontSize: 15, fontWeight: '600', color: '#374151' },
-
-  noteText: {
-    fontSize: 11, color: '#9CA3AF',
-    textAlign: 'center', marginTop: 22,
-  },
+  noteRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 20 },
+  noteText: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
 });

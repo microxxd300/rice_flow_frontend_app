@@ -9,6 +9,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as Location from 'expo-location';
 import { useAppStore } from '@/store/appStore';
 import { goBackFromStep } from '@/utils/navigation';
+import { SetupHeader } from '@/components/SetupHeader';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -88,14 +89,7 @@ export const LocationPermissionScreen: React.FC = () => {
   return (
     <SafeAreaView style={s.root}>
 
-      {/* Header — same shape as the other setup steps */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => goBackFromStep(navigation, 'LocationPermission')} activeOpacity={0.7} style={s.backBtn}>
-          <Ionicons name="chevron-back" size={22} color="#111827" />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>Allow location</Text>
-        <Text style={s.stepText}>2 / 4</Text>
-      </View>
+      <SetupHeader title="Allow location" step={2} onBack={() => goBackFromStep(navigation, 'LocationPermission')} />
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
@@ -123,7 +117,7 @@ export const LocationPermissionScreen: React.FC = () => {
         <View style={s.points}>
           {POINTS.map((p, i) => (
             <View key={i} style={[s.pointRow, i < POINTS.length - 1 && s.pointRowDivider]}>
-              <Ionicons name={p.icon} size={18} color="#9CA3AF" />
+              <View style={s.pointTile}><Ionicons name={p.icon} size={18} color="#059669" /></View>
               <View style={{ flex: 1 }}>
                 <Text style={s.pointTitle}>{p.title}</Text>
                 <Text style={s.pointText}>{p.text}</Text>
@@ -182,70 +176,33 @@ export const LocationPermissionScreen: React.FC = () => {
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  backBtn:     { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  stepText:    { width: 32, textAlign: 'right', fontSize: 12, fontWeight: '600', color: '#9CA3AF' },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 24 },
-  lead:   { fontSize: 14, color: '#374151', lineHeight: 21, marginBottom: 24 },
+  scroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24 },
+  lead: { fontSize: 15, color: '#374151', lineHeight: 22, marginBottom: 16, paddingHorizontal: 4, fontFamily: 'Inter_500Medium' },
 
-  points: { backgroundColor: '#FFFFFF' },
-  pointRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16,
-  },
-  pointRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
-  },
-  pointTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  pointText:  { fontSize: 12, color: '#6B7280', lineHeight: 17 },
+  points: { backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, paddingHorizontal: 16, paddingVertical: 4 },
+  pointRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
+  pointRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  pointTile: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
+  pointTitle: { fontSize: 15, color: '#111827', marginBottom: 2, fontFamily: 'Inter_700Bold' },
+  pointText: { fontSize: 13, color: '#6B7280', lineHeight: 18 },
 
-  privacyNote: {
-    fontSize: 11, color: '#9CA3AF',
-    marginTop: 20, paddingHorizontal: 4,
-  },
+  privacyNote: { fontSize: 12, color: '#6B7280', marginTop: 16, paddingHorizontal: 6, lineHeight: 17 },
 
-  footer: {
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-  },
-  saveBtnFull: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, height: 52, borderRadius: 12,
-    backgroundColor: '#059669',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 20 },
+  saveBtnFull: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 56, borderRadius: 20, backgroundColor: '#111827' },
+  saveBtnText: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
 
-  whyCard: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1, borderColor: '#BBF7D0',
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 18,
-  },
+  whyCard: { backgroundColor: '#E8F5EF', borderRadius: 20, padding: 16, marginTop: 12 },
   whyHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  whyTitle:  { fontSize: 13, fontWeight: '700', color: '#065F46' },
-  whyBody:   { fontSize: 12, color: '#047857', lineHeight: 18 },
+  whyTitle: { fontSize: 14, color: '#065F46', fontFamily: 'Inter_700Bold' },
+  whyBody: { fontSize: 13, color: '#047857', lineHeight: 19 },
 
-  blockedCard: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1, borderColor: '#FECACA',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-  },
-  blockedTitle: { fontSize: 13, fontWeight: '700', color: '#B91C1C' },
+  blockedCard: { backgroundColor: '#FDECEC', borderRadius: 20, padding: 16, marginBottom: 14 },
+  blockedTitle: { fontSize: 14, color: '#B91C1C', fontFamily: 'Inter_700Bold' },
   blockedBody:  { fontSize: 12, color: '#7F1D1D', lineHeight: 18 },
   blockedSteps: { fontSize: 12, color: '#7F1D1D', lineHeight: 18, marginTop: 6, fontWeight: '600' },
-  settingsBtn:  { backgroundColor: '#374151', shadowColor: '#374151', marginBottom: 10 },
+  settingsBtn: { backgroundColor: '#374151', marginBottom: 10 },
 });

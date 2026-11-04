@@ -174,11 +174,14 @@ export const FarmMapTaggingScreen: React.FC = () => {
         {/* Floating header — same minimal header shape, just floats over the map */}
         <View style={s.topBar}>
           <TouchableOpacity onPress={() => goBackFromStep(navigation, 'FarmMapTagging')} activeOpacity={0.7} style={s.iconBtn}>
-            <Ionicons name="chevron-back" size={20} color="#111827" />
+            <Ionicons name="chevron-back" size={22} color="#111827" />
           </TouchableOpacity>
           <View style={s.titleChip}>
             <Text style={s.titleText}>Tag your farm</Text>
-            <Text style={s.titleStep}>3 / 4</Text>
+            {/* the same 4-part bar as the other steps */}
+            <View style={s.miniBar}>
+              {[0, 1, 2, 3].map(i => <View key={i} style={[s.miniSeg, i < 3 && s.miniSegDone]} />)}
+            </View>
           </View>
           <TouchableOpacity onPress={goToMyLocation} activeOpacity={0.7} style={s.iconBtn}>
             {locating
@@ -238,13 +241,13 @@ const Row: React.FC<{ label: string; value: string; last?: boolean }> = ({ label
 
 const r = StyleSheet.create({
   row:    { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12 },
-  border: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
-  label:  { width: 100, fontSize: 12, color: '#6B7280' },
-  value:  { flex: 1, fontSize: 13, fontWeight: '600', color: '#111827', textAlign: 'right' },
+  border: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  label: { width: 100, fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  value: { flex: 1, fontSize: 13, color: '#111827', textAlign: 'right', fontFamily: 'Inter_600SemiBold' },
 });
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
 
   mapContainer: { overflow: 'hidden' },
 
@@ -253,65 +256,33 @@ const s = StyleSheet.create({
     position: 'absolute', top: 8, left: 16, right: 16,
     flexDirection: 'row', alignItems: 'center', gap: 10,
   },
-  iconBtn: {
-    width: 38, height: 38, borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
-  },
-  titleChip: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF', borderRadius: 10,
-    paddingHorizontal: 14, height: 38,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
-  },
-  titleText: { fontSize: 14, fontWeight: '700', color: '#111827' },
-  titleStep: { fontSize: 12, fontWeight: '600', color: '#9CA3AF' },
-  hintChip: {
-    position: 'absolute', bottom: 12, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(17,24,39,0.75)', borderRadius: 9999,
-    paddingVertical: 6, paddingHorizontal: 12,
-  },
-  hintText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  titleChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, backgroundColor: '#FFFFFF', borderRadius: 22, paddingHorizontal: 16, height: 44, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  titleText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  miniBar:     { flexDirection: 'row', gap: 3 },
+  miniSeg:     { width: 14, height: 5, borderRadius: 3, backgroundColor: '#E4E6E4' },
+  miniSegDone: { backgroundColor: '#059669' },
+  hintChip: { position: 'absolute', bottom: 40, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(17,24,39,0.85)', borderRadius: 18, paddingVertical: 8, paddingHorizontal: 14 },
+  hintText: { fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 
   /* Panel */
-  panel: {
-    flex: 1, backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20, paddingTop: 18,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-  },
+  panel: { flex: 1, backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 22, marginTop: -28, borderTopLeftRadius: 28, borderTopRightRadius: 28 },
 
   farmRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     marginBottom: 10,
   },
-  farmName:   { fontSize: 16, fontWeight: '700', color: '#111827' },
-  farmSub:    { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  taggedText: { fontSize: 12, fontWeight: '700', color: '#059669' },
+  farmName: { fontSize: 20, color: '#111827', letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  farmSub: { fontSize: 13, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
+  taggedText: { fontSize: 12, color: '#047857', backgroundColor: '#E8F5EF', borderRadius: 10, paddingVertical: 5, paddingHorizontal: 10, overflow: 'hidden', fontFamily: 'Inter_700Bold' },
 
   /* Info list */
-  infoList: {
-    backgroundColor: '#FFFFFF',
-    marginBottom: 18,
-  },
+  infoList: { backgroundColor: '#F1F2F1', borderRadius: 18, paddingHorizontal: 14, marginBottom: 16 },
 
   /* Actions — sit a comfortable distance below the info list, same on any screen */
   actions: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  cancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  cancelBtnText: { fontSize: 14, fontWeight: '600', color: '#374151' },
-  saveBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
+  cancelBtn: { flex: 1, height: 56, borderRadius: 20, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F2F1' },
+  cancelBtnText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  saveBtn: { flex: 1, height: 56, borderRadius: 20, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
+  saveBtnText: { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
 });

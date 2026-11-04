@@ -37,7 +37,7 @@ interface LanguageState {
   resetLanguage: () => void;
 }
 
-export const useLanguageStore = create<LanguageState>((set) => ({
+export const useLanguageStore = create<LanguageState>((set, get) => ({
   language: DEFAULT_LANGUAGE,
 
   setLanguage: async (lang) => {
@@ -61,8 +61,11 @@ export const useLanguageStore = create<LanguageState>((set) => ({
       return;
     }
     const saved = await storage.getItem<Language>(keyFor(userId));
-    // No saved value = new account → English.
-    set({ language: isValid(saved) ? saved : DEFAULT_LANGUAGE });
+    if (isValid(saved)) { set({ language: saved }); return; }
+    // No saved value = new account: it keeps the language picked on the welcome
+    // screen (English unless one was picked; logout resets it), and saves it
+    const picked = get().language;
+    await storage.setItem(keyFor(userId), picked);
   },
 
   /** Logout: drop back to the default in memory. The user's own key stays on
