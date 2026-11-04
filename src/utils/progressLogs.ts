@@ -11,7 +11,13 @@ import { apiProgress } from '@/services/apiService';
 export const STAGE_NO: Record<string, number> = {
   'Land Prep & Planting': 1, 'Early Growth': 2, 'Tillering': 3, 'Stem Elongation': 4,
   'Panicle Initiation': 5, 'Heading': 6, 'Grain Filling': 7,
+  'Ripening': 8, 'Harvesting': 9, 'Post-Harvest': 10,
 };
+
+/** The log form's stage name for the server's stage_no ('' when there is none). */
+export function stageLabel(stageNo?: number | null): string {
+  return Object.keys(STAGE_NO).find(k => STAGE_NO[k] === stageNo) ?? '';
+}
 
 export const ISSUE_TO_API: Record<string, string> = {
   Insect: 'pest', Disease: 'disease', Drought: 'weather', Flood: 'weather', Other: 'other',

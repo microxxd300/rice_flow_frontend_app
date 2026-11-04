@@ -27,7 +27,7 @@ import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { seasonLabel } from '@/utils/formatting';
-import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
+import { ISSUE_TO_API, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
   onAddLog?: () => void;
@@ -49,7 +49,7 @@ const CROP_STAGES = [
 
 const GROWTH_STAGES = [
   'Land Prep & Planting', 'Early Growth', 'Tillering', 'Stem Elongation',
-  'Panicle Initiation', 'Heading', 'Grain Filling',
+  'Panicle Initiation', 'Heading', 'Grain Filling', 'Ripening', 'Harvesting', 'Post-Harvest',
 ];
 
 const ISSUE_OPTIONS = ['None', 'Insect', 'Disease', 'Drought', 'Flood', 'Other'];
@@ -59,7 +59,8 @@ const ISSUE_OPTIONS = ['None', 'Insect', 'Disease', 'Drought', 'Flood', 'Other']
 const LOG_WORD_KEYS: Record<string, string> = {
   'Land Prep & Planting': 'plogStLandPrep', 'Early Growth': 'plogStEarly', 'Tillering': 'plogStTiller',
   'Stem Elongation': 'plogStStem', 'Panicle Initiation': 'plogStPanicle', 'Heading': 'plogStHeading',
-  'Grain Filling': 'plogStGrain',
+  'Grain Filling': 'plogStGrain', 'Ripening': 'plogStRipen', 'Harvesting': 'plogStHarvest',
+  'Post-Harvest': 'plogStPost',
   None: 'plogIsNone', Insect: 'plogIsInsect', Disease: 'plogIsDisease', Drought: 'plogIsDrought',
   Flood: 'plogIsFlood', Other: 'plogIsOther',
   Low: 'plogSevLow', Medium: 'plogSevMedium', High: 'plogSevHigh',
@@ -256,6 +257,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // A newer copy of this cycle in the store (refreshCycle, after a log or a sowing answer)
   // wins, so its stage and dates change at once
   const currentCycle = activeCycle && loadedCycle && activeCycle.id === loadedCycle.id ? activeCycle : loadedCycle;
+  // The log's growth stage fills in from the crop's stage (the cycle follows the guide);
+  // the farmer only picks one to correct it
+  const autoStage  = stageLabel((currentCycle as any)?.stage?.stage_no);
+  const shownStage = logStage || autoStage;
   // Skeletons only when there is nothing to show yet
   const [cycleLoading, setCycleLoading] = useState(!cached);
 
@@ -411,7 +416,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     : new Date(plannedStart.getTime() + cycleDays * 86400000);
   const harvestLabel    = harvestDate ? `${MONTHS_SHORT[harvestDate.getMonth()]} ${harvestDate.getDate()}` : 'Oct 9';
   // The server's stage: days since sowing or the guide steps logged, whichever is further
-  const activeStage     = (currentCycle as any)?.stage?.name ?? (() => {
+  const serverStage     = stageLabel((currentCycle as any)?.stage?.stage_no);
+  const activeStage     = serverStage ? logWord(serverStage) : (() => {
     const i = Math.min(CROP_STAGES.length - 1, Math.floor((cyclePct / 100) * CROP_STAGES.length));
     return CROP_STAGES[i]?.stage ?? 'Panicle Initiation';
   })();
@@ -556,19 +562,20 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     const issueClean = logIssue.trim();
     const issueIsReal = !!issueClean && issueClean !== 'Wala' && issueClean !== 'None';
+    const stageName   = shownStage;
     const doneStep    = finishesStep && logStepTarget && !isNaN(Number(logStepTarget.id)) ? logStepTarget : null;
 
     // Save to the server first; the log only shows in the app once the server has it.
     // Notes are required by the server, so a log without notes falls back to its step/stage/issue.
     const observation = logNotes.trim() || doneStep?.title
-      || [logStage, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check';
+      || [stageName, issueIsReal ? issueClean : ''].filter(Boolean).join(' · ') || 'Field check';
     let saved: any;
     setSavingLog(true);
     try {
       const res = await apiProgress.createLog({
         farm_cycle:   currentCycle.id,
         log_date:     logDate,
-        growth_stage: growthStages.find((g: any) => g.stage_no === STAGE_NO[logStage])?.id ?? null,
+        growth_stage: growthStages.find((g: any) => g.stage_no === STAGE_NO[stageName])?.id ?? null,
         issue_type:   issueIsReal ? (ISSUE_TO_API[issueClean] ?? 'other') : '',
         severity:     issueIsReal ? (logSeverity || 'Low').toLowerCase() : '',
         action_taken: issueIsReal ? logAction.trim() : '',
@@ -587,7 +594,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       id:            String(saved.id),
       cycleId:       String(currentCycle.id),
       logDate,
-      growthStage:   logStage,
+      growthStage:   stageName,
       observedIssue: issueClean || 'None',
       severity:      issueIsReal ? (logSeverity || 'Low') : '',
       actionTaken:   issueIsReal ? logAction.trim() : '',
@@ -1489,7 +1496,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
               {/* Yugto ng Paglaki */}
               <View style={s.mFieldWrap}>
-                <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogStage} <Text style={s.mReq}>*</Text></Text>
+                <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogStage}</Text>
+                {!logStage && !!autoStage && (
+                  <Text style={[s.mHint, T && { fontSize: 13 }]}>{tr.plogStageAuto}</Text>
+                )}
                 <View>
                   <TouchableOpacity
                     style={s.mInputBox}
@@ -1497,8 +1507,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                     activeOpacity={0.75}
                   >
                     <Ionicons name="leaf-outline" size={16} color="#9CA3AF" />
-                    <Text style={[s.mInput, { color: logStage ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
-                      {logStage ? logWord(logStage) : tr.plogStagePh}
+                    <Text style={[s.mInput, { color: shownStage ? '#111827' : '#D1D5DB' }, T && { fontSize: 16 }]}>
+                      {shownStage ? logWord(shownStage) : tr.plogStagePh}
                     </Text>
                     <Ionicons name={openStage ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
                   </TouchableOpacity>
@@ -1511,8 +1521,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                           onPress={() => { setLogStage(opt); setOpenStage(false); }}
                           activeOpacity={0.7}
                         >
-                          <Text style={[s.mDropItemText, logStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
-                          {logStage === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
+                          <Text style={[s.mDropItemText, shownStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
+                          {shownStage === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -1972,6 +1982,7 @@ const s = StyleSheet.create({
   mFieldWrap:  { marginBottom: 20 },
   mLabel:      { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 8 },
   mReq:        { color: '#EF4444' },
+  mHint:       { fontSize: 11.5, color: '#6B7280', marginTop: -4, marginBottom: 8, lineHeight: 16 },
   mInputBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
