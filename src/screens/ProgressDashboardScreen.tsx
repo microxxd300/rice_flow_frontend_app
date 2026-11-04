@@ -815,9 +815,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 </View>
                 <View style={s.ovStats}>
                   {[
-                    { lbl: tr.cycCurrent,       val: days && days.day >= 1 ? `${tr.cycDayPrefix} ${days.day}` : (sowingLabel ?? '—') },
-                    { lbl: tr.cycDone,          val: days && days.total && days.day >= 1 ? `${Math.round(days.share * 100)}%` : '—' },
-                    { lbl: tr.progressExpected, val: harvestDate ? harvestLabel : '—' },
+                    { lbl: tr.cycCurrent,       val: days && days.day >= 1 ? `${tr.cycDayPrefix} ${days.day}` : (sowingLabel ?? tr.ovNotSown) },
+                    { lbl: tr.cycDone,          val: days && days.total && days.day >= 1 ? `${Math.round(days.share * 100)}%` : tr.ovNotStarted },
+                    { lbl: tr.progressExpected, val: harvestDate ? harvestLabel : tr.ovNotSet },
                   ].map(c => (
                     <View key={c.lbl} style={{ flex: 1 }}>
                       <Text style={[s.ovStatLbl, T && { fontSize: 13 }]} numberOfLines={1}>{c.lbl}</Text>
@@ -833,8 +833,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               <View style={[s.card, s.ovCard]}>
                 <Text style={s.ovLabel}>{tr.cycExpectedYield}</Text>
                 <View style={s.ovBigRow}>
-                  <Text style={s.ovBig}>{showYield ? predictedYield!.toFixed(1) : '—'}</Text>
-                  {showYield && <Text style={s.ovBigUnit}>{tr.ovTons}</Text>}
+                  {showYield
+                    ? <><Text style={s.ovBig}>{predictedYield!.toFixed(1)}</Text><Text style={s.ovBigUnit}>{tr.ovTons}</Text></>
+                    : <View style={s.pendingPill}><Ionicons name="time-outline" size={15} color="#6B7280" /><Text style={s.pendingText}>{tr.ovNotYet}</Text></View>}
                 </View>
                 <Text style={[s.ovSub, T && { fontSize: 14 }]}>
                   {sacks != null
@@ -852,14 +853,15 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {/* This season in three tiles */}
               <View style={s.tiles}>
                 {[
-                  { lbl: tr.cycHealth,     val: healthScore != null ? String(healthScore) : '—', unit: healthScore != null ? '/100' : '' },
-                  { lbl: tr.ovStepsDone,   val: guideList.length ? String(stepsDone) : '—',      unit: guideList.length ? `/${guideList.length}` : '' },
-                  { lbl: tr.ovProblems,    val: String(problems),                                  unit: '' },
+                  { lbl: tr.cycHealth,     val: healthScore != null ? String(healthScore) : null, unit: healthScore != null ? '/100' : '', none: tr.ovNoLogs },
+                  { lbl: tr.ovStepsDone,   val: guideList.length ? String(stepsDone) : null,      unit: guideList.length ? `/${guideList.length}` : '', none: tr.ovNoGuide },
+                  { lbl: tr.ovProblems,    val: String(problems),                                  unit: '', none: '' },
                 ].map(m => (
                   <View key={m.lbl} style={s.tile}>
                     <Text style={[s.tileLbl, T && { fontSize: 13 }]} numberOfLines={2}>{m.lbl}</Text>
                     <View style={s.tileValRow}>
-                      <Text style={[s.tileVal, T && { fontSize: 26 }]}>{m.val}</Text>
+                      {/* No number yet: say why, in words, instead of a dash */}
+                      <Text style={m.val == null ? [s.tileNone, T && { fontSize: 15 }] : [s.tileVal, T && { fontSize: 26 }]}>{m.val ?? m.none}</Text>
                       {!!m.unit && <Text style={s.tileUnit}>{m.unit}</Text>}
                     </View>
                   </View>
@@ -1632,6 +1634,9 @@ const s = StyleSheet.create({
   tileLbl:     { fontSize: 12, color: '#111827', fontFamily: 'Inter_600SemiBold' },
   tileValRow:  { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 },
   tileVal:     { fontSize: 24, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
+  tileNone:    { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold', lineHeight: 17 },
+  pendingPill: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 8, marginBottom: 4, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: PAGE },
+  pendingText: { fontSize: 15, color: '#374151', fontFamily: 'Inter_600SemiBold' },
   tileUnit:    { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 2, marginBottom: 4 },
 
   trendCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
