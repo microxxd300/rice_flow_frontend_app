@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,9 +20,10 @@ import { dedupeName } from '@/utils/formatting';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useAccessibility } from '@/context/AccessibilityContext';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
-import { FarmSwitcher } from '@/components/FarmSwitcher';
+import { loadFarmData } from '@/services/farmData';
 import { cropDays } from '@/utils/cropDays';
-import { refreshCycle } from '@/services/guideLoader';
+import { loadGuide, refreshCycle } from '@/services/guideLoader';
+import { useLanguageStore } from '@/store/languageStore';
 
 type Nav = StackNavigationProp<any>;
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -79,7 +80,7 @@ const ArrowBadge: React.FC<{ dark?: boolean }> = ({ dark }) => (
 /**
  * Home: what the farmer needs today, in this order. My crop (stage, day, harvest date),
  * the planting guide's next steps with their weather warnings, the weather, then the
- * farms. Before a crop is planted the crop card shows the top recommendation; once it
+ * farms (tap one to show it). Before a crop is planted the crop card shows the top recommendation; once it
  * reaches harvesting it asks for the harvest. All logs live on the Progress tab.
  */
 export const HomeDashboardScreen: React.FC = () => {
@@ -87,6 +88,7 @@ export const HomeDashboardScreen: React.FC = () => {
   const tr = useTranslation();
   const { isLargeText: T } = useAccessibility();   // easy-reading text scale
   const [showHourly, setShowHourly] = useState(false);
+  const lang = useLanguageStore(st => st.language);
 
   const { user: authUser } = useAuthStore();
   const { farms, farmsLoaded, latestRecommendation, latestGuide, completedGuideSteps, activeCycle } = useAppStore();
@@ -145,6 +147,23 @@ export const HomeDashboardScreen: React.FC = () => {
 
   const sowingDue = sowingQuestionDue(latestGuide, completedGuideSteps);
 
+  // A farm tile shows that farm on every tab; its arrow opens the farm's pin
+  const [switching, setSwitching] = useState<number | null>(null);
+  const showFarm = async (farm: any) => {
+    if (farm.id === farmId || switching != null) return;
+    useAppStore.getState().selectFarm(farm.id);   // clears the old farm's data
+    setSwitching(farm.id);
+    try {
+      await loadFarmData(farm);
+      // A farm with a crop has a saved guide: load it so its tasks show here at once
+      // (otherwise only the Planting tab loads it)
+      const st = useAppStore.getState();
+      const recId = st.latestRecommendation?.id;
+      if (recId && st.activeCycle?.status === 'active') await loadGuide(recId, lang).catch(() => {});
+    } catch { /* each part falls back on its own */ }
+    setSwitching(null);
+  };
+
   return (
     <SafeAreaView style={s.root} edges={['top']}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -160,9 +179,6 @@ export const HomeDashboardScreen: React.FC = () => {
             <Text style={s.avatarText}>{initials}</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Only with 2+ farms */}
-        <View style={s.switcher}><FarmSwitcher /></View>
 
         {/* ── My crop ── */}
         {cycle ? (
@@ -332,7 +348,7 @@ export const HomeDashboardScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
 
-        {/* ── My farms: tap to edit the pin; the last tile adds a farm ── */}
+        {/* ── My farms: tap one to show it, its arrow edits the pin; the last tile adds a farm ── */}
         <Text style={[s.sectionTitle, T && { fontSize: 19 }]}>{tr.homeMyFarms}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.farms}>
           {!farmsLoaded && farms.length === 0 && [0, 1].map(i => (
@@ -344,19 +360,29 @@ export const HomeDashboardScreen: React.FC = () => {
               <TouchableOpacity
                 key={f.id}
                 style={[s.farmTile, isSel && s.farmTileSel]}
-                onPress={() => navigation.navigateDeprecated('GISPinning', { farmId: f.id })}
+                onPress={() => showFarm(f)}
                 activeOpacity={0.85}
               >
-                <View style={[s.farmArt, isSel && { backgroundColor: '#059669' }]}>
-                  <Ionicons name="leaf" size={22} color={isSel ? '#FFFFFF' : '#059669'} />
+                <View style={[s.farmArt, isSel && s.farmArtSel]}>
+                  {switching === f.id
+                    ? <ActivityIndicator color="#059669" />
+                    : <Ionicons name="leaf" size={22} color={isSel ? '#FFFFFF' : '#059669'} />}
                 </View>
                 <View style={s.farmFoot}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[s.rowTitle, T && { fontSize: 16 }]} numberOfLines={1}>{f.name}</Text>
-                    <Text style={s.rowMeta} numberOfLines={1}>{f.barangay || '—'}</Text>
-                    {f.area_hectares != null && <Text style={s.rowMeta}>{f.area_hectares} ha</Text>}
+                    <Text style={[s.rowTitle, isSel && s.onDark, T && { fontSize: 16 }]} numberOfLines={1}>{f.name}</Text>
+                    <Text style={[s.rowMeta, isSel && s.onDarkSoft]} numberOfLines={1}>{f.barangay || '—'}</Text>
+                    {f.area_hectares != null && <Text style={[s.rowMeta, isSel && s.onDarkSoft]}>{f.area_hectares} ha</Text>}
                   </View>
-                  <ArrowBadge />
+                  <TouchableOpacity
+                    onPress={() => navigation.navigateDeprecated('GISPinning', { farmId: f.id })}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[s.badge, isSel && s.badgeOnDark]}>
+                      <Ionicons name="arrow-forward" size={14} color={isSel ? '#FFFFFF' : '#111827'} style={{ transform: [{ rotate: '-45deg' }] }} />
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </TouchableOpacity>
             );
@@ -397,8 +423,6 @@ const s = StyleSheet.create({
   headerBtn:  { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   avatar:     { width: 42, height: 42, borderRadius: 21, backgroundColor: INK, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
-  // FarmSwitcher brings its own side padding
-  switcher:   { marginHorizontal: -20, marginBottom: 4 },
 
   /* Cards */
   card:      { ...card, padding: 20, marginTop: 12 },
@@ -456,7 +480,11 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 17, color: INK, fontFamily: 'Inter_700Bold', marginTop: 24, marginBottom: 10, paddingHorizontal: 4 },
   farms:        { gap: 12, paddingRight: 4, paddingBottom: 6 },
   farmTile:     { ...card, width: 170, padding: 10 },
-  farmTileSel:  { borderWidth: 2, borderColor: '#059669' },
+  farmTileSel:  { backgroundColor: INK },
+  farmArtSel:   { backgroundColor: '#1F2937' },
+  onDark:       { color: '#FFFFFF' },
+  onDarkSoft:   { color: '#9CA3AF' },
+  badgeOnDark:  { backgroundColor: '#374151' },
   farmArt:      { height: 84, borderRadius: 18, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
   farmFoot:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 4, paddingBottom: 2 },
   farmAdd:      { justifyContent: 'center', alignItems: 'center', minHeight: 150 },

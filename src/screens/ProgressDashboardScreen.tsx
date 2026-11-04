@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert,
+  Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -17,7 +17,7 @@ import { Button } from '../components';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
-import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
+import { useStepWeather } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
@@ -26,6 +26,8 @@ import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
+import { cropDays } from '@/utils/cropDays';
+import { CAVAN_KG } from '@/utils/harvest';
 import { seasonLabel } from '@/utils/formatting';
 import { ISSUE_TO_API, LOG_WORD_KEYS, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
@@ -78,8 +80,12 @@ const PROBLEM_OPTIONS: { value: string; icon: IoniconsName }[] = [
 // baseline, then erases and redraws — visually says "wala pang data, papunta sa zero".
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; onRecord: () => void }> = ({
-  width, expectedYield, onRecord,
+// The server's growth stages run 1..10; from Harvesting (9) on, the harvest is asked for
+const STAGE_COUNT      = 10;
+const HARVEST_STAGE_NO = 9;
+
+const EmptyYieldChart: React.FC<{ width: number; onRecord: () => void }> = ({
+  width, onRecord,
 }) => {
   const svgH    = 90;
   const pad     = { l: 8, r: 8, t: 8, b: 10 };
@@ -109,15 +115,10 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
   }, []);
 
   return (
-    <View style={{ backgroundColor: '#FFFFFF', borderRadius: 10, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>Yield History</Text>
-        {expectedYield != null && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF7ED', borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 9, borderWidth: 1, borderColor: '#FDE68A' }}>
-            <Ionicons name="trending-up" size={11} color="#D97706" />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>{expectedYield}t expected</Text>
-          </View>
-        )}
+    <View style={[s.card, { padding: 20 }]}>
+      {/* The expected yield has its own card above, so no badge here */}
+      <View style={{ marginBottom: 10 }}>
+        <Text style={{ fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Yield History</Text>
       </View>
 
       <Svg width={width} height={svgH}>
@@ -153,13 +154,13 @@ const EmptyYieldChart: React.FC<{ width: number; expectedYield: number | null; o
         activeOpacity={0.85}
         style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-          gap: 6, marginTop: 12,
-          paddingVertical: 10, borderRadius: 10,
-          backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0',
+          gap: 6, marginTop: 14,
+          height: 46, borderRadius: 16,
+          backgroundColor: PAGE,
         }}
       >
-        <Ionicons name="add" size={14} color="#059669" />
-        <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>Record Harvest</Text>
+        <Ionicons name="add" size={16} color="#111827" />
+        <Text style={{ fontSize: 13, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Record Harvest</Text>
       </TouchableOpacity>
     </View>
   );
@@ -520,10 +521,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     useAppStore.getState().setPendingLogStep(null);
   }, [pendingLogStep]);
 
-  // Live temperature for the metric tile, from the app's shared forecast (useFarmForecast)
-  const forecast = useAppStore(s => s.forecast);
-  const liveTemp = forecast && forecast.key === farmKey(selectedFarm) && forecast.data.current?.temperature != null
-    ? Math.round(forecast.data.current.temperature) : null;
   // What the weather means for the step this log finishes
   const { adviceFor } = useStepWeather();
   const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
@@ -552,14 +549,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     };
     load();
   }, [selectedFarmId]);
-
-  const CAT_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    planting:        { label: 'Planting',   color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
-    fertilizer:      { label: 'Fertilizer', color: '#D97706', bg: '#FFF7ED', border: '#FDE68A' },
-    pest_prevention: { label: 'Pest Care',  color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' },
-    irrigation:      { label: 'Irrigation', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-    harvesting:      { label: 'Harvesting', color: '#B45309', bg: '#FFFBEB', border: '#FCD34D' },
-  };
 
   const handleSaveLog = async () => {
     if (savingLog) return;
@@ -737,11 +726,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       {/* Header */}
       <View style={s.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <View style={s.titleIcon}>
-            <Ionicons name="analytics-outline" size={16} color="#FFFFFF" />
-          </View>
           <View>
-            <Text style={[s.headerTitle, T && { fontSize: 17 }]}>{tr.progressHeader}</Text>
+            <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.progressHeader}</Text>
             <Text style={s.headerSub}>
               {currentCycle
                 ? seasonLabel(currentCycle).replace(' ', ' Season ')
@@ -749,7 +735,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             </Text>
           </View>
         </View>
-        <NotificationBell color="#059669" size={22} />
+        <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -778,136 +764,99 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           })}
         </View>
 
-        {/* TAB 1: BUOD */}
+        {/* TAB 1: OVERVIEW: how the crop is doing (Home has what to do today) */}
         {selectedTab === 'overview' && (() => {
           const cW2 = Dimensions.get('window').width - 80;
+          const days      = cropDays(plantingDateStr, (currentCycle as any)?.expected_harvest_date);
+          const stageNo   = (currentCycle as any)?.stage?.stage_no ?? null;
+          const nextStage = stageNo != null && stageNo < STAGE_COUNT ? logWord(stageLabel(stageNo + 1)) : '';
+          const stepsDone = guideList.filter(st => completedSteps.includes(st.id)).length;
+          const problems  = storeLogs.filter((l: any) => {
+            const issue = String(l.observedIssue ?? l.observed_issue ?? '').trim();
+            return !!issue && issue !== 'None' && issue !== 'Wala';
+          }).length;
+          const showYield  = hasRealCycle && predictedYield != null;
+          const sacks      = showYield ? Math.round((predictedYield! * 1000) / CAVAN_KG) : null;
+          const harvestDue = stageNo != null && stageNo >= HARVEST_STAGE_NO && (currentCycle as any)?.yield_per_ha == null;
           return (
             <>
-              {/* Card 1: Status — flat (with shimmer loading state) */}
-              <View style={[s.card, { marginTop: 16, marginBottom: 10, padding: 16 }]}>
-                <View style={{ marginBottom: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.6 }}>{tr.activeStageLabel}</Text>
-                    {cycleLoading && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontSize: 10, color: '#059669', fontWeight: '600' }}>{tr.progressViewing}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 6 }}>
-                          {[dot1, dot2, dot3].map((d, i) => (
-                            <Animated.View key={i} style={{
-                              width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: '#059669',
-                              opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
-                              transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
-                            }} />
-                          ))}
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                  {cycleLoading ? (
-                    <SkelBar w={180} h={20} br={6} />
-                  ) : (
-                    <Text style={{ fontSize: T ? 17 : 16, fontWeight: '700', color: '#111827' }}>
-                      {activeStage}
-                    </Text>
-                  )}
+              {/* The season: today's stage on the 10-stage track, the day and the harvest date */}
+              <View style={[s.card, s.ovCard]}>
+                <View style={s.ovHead}>
+                  <Text style={s.ovLabel}>{tr.ovStageNow}</Text>
+                  {cycleLoading && <ActivityIndicator size="small" color="#059669" />}
                 </View>
-
-                {/* Progress pill */}
-                <View style={{ height: 4, backgroundColor: '#F3F4F6', borderRadius: 999, marginBottom: 14, overflow: 'hidden' }}>
-                  {cycleLoading ? (
-                    <Animated.View style={{
-                      position: 'absolute', top: 0, bottom: 0, width: 110,
-                      transform: [{
-                        translateX: stripeX.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-110, Dimensions.get('window').width - 40],
-                        }),
-                      }],
-                    }}>
-                      <ExpoGradient
-                        colors={['rgba(5,150,105,0)', '#059669', 'rgba(5,150,105,0)']}
-                        start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
-                        style={{ flex: 1, borderRadius: 999 }}
-                      />
-                    </Animated.View>
-                  ) : (
-                    <Animated.View style={{
-                      height: 4, borderRadius: 999, overflow: 'hidden',
-                      backgroundColor: '#059669',
-                      width: fillAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
-                    }}>
-                      {/* Continuous shimmer sweep on the green fill */}
-                      <Animated.View style={{
-                        position: 'absolute', top: 0, bottom: 0, width: 60,
-                        transform: [{
-                          translateX: fillSweep.interpolate({
-                            inputRange:  [0, 1],
-                            outputRange: [-60, Dimensions.get('window').width - 40],
-                          }),
-                        }],
-                      }}>
-                        <ExpoGradient
-                          colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']}
-                          start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
-                          style={{ flex: 1 }}
-                        />
-                      </Animated.View>
-                    </Animated.View>
-                  )}
+                {cycleLoading
+                  ? <SkelBar w={190} h={26} br={6} />
+                  : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{currentCycle ? activeStage : tr.plogNoCycle}</Text>}
+                {!!nextStage && !cycleLoading && (
+                  <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.ovNext.replace('{stage}', nextStage)}</Text>
+                )}
+                <View style={s.stageTrack}>
+                  {Array.from({ length: STAGE_COUNT }, (_, i) => i + 1).map(no => (
+                    <View
+                      key={no}
+                      style={[s.stageSeg, stageNo != null && no < stageNo && s.stageSegDone, no === stageNo && s.stageSegNow]}
+                    />
+                  ))}
                 </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={s.ovStats}>
                   {[
-                    { val: cycleLoading ? null : (hasRealCycle ? `${tr.cycDayPrefix} ${CURRENT_DAY}` : sowingLabel ?? '—'), lbl: tr.cycCurrent, valColor: '#111827' },
-                    { val: cycleLoading ? null : `${cyclePct}%`,                                              lbl: tr.cycDone,           valColor: '#059669' },
-                    { val: cycleLoading ? null : (harvestDate ? harvestLabel : '—'),                           lbl: tr.progressExpected,  valColor: '#111827' },
-                  ].map((c, i, arr) => (
-                    <React.Fragment key={c.lbl}>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
-                        {c.val == null
-                          ? <View style={{ marginBottom: 4 }}><SkelBar w={46} h={14} br={4} /></View>
-                          : <Text style={{ fontSize: 14, fontWeight: '700', color: c.valColor }}>{c.val}</Text>
-                        }
-                        <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>{c.lbl}</Text>
-                      </View>
-                      {i < arr.length - 1 && <View style={{ width: 1, height: 26, backgroundColor: '#E5E7EB' }} />}
-                    </React.Fragment>
+                    { lbl: tr.cycCurrent,       val: days && days.day >= 1 ? `${tr.cycDayPrefix} ${days.day}` : (sowingLabel ?? '—') },
+                    { lbl: tr.cycDone,          val: days && days.total && days.day >= 1 ? `${Math.round(days.share * 100)}%` : '—' },
+                    { lbl: tr.progressExpected, val: harvestDate ? harvestLabel : '—' },
+                  ].map(c => (
+                    <View key={c.lbl} style={{ flex: 1 }}>
+                      <Text style={[s.ovStatLbl, T && { fontSize: 13 }]} numberOfLines={1}>{c.lbl}</Text>
+                      {cycleLoading
+                        ? <View style={{ marginTop: 6 }}><SkelBar w={52} h={16} br={4} /></View>
+                        : <Text style={[s.ovStatVal, T && { fontSize: 18 }]}>{c.val}</Text>}
+                    </View>
                   ))}
                 </View>
               </View>
 
-              {/* Card 2: 3-column metrics — flat, with per-tile skeleton when data not yet loaded */}
-              <View style={[s.card, { padding: 0, marginBottom: 10 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 16 }}>
-                  {[
-                    { icon: 'shield-checkmark-outline' as const, value: healthScore != null ? String(healthScore) : '—',                        sub: healthScore != null ? '/100' : '',                        label: tr.cycHealth,          loading: cycleLoading },
-                    { icon: 'trending-up-outline'      as const, value: (hasRealCycle && predictedYield != null) ? predictedYield.toFixed(1) : '—', sub: (hasRealCycle && predictedYield != null) ? 't' : '',     label: tr.cycExpectedYield,   loading: false },
-                    { icon: 'thermometer-outline'      as const, value: liveTemp != null ? String(liveTemp) : '—',                             sub: liveTemp != null ? '°C' : '',                             label: tr.cycTemperature,     loading: liveTemp == null },
-                  ].map((m, i) => (
-                    <React.Fragment key={m.label}>
-                      <View style={{ flex: 1, alignItems: 'center' }}>
-                        <Ionicons name={m.icon} size={14} color="#9CA3AF" style={{ marginBottom: 6 }} />
-                        {m.loading ? (
-                          <Skeleton w={48} h={T ? 26 : 24} br={5} style={{ marginBottom: 6 }} />
-                        ) : (
-                          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                            <Text style={{ fontSize: T ? 24 : 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5 }}>{m.value}</Text>
-                            <Text style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 2, fontWeight: '600' }}>{m.sub}</Text>
-                          </View>
-                        )}
-                        <Text style={{ fontSize: 10, color: '#6B7280', marginTop: 4 }}>{m.label}</Text>
-                      </View>
-                      {i < 2 && <View style={{ width: 1, height: 38, backgroundColor: '#E5E7EB' }} />}
-                    </React.Fragment>
-                  ))}
+              {/* Expected harvest from the yield model, in tons and sacks */}
+              <View style={[s.card, s.ovCard]}>
+                <Text style={s.ovLabel}>{tr.cycExpectedYield}</Text>
+                <View style={s.ovBigRow}>
+                  <Text style={s.ovBig}>{showYield ? predictedYield!.toFixed(1) : '—'}</Text>
+                  {showYield && <Text style={s.ovBigUnit}>{tr.ovTons}</Text>}
                 </View>
+                <Text style={[s.ovSub, T && { fontSize: 14 }]}>
+                  {sacks != null
+                    ? tr.ovSacks.replace('{n}', String(sacks)).replace('{ha}', String(farmArea))
+                    : tr.ovYieldLater}
+                </Text>
+                {harvestDue && (
+                  <TouchableOpacity style={s.ovDarkBtn} onPress={() => navigation.navigateDeprecated('YieldRecord')} activeOpacity={0.85}>
+                    <Ionicons name="basket-outline" size={17} color="#FFFFFF" />
+                    <Text style={s.ovDarkBtnText}>{tr.harvestAskYes}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* This season in three tiles */}
+              <View style={s.tiles}>
+                {[
+                  { lbl: tr.cycHealth,     val: healthScore != null ? String(healthScore) : '—', unit: healthScore != null ? '/100' : '' },
+                  { lbl: tr.ovStepsDone,   val: guideList.length ? String(stepsDone) : '—',      unit: guideList.length ? `/${guideList.length}` : '' },
+                  { lbl: tr.ovProblems,    val: String(problems),                                  unit: '' },
+                ].map(m => (
+                  <View key={m.lbl} style={s.tile}>
+                    <Text style={[s.tileLbl, T && { fontSize: 13 }]} numberOfLines={2}>{m.lbl}</Text>
+                    <View style={s.tileValRow}>
+                      <Text style={[s.tileVal, T && { fontSize: 26 }]}>{m.val}</Text>
+                      {!!m.unit && <Text style={s.tileUnit}>{m.unit}</Text>}
+                    </View>
+                  </View>
+                ))}
               </View>
 
               {/* Card 3: Yield trend — animated empty state (line draws down to zero) */}
               {realYields.length === 0 ? (
                 <EmptyYieldChart
                   width={cW2}
-                  expectedYield={hasRealCycle && predictedYield != null ? predictedYield : null}
                   onRecord={() => navigation.navigateDeprecated('YieldRecord')}
                 />
               ) : (() => {
@@ -1020,42 +969,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 );
               })()}
 
-              {/* Card 4: Todo list */}
-              {(() => {
-                const todos = [guideNow.current, ...guideNow.next].filter(st => !!st).slice(0, 4) as typeof guideList;
-                if (!todos.length) return null;
-                return (
-                  <View style={[s.card, { padding: 0, overflow: 'hidden', marginBottom: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.3 }}>NEXT TASKS</Text>
-                      <TouchableOpacity onPress={() => setShowAddLog(true)} style={s.todoLogBtn} activeOpacity={0.8}>
-                        <Ionicons name="add" size={13} color="#059669" />
-                        <Text style={s.todoLogBtnText}>{tr.homeAddLog}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {todos.map((step, i) => {
-                      const cat    = CAT_CONFIG[step.category] ?? CAT_CONFIG.planting;
-                      const isNext = i === 0;
-                      return (
-                        <TouchableOpacity
-                          key={step.id}
-                          onPress={() => openLogFor(step.id)}
-                          activeOpacity={0.75}
-                          style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: i < todos.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}
-                        >
-                          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: isNext ? cat.color : '#D1D5DB', marginTop: 5 }} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: T ? 13 : 12, color: isNext ? '#111827' : '#9CA3AF', lineHeight: 19, fontWeight: isNext ? '600' : '400' }}>
-                              {step.title}
-                            </Text>
-                          </View>
-                          <Ionicons name="chevron-forward" size={14} color="#D1D5DB" style={{ marginTop: 3 }} />
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                );
-              })()}
             </>
           );
         })()}
@@ -1684,8 +1597,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   );
 };
 
+const PAGE = '#F1F2F1';   // the page gray behind the white cards (as on Home)
+
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F7F9F8' },
+  container: { flex: 1, backgroundColor: PAGE },
   stepToggle: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, marginBottom: 16,
@@ -1705,33 +1620,31 @@ const s = StyleSheet.create({
   },
   logWeatherStop: { borderColor: '#FECACA', backgroundColor: '#FEF2F2' },
   logWeatherText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: '#92400E', fontWeight: '600' },
-  scroll: { paddingHorizontal: 24, paddingBottom: 110 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 130 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4,
   },
   titleIcon:   { width: 34, height: 34, borderRadius: 17, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  headerSub:   { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
-  headerBtn:   { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 21, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  headerSub:   { fontSize: 13, color: '#6B7280', marginTop: 1, fontFamily: 'Inter_500Medium' },
+  headerBtn:   { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
   bellDot:     { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFFFFF' },
 
   /* Segmented control */
   segWrap: {
     flexDirection: 'row',
-    backgroundColor: '#F1F3F5',
-    borderRadius: 10,
-    padding: 3,
-    marginTop: 20,
+    backgroundColor: '#E4E6E4',
+    borderRadius: 16,
+    padding: 4,
+    marginTop: 14,
     marginBottom: 4,
   },
   segItem: {
-    flex: 1, height: 36,
+    flex: 1, height: 40,
     alignItems: 'center', justifyContent: 'center',
-    borderRadius: 8,
+    borderRadius: 12,
   },
   segItemActive: {
     backgroundColor: '#FFFFFF',
@@ -1741,8 +1654,8 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
   },
-  segText:       { fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
-  segTextActive: { color: '#111827', fontWeight: '700' },
+  segText:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  segTextActive: { color: '#111827', fontFamily: 'Inter_700Bold' },
 
   sectionLabel: {
     fontSize: 11, fontWeight: '600', color: '#9CA3AF',
@@ -1750,9 +1663,39 @@ const s = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#FFFFFF', borderRadius: 10, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF', borderRadius: 24, padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
+
+  /* Overview */
+  ovCard:      { padding: 20, marginTop: 4 },
+  ovHead:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  ovLabel:     { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold', marginBottom: 8 },
+  ovStage:     { fontSize: 22, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  ovSub:       { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_500Medium', marginTop: 4 },
+  stageTrack:  { flexDirection: 'row', gap: 4, marginTop: 16 },
+  stageSeg:    { flex: 1, height: 10, borderRadius: 5, backgroundColor: PAGE },
+  stageSegDone:{ backgroundColor: '#111827' },
+  stageSegNow: { backgroundColor: '#059669' },
+  ovStats:     { flexDirection: 'row', marginTop: 18 },
+  ovStatLbl:   { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  ovStatVal:   { fontSize: 16, color: '#111827', fontFamily: 'Inter_700Bold', marginTop: 4 },
+  ovBigRow:    { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  ovBig:       { fontSize: 48, lineHeight: 54, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -1.5 },
+  ovBigUnit:   { fontSize: 16, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 9 },
+  ovDarkBtn:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: '#111827', marginTop: 16 },
+  ovDarkBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+  tiles:       { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  tile:        {
+    flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 14, minHeight: 112, justifyContent: 'space-between',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2,
+  },
+  tileLbl:     { fontSize: 12, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  tileValRow:  { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 },
+  tileVal:     { fontSize: 24, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
+  tileUnit:    { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 2, marginBottom: 4 },
 
   trendCard: {
     backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14,
