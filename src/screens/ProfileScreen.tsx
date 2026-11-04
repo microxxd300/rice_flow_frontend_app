@@ -20,7 +20,8 @@ import { apiFarms, apiRecommendations, authUpdateProfile } from '@/services/apiS
 import { fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
 import { loadGuide, guideNeedsTranslation } from '@/services/guideLoader';
 
-const LogoImage = require('../assets/icons/logo_for_rice-flow.png');
+// The new RiceFlow logo (720 × 515)
+const LogoImage = require('../assets/logo/logo_full.png');
 
 interface ProfileScreenProps {
   onLogout?: () => void;
@@ -382,8 +383,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
 
         {/* Version */}
         <View style={s.versionCard}>
-          {/* The wordmark sits in the middle of a wide transparent canvas; trim its empty margins */}
-          <Image source={LogoImage} style={{ width: 192, height: 128, marginVertical: -36 }} resizeMode="contain" />
+          <Image source={LogoImage} style={{ width: 132, height: 132 * (515 / 720) }} resizeMode="contain" />
           <Text style={s.versionNum}>{tr.profileVersion.replace('{v}', '1.0.0')}</Text>
         </View>
 
