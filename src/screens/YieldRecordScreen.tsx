@@ -37,7 +37,7 @@ function Chips({ options, value, onSelect, T }: {
         const active = value === o.value;
         return (
           <TouchableOpacity key={o.value} style={[s.chip, active && s.chipOn]} onPress={() => onSelect(o.value)} activeOpacity={0.8}>
-            {o.icon && <Ionicons name={o.icon} size={14} color={active ? '#FFFFFF' : '#059669'} />}
+            {o.icon && <Ionicons name={o.icon} size={15} color={active ? '#FFFFFF' : '#111827'} />}
             <Text style={[s.chipText, active && s.chipTextOn, T && { fontSize: 14 }]}>{o.label}</Text>
           </TouchableOpacity>
         );
@@ -200,9 +200,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           </View>
 
           {predictedYield !== null && (
-            <View style={{ backgroundColor: '#F0FDF4', borderRadius: 14, borderWidth: 1, borderColor: '#D1FAE5', padding: 14, width: '100%', marginTop: 12 }}>
-              <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700', marginBottom: 4 }}>AI YIELD PREDICTION ({modelUsed})</Text>
-              <Text style={{ fontSize: 20, fontWeight: '800', color: '#1F6B3F' }}>{predictedYield} t/ha</Text>
+            <View style={[s.card, { width: '100%', marginTop: 12 }]}>
+              <Text style={{ fontSize: 12, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>AI YIELD PREDICTION ({modelUsed})</Text>
+              <Text style={{ fontSize: 28, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.5 }}>{predictedYield} t/ha</Text>
               <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Based on your farm and weather data</Text>
             </View>
           )}
@@ -231,16 +231,11 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
         <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
           <Ionicons name="chevron-back" size={22} color="#111827" />
         </TouchableOpacity>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-          <View style={s.titleIcon}>
-            <Ionicons name="basket-outline" size={16} color="#FFFFFF" />
-          </View>
-          <View>
-            <Text style={[s.headerTitle, T && { fontSize: 15 }]}>{tr.yieldRecordHeader}</Text>
-            <Text style={s.headerSub}>{farm?.name ?? ''}</Text>
-          </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.yieldRecordHeader}</Text>
+          <Text style={s.headerSub}>{farm?.name ?? ''}</Text>
         </View>
-        <NotificationBell color="#059669" size={22} />
+        <View style={s.backBtn}><NotificationBell color="#111827" size={20} /></View>
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -276,7 +271,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                   <RNTextInput
                     style={[s.input, T && { fontSize: 16 }]}
                     placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#D1D5DB"
+                    placeholderTextColor="#9CA3AF"
                     value={harvestDate}
                     onChangeText={setHarvestDate}
                   />
@@ -292,7 +287,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                 <RNTextInput
                   style={[s.input, T && { fontSize: 16 }]}
                   placeholder="e.g. 1.5"
-                  placeholderTextColor="#D1D5DB"
+                  placeholderTextColor="#9CA3AF"
                   value={areaHarvested}
                   onChangeText={setAreaHarvested}
                   keyboardType="decimal-pad"
@@ -309,7 +304,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                   <RNTextInput
                     style={[s.input, T && { fontSize: 16 }]}
                     placeholder="e.g. 100"
-                    placeholderTextColor="#D1D5DB"
+                    placeholderTextColor="#9CA3AF"
                     value={sacks}
                     onChangeText={setSacks}
                     keyboardType="decimal-pad"
@@ -398,8 +393,8 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
 };
 
 const s = StyleSheet.create({
-  root:  { flex: 1, backgroundColor: '#F7F9F8' },
-  scroll:{ paddingBottom: 120 },
+  root: { flex: 1, backgroundColor: '#F1F2F1' },
+  scroll: { paddingBottom: 150 },   // room for the floating tab bar
 
   successScroll: {
     paddingHorizontal: 20, paddingBottom: 40,
@@ -407,100 +402,63 @@ const s = StyleSheet.create({
   },
 
   /* Header */
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
-  },
-  backBtn:     { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  titleIcon:   { width: 34, height: 34, borderRadius: 17, backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  headerSub:   { fontSize: 11, color: '#9CA3AF', marginTop: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 21, color: '#111827', letterSpacing: -0.4, fontFamily: 'Inter_700Bold' },
+  headerSub: { fontSize: 13, color: '#6B7280', marginTop: 1, fontFamily: 'Inter_500Medium' },
 
   /* Section */
-  section:    { paddingHorizontal: 20, marginTop: 24 },
-  cardTitleNew: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 },
+  section: { paddingHorizontal: 16, marginTop: 12 },
+  cardTitleNew: { fontSize: 16, color: '#111827', marginBottom: 14, fontFamily: 'Inter_700Bold' },
 
   /* Card */
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB',
-    padding: 16,
-  },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
 
   /* Form */
-  fieldWrap: { marginBottom: 20 },
-  label:   { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 8 },
-  hint:    { fontSize: 11.5, color: '#6B7280', marginTop: -4, marginBottom: 8, lineHeight: 16 },
+  fieldWrap: { marginBottom: 22 },
+  label: { fontSize: 14, color: '#111827', marginBottom: 10, fontFamily: 'Inter_700Bold' },
+  hint: { fontSize: 12, color: '#6B7280', marginTop: -4, marginBottom: 10, lineHeight: 17, fontFamily: 'Inter_500Medium' },
   req:     { color: '#EF4444' },
-  inputBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
-    backgroundColor: '#FFFFFF', paddingHorizontal: 14, height: 52,
-  },
-  input:   { flex: 1, fontSize: 15, color: '#111827' },
-  unit:    { fontSize: 13, fontWeight: '600', color: '#9CA3AF' },
-  times:   { fontSize: 16, fontWeight: '700', color: '#9CA3AF' },
+  inputBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, backgroundColor: '#F1F2F1', paddingHorizontal: 16, height: 54 },
+  input: { flex: 1, fontSize: 16, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  unit: { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  times: { fontSize: 18, color: '#6B7280', fontFamily: 'Inter_700Bold' },
 
   /* Chips */
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9999, borderWidth: 1,
-    borderColor: '#A7F3D0', backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 14,
-  },
-  chipOn:     { backgroundColor: '#059669', borderColor: '#059669' },
-  chipText:   { fontSize: 13, fontWeight: '600', color: '#065F46' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, backgroundColor: '#F1F2F1', minHeight: 44, paddingHorizontal: 16 },
+  chipOn: { backgroundColor: '#111827' },
+  chipText: { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
   chipTextOn: { color: '#FFFFFF' },
 
   /* The worked-out yield */
-  resultBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderRadius: 12, borderWidth: 1,
-    borderColor: '#A7F3D0', backgroundColor: '#ECFDF5', padding: 12, marginBottom: 20,
-  },
-  resultBoxWarn: { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
-  resultText:    { fontSize: 15, fontWeight: '800', color: '#065F46' },
-  resultNote:    { fontSize: 11.5, color: '#6B7280', marginTop: 2, lineHeight: 16 },
+  resultBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderRadius: 18, backgroundColor: '#E8F5EF', padding: 16, marginBottom: 22 },
+  resultBoxWarn: { backgroundColor: '#FEF3DC' },
+  resultText: { fontSize: 18, color: '#065F46', letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  resultNote: { fontSize: 12, color: '#374151', marginTop: 4, lineHeight: 17, fontFamily: 'Inter_500Medium' },
 
   /* List rows */
   listRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
   },
-  rowLabel: { fontSize: 14, color: '#6B7280' },
-  rowValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  rowLabel: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  rowValue: { fontSize: 14, color: '#111827', fontFamily: 'Inter_700Bold' },
 
   /* Buttons — primary/secondary pair, equal width */
-  saveBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, height: 50, borderRadius: 12,
-    backgroundColor: '#059669',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  saveBtnText:    { fontSize: 14, color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.2 },
-  cancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  cancelBtnText:  { fontSize: 14, fontWeight: '600', color: '#374151' },
+  saveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18, backgroundColor: '#111827' },
+  saveBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+  cancelBtn: { flex: 1, height: 54, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  cancelBtnText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   /* Read-only variety row at top of form */
-  readOnlyRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB', borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 20,
-  },
-  readOnlyLabel: { fontSize: 11, color: '#9CA3AF', marginBottom: 2 },
-  readOnlyValue: { fontSize: 14, fontWeight: '700', color: '#111827' },
+  readOnlyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F1F2F1', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 22 },
+  readOnlyLabel: { fontSize: 12, color: '#6B7280', marginBottom: 2, fontFamily: 'Inter_500Medium' },
+  readOnlyValue: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
 
   /* Performance banner */
-  perfBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderRadius: 12, padding: 14, marginTop: 12,
-  },
-  perfBannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  perfBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 18, padding: 16, marginTop: 12 },
+  perfBannerTitle: { fontSize: 15, marginBottom: 2, fontFamily: 'Inter_700Bold' },
   perfBannerSub:   { fontSize: 12, color: '#6B7280' },
 
   /* Success */
@@ -510,10 +468,7 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
     marginTop: 40, marginBottom: 20,
   },
-  successTitle: {
-    fontSize: 26, fontWeight: '700', color: '#111827',
-    letterSpacing: -0.5, textAlign: 'center', marginBottom: 10,
-  },
+  successTitle: { fontSize: 26, color: '#111827', letterSpacing: -0.5, textAlign: 'center', marginBottom: 10, fontFamily: 'Inter_700Bold' },
   successSub: {
     fontSize: 14, color: '#6B7280', textAlign: 'center',
     lineHeight: 22, paddingHorizontal: 16,

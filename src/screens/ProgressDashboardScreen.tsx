@@ -363,7 +363,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   const plantingDateStr = (currentCycle as any)?.planting_date ?? (currentCycle as any)?.plantingDate;
   const today           = new Date();
-  const cycleDays       = variety?.maturity_days ?? 115;
+  // The planted crop's season (sowing to expected harvest) first; the top variety's otherwise
+  const cycleDays       = cropDays(plantingDateStr, (currentCycle as any)?.expected_harvest_date)?.total
+    ?? variety?.maturity_days ?? 115;
   // Only treat the planting date as valid if it falls inside a sensible window
   // (not in the future, not older than one full cycle). Otherwise, no real cycle
   // is running yet — UI shows "Day 1" / "—" instead of fabricating mid-cycle state.
@@ -695,6 +697,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     const subBits: string[] = [];
     if (hasIssue) subBits.push(log.observedIssue);
     if (hasIssue && log.actionTaken) subBits.push(log.actionTaken);
+    const title = (log.growthStage ? logWord(log.growthStage) : '') || log.notes || '—';
 
     return (
       <View key={idx} style={[s.logRow, !isLast && s.logRowDivider]}>
@@ -703,13 +706,14 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           <Text style={[s.logDateDay, T && { fontSize: 19 }]}>{fmtDay(log.logDate)}</Text>
         </View>
         <View style={s.logContentCol}>
-          <Text style={[s.logRowTitle, T && { fontSize: 15 }]} numberOfLines={1}>{logWord(log.growthStage)}</Text>
+          {/* A step log may have no stage: its note (the step) is the title then */}
+          <Text style={[s.logRowTitle, T && { fontSize: 16 }]} numberOfLines={2}>{title}</Text>
           {subBits.length > 0 ? (
             <Text style={[s.logRowSub, T && { fontSize: 13 }]} numberOfLines={2}>
               {subBits.join(' · ')}
             </Text>
           ) : null}
-          {log.notes ? (
+          {log.notes && title !== log.notes ? (
             <Text style={[s.logRowNote, T && { fontSize: 13 }]} numberOfLines={2}>{log.notes}</Text>
           ) : null}
         </View>
@@ -1049,7 +1053,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 // No real cycle yet → show a clean "start a cycle" empty state instead of fabricated numbers
                 if (!hasRealCycle || predictedYield == null) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 20, alignItems: 'center', paddingVertical: 28 }]}>
+                    <View style={[s.trendCard, { marginTop: 4, alignItems: 'center', paddingVertical: 28 }]}>
                       <Ionicons name="trending-up-outline" size={28} color="#D1D5DB" />
                       <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }}>
                         {tr.yieldNeedCycle}
@@ -1063,17 +1067,17 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 const deltaPct      = prevYield != null && prevYield > 0
                   ? +(((predictedYield - prevYield) / prevYield) * 100).toFixed(1)
                   : null;
-                const varietyName   = variety?.common_name ?? 'NSIC Rc160';
+                const varietyName   = (currentCycle as any)?.variety_name ?? variety?.common_name ?? '—';
 
                 return (
                   <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 20 }]}
+                    style={[s.trendCard, { marginTop: 4 }]}
                     onPress={() => navigation.navigateDeprecated('RecommendationResults')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{varietyName}</Text>
+                        <Text style={{ fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' }}>{varietyName}</Text>
                         <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.progressExpected}</Text>
                       </View>
                       <View style={s.trendHarvestPill}>
@@ -1133,7 +1137,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {(() => {
                 if (recentLogs.length === 0) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 20, alignItems: 'center', paddingVertical: 28 }]}>
+                    <View style={[s.trendCard, { marginTop: 4, alignItems: 'center', paddingVertical: 28 }]}>
                       <Ionicons name="shield-checkmark-outline" size={28} color="#D1D5DB" />
                       <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8, textAlign: 'center', paddingHorizontal: 12 }}>
                         {tr.healthNoLogs}
@@ -1194,13 +1198,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 return (
                   <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 20 }]}
+                    style={[s.trendCard, { marginTop: 4 }]}
                     onPress={() => setSelectedTab('logs')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{tr.progressPlantHealth}</Text>
+                        <Text style={{ fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' }}>{tr.progressPlantHealth}</Text>
                         <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.healthFromLogs.replace('{n}', String(recentLogs.length))}</Text>
                       </View>
                       <Text style={{ fontSize: 12, fontWeight: '700', color: overallColor }}>{overallLabel}</Text>
@@ -1281,7 +1285,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 if (buckets.length === 0) {
                   return (
-                    <View style={[s.trendCard, { marginTop: 20, alignItems: 'center', paddingVertical: 24 }]}>
+                    <View style={[s.trendCard, { marginTop: 4, alignItems: 'center', paddingVertical: 24 }]}>
                       <Ionicons name="book-outline" size={28} color="#D1D5DB" />
                       <Text style={{ fontSize: 13, fontWeight: '600', color: '#374151', marginTop: 8 }}>{tr.progressNoGuide}</Text>
                       <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4, textAlign: 'center' }}>
@@ -1293,30 +1297,30 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 return (
                   <TouchableOpacity
-                    style={[s.trendCard, { marginTop: 20 }]}
+                    style={[s.trendCard, { marginTop: 4 }]}
                     onPress={() => navigation.navigateDeprecated('PlantingTab')}
                     activeOpacity={0.85}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{tr.progressGuideAdh}</Text>
+                        <Text style={{ fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' }}>{tr.progressGuideAdh}</Text>
                         <Text style={{ fontSize: 11, color: '#9CA3AF', marginTop: 1 }}>{tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}</Text>
                       </View>
-                      <View style={{ backgroundColor: badge.bg, borderRadius: 9999, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: badge.border }}>
+                      <View style={{ backgroundColor: badge.bg, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 }}>
                         <Text style={{ fontSize: 11, fontWeight: '700', color: badge.color }}>{badge.label}</Text>
                       </View>
                     </View>
                     {buckets.map((item, i, arr) => (
                       <View key={item.cat} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: '#F3F4F6' }}>
-                        <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: item.done ? '#ECFDF5' : '#F9FAFB', borderWidth: 1.5, borderColor: item.done ? '#059669' : '#E5E7EB', justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                        <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: item.done ? '#E8F5EF' : PAGE, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
                           {item.done
                             ? <Ionicons name="checkmark" size={14} color="#059669" />
                             : <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#D1D5DB' }} />
                           }
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '600', color: item.done ? '#111827' : '#9CA3AF' }}>{item.label}</Text>
-                          <Text style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{item.detail} · {item.doneCt}/{item.total}</Text>
+                          <Text style={{ fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>{item.label}</Text>
+                          <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{item.detail} · {item.doneCt}/{item.total}</Text>
                         </View>
                         <Text style={{ fontSize: 11, fontWeight: '600', color: item.done ? '#059669' : '#9CA3AF' }}>{item.status}</Text>
                       </View>
@@ -1324,7 +1328,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                     <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                         <Text style={{ fontSize: 12, color: '#6B7280', fontWeight: '500' }}>{tr.progressOverallAdh}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#1F6B3F' }}>{adherence}%</Text>
+                        <Text style={{ fontSize: 16, color: '#111827', fontFamily: 'Inter_700Bold' }}>{adherence}%</Text>
                       </View>
                       <View style={s.progBg}>
                         <View style={[s.progFill, { width: `${adherence}%` }]} />
@@ -1338,10 +1342,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               <TouchableOpacity
                 onPress={() => navigation.navigateDeprecated('ReportsHome')}
                 activeOpacity={0.85}
-                style={{ height: 50, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', marginTop: 16, flexDirection: 'row', gap: 6 }}
+                style={{ height: 54, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: '#111827', marginTop: 4, flexDirection: 'row', gap: 8 }}
               >
-                <Ionicons name="document-text-outline" size={16} color="#374151" />
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#374151' }}>{tr.progressFullReport}</Text>
+                <Ionicons name="document-text-outline" size={17} color="#FFFFFF" />
+                <Text style={{ fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{tr.progressFullReport}</Text>
               </TouchableOpacity>
             </>
           );
@@ -1391,7 +1395,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       onPress={() => setLogKind(k.key)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name={k.icon} size={20} color={active ? '#FFFFFF' : '#059669'} />
+                      <Ionicons name={k.icon} size={22} color={active ? '#FFFFFF' : '#059669'} />
                       <Text style={[s.kindText, active && s.kindTextOn, T && { fontSize: 14 }]}>{(tr as any)[k.label]}</Text>
                     </TouchableOpacity>
                   );
@@ -1436,7 +1440,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                             onPress={() => setLogIssue(opt.value)}
                             activeOpacity={0.8}
                           >
-                            <Ionicons name={opt.icon} size={20} color={active ? '#B45309' : '#6B7280'} />
+                            <Ionicons name={opt.icon} size={22} color={active ? '#FFFFFF' : '#111827'} />
                             <Text style={[s.issueText, active && s.issueTextOn, T && { fontSize: 13 }]} numberOfLines={2}>
                               {logWord(opt.value)}
                             </Text>
@@ -1478,7 +1482,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       <TextInput
                         style={[s.mInput, T && { fontSize: 16 }]}
                         placeholder={tr.plogActionPh}
-                        placeholderTextColor="#D1D5DB"
+                        placeholderTextColor="#9CA3AF"
                         value={logAction}
                         onChangeText={setLogAction}
                       />
@@ -1500,7 +1504,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       <TextInput
                         style={[s.mInput, { textAlignVertical: 'top', minHeight: 60 }, T && { fontSize: 16 }]}
                         placeholder={tr.plogNotesPh}
-                        placeholderTextColor="#D1D5DB"
+                        placeholderTextColor="#9CA3AF"
                         value={logNotes}
                         onChangeText={setLogNotes}
                         multiline
@@ -1530,7 +1534,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         onPress={() => setPickDate(true)}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="calendar-outline" size={14} color={pickDate ? '#FFFFFF' : '#059669'} />
+                        <Ionicons name="calendar-outline" size={15} color={pickDate ? '#FFFFFF' : '#111827'} />
                         <Text style={[s.dateChipText, pickDate && s.dateChipTextOn, T && { fontSize: 14 }]}>{tr.plogPickDate}</Text>
                       </TouchableOpacity>
                     </View>
@@ -1540,7 +1544,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         <TextInput
                           style={[s.mInput, T && { fontSize: 16 }]}
                           placeholder="YYYY-MM-DD"
-                          placeholderTextColor="#D1D5DB"
+                          placeholderTextColor="#9CA3AF"
                           value={logDate}
                           onChangeText={setLogDate}
                         />
@@ -1601,12 +1605,8 @@ const PAGE = '#F1F2F1';   // the page gray behind the white cards (as on Home)
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: PAGE },
-  stepToggle: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, marginBottom: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  stepToggleOn:    { borderColor: '#A7F3D0', backgroundColor: '#ECFDF5' },
+  stepToggle: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 16, padding: 14, marginBottom: 16, backgroundColor: PAGE },
+  stepToggleOn: { backgroundColor: '#E8F5EF' },
   stepCheck: {
     width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#D1D5DB',
     justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
@@ -1697,25 +1697,14 @@ const s = StyleSheet.create({
   tileVal:     { fontSize: 24, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
   tileUnit:    { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 2, marginBottom: 4 },
 
-  trendCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14,
-    marginBottom: 10, borderWidth: 1, borderColor: '#E5E7EB',
-  },
-  trendHarvestPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#FFF7ED', borderRadius: 9999,
-    paddingVertical: 5, paddingHorizontal: 10,
-    borderWidth: 1, borderColor: '#FDE68A',
-  },
-  trendHarvestPillText: { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  trendCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  trendHarvestPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3DC', borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
+  trendHarvestPillText: { fontSize: 12, color: '#B45309', fontFamily: 'Inter_700Bold' },
   cardHighlight: { borderColor: '#059669' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 12 },
 
-  listRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  rowLabel: { fontSize: 14, color: '#6B7280' },
+  listRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  rowLabel: { fontSize: 14, color: '#111827', fontFamily: 'Inter_500Medium' },
   rowValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
 
   /* Graph card */
@@ -1812,60 +1801,31 @@ const s = StyleSheet.create({
   healthChipText: { fontSize: 11, fontWeight: '600', color: '#065F46' },
 
   /* Log list — single container with hairline-separated rows (apps-log style) */
-  logList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
+  logList: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 6, paddingHorizontal: 6, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
 
   /* Empty state — shows when there are no real logs yet */
-  logEmpty: {
-    backgroundColor: '#FFFFFF', borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    paddingVertical: 32, paddingHorizontal: 24,
-    alignItems: 'center',
-  },
-  logEmptyIconWrap: {
-    width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12,
-  },
-  logEmptyTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 6 },
-  logEmptySub:   { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 18 },
-  logRow: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    paddingVertical: 14, paddingHorizontal: 14, gap: 14,
-  },
-  logRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  logDateCol:    { width: 42, alignItems: 'center' },
-  logDateMo:     { fontSize: 10, fontWeight: '600', color: '#9CA3AF', letterSpacing: 0.5, textTransform: 'uppercase' },
-  logDateDay:    { fontSize: 18, fontWeight: '700', color: '#111827', marginTop: 1, lineHeight: 22 },
-  logContentCol: { flex: 1 },
-  logRowTitle:   { fontSize: 14, fontWeight: '600', color: '#111827' },
-  logRowSub:     { fontSize: 12, color: '#6B7280', marginTop: 3, lineHeight: 17 },
-  logRowNote:    { fontSize: 12, color: '#9CA3AF', marginTop: 3, lineHeight: 17, fontStyle: 'italic' },
-  logRowSev:     { fontSize: 11, fontWeight: '700', alignSelf: 'flex-start', marginTop: 2 },
+  logEmpty: { backgroundColor: '#FFFFFF', borderRadius: 24, paddingVertical: 32, paddingHorizontal: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  logEmptyIconWrap: { width: 60, height: 60, borderRadius: 20, backgroundColor: PAGE, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+  logEmptyTitle: { fontSize: 15, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  logEmptySub: { fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19, fontFamily: 'Inter_500Medium' },
+  logRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, paddingHorizontal: 12, gap: 14 },
+  logRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
+  logDateCol: { width: 54, height: 54, borderRadius: 16, backgroundColor: PAGE, alignItems: 'center', justifyContent: 'center' },
+  logDateMo: { fontSize: 10, color: '#6B7280', letterSpacing: 0.5, textTransform: 'uppercase', fontFamily: 'Inter_600SemiBold' },
+  logDateDay: { fontSize: 19, color: '#111827', lineHeight: 23, fontFamily: 'Inter_700Bold' },
+  logContentCol: { flex: 1, paddingTop: 2 },
+  logRowTitle: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  logRowSub: { fontSize: 13, color: '#374151', marginTop: 3, lineHeight: 18, fontFamily: 'Inter_500Medium' },
+  logRowNote: { fontSize: 13, color: '#6B7280', marginTop: 3, lineHeight: 18 },
+  logRowSev: { fontSize: 11, alignSelf: 'flex-start', marginTop: 2, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: PAGE, overflow: 'hidden', fontFamily: 'Inter_700Bold' },
 
   /* Log tab buttons */
-  logBtnRow: { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 14 },
-  logActionBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'center', gap: 6, height: 50, borderRadius: 12,
-  },
-  logActionBtnPrimary: {
-    backgroundColor: '#059669',
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  logActionBtnPrimaryText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.2 },
-  logActionBtnGhost: {
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB',
-  },
-  logActionBtnGhostText:   { fontSize: 14, fontWeight: '600', color: '#374151' },
+  logBtnRow: { flexDirection: 'row', gap: 10, marginTop: 14, marginBottom: 12 },
+  logActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18 },
+  logActionBtnPrimary: { backgroundColor: '#111827' },
+  logActionBtnPrimaryText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
+  logActionBtnGhost: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  logActionBtnGhostText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   /* Yield trend */
   yieldSectionHeader: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
@@ -1901,104 +1861,62 @@ const s = StyleSheet.create({
   yieldStatDiv:   { width: 1, height: 36, backgroundColor: '#E5E7EB' },
 
   /* Progress bar */
-  progBg:    { height: 4, backgroundColor: '#E5E7EB', borderRadius: 2 },
-  progFill:  { height: 4, borderRadius: 2, backgroundColor: '#059669' },
+  progBg: { height: 10, backgroundColor: PAGE, borderRadius: 5, overflow: 'hidden' },
+  progFill: { height: 10, borderRadius: 5, backgroundColor: '#059669' },
   progLabel: { fontSize: 12, color: '#6B7280', marginTop: 6, fontWeight: '600' },
 
   /* Modal */
   modalOverlay:  { flex: 1, justifyContent: 'flex-end' },
   modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    paddingHorizontal: 24, paddingBottom: 32, maxHeight: '92%',
-  },
-  modalHandle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5E7EB',
-    alignSelf: 'center', marginTop: 10, marginBottom: 4,
-  },
+  modalSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingBottom: 32, maxHeight: '92%' },
+  modalHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#E5E7EB', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: '#111827', letterSpacing: -0.3 },
-  modalSub:   { fontSize: 13, color: '#6B7280', marginTop: 1 },
-  modalCloseBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  modalTitle: { fontSize: 20, color: '#111827', letterSpacing: -0.3, fontFamily: 'Inter_700Bold' },
+  modalSub: { fontSize: 13, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
+  modalCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: PAGE, justifyContent: 'center', alignItems: 'center' },
   modalContextRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
-  contextChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: '#F9FAFB', borderRadius: 9999, borderWidth: 1, borderColor: '#E5E7EB',
-    paddingVertical: 5, paddingHorizontal: 10,
-  },
-  contextChipText: { fontSize: 12, fontWeight: '600', color: '#6B7280' },
+  contextChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: PAGE, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10 },
+  contextChipText: { fontSize: 12, color: '#374151', fontFamily: 'Inter_600SemiBold' },
   modalFieldLabel: {
     fontSize: 11, fontWeight: '600', color: '#9CA3AF',
     letterSpacing: 0.8, marginBottom: 8, marginTop: 14,
   },
-  modalInput: {
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
-    backgroundColor: '#FFFFFF', paddingHorizontal: 14, minHeight: 52, justifyContent: 'center',
-  },
+  modalInput: { borderRadius: 16, backgroundColor: PAGE, paddingHorizontal: 16, minHeight: 52, justifyContent: 'center' },
   modalTextArea:  { minHeight: 88, justifyContent: 'flex-start', paddingVertical: 8 },
   modalInputText: { fontSize: 15, color: '#111827', flex: 1 },
   stageChipRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
-  stageChip: {
-    paddingVertical: 9, paddingHorizontal: 14, borderRadius: 9999,
-    borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
-    minHeight: 44, justifyContent: 'center',
-  },
-  stageChipActive:     { backgroundColor: '#059669', borderColor: '#059669' },
-  stageChipText:       { fontSize: 13, fontWeight: '600', color: '#111827' },
+  stageChip: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, backgroundColor: PAGE, minHeight: 44, justifyContent: 'center' },
+  stageChipActive: { backgroundColor: '#111827' },
+  stageChipText: { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
   stageChipTextActive: { color: '#FFFFFF' },
   modalActions: { gap: 8, marginTop: 16, marginBottom: 8 },
 
   /* Modal professional form */
-  mFieldWrap:  { marginBottom: 20 },
-  mLabel:      { fontSize: 13, fontWeight: '600', color: '#111827', marginBottom: 8 },
+  mFieldWrap: { marginBottom: 22 },
+  mLabel: { fontSize: 14, color: '#111827', marginBottom: 10, fontFamily: 'Inter_700Bold' },
   mReq:        { color: '#EF4444' },
-  mHint:       { fontSize: 11.5, color: '#6B7280', marginTop: -4, marginBottom: 8, lineHeight: 16 },
-  kindRow:     { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  kindBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 4,
-    borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0', backgroundColor: '#FFFFFF',
-  },
-  kindBtnOn:   { backgroundColor: '#059669', borderColor: '#059669' },
-  kindText:    { fontSize: 12.5, fontWeight: '700', color: '#065F46', textAlign: 'center' },
+  mHint: { fontSize: 12, color: '#6B7280', marginTop: -4, marginBottom: 10, lineHeight: 17, fontFamily: 'Inter_500Medium' },
+  kindRow: { flexDirection: 'row', gap: 8, marginBottom: 18 },
+  kindBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, paddingHorizontal: 4, borderRadius: 18, backgroundColor: PAGE },
+  kindBtnOn: { backgroundColor: '#111827' },
+  kindText: { fontSize: 13, color: '#111827', textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
   kindTextOn:  { color: '#FFFFFF' },
   issueGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  issueBtn: {
-    width: '31%', alignItems: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 4,
-    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF',
-  },
-  issueBtnOn:  { borderColor: '#FCD34D', backgroundColor: '#FFFBEB' },
-  issueText:   { fontSize: 12, fontWeight: '600', color: '#374151', textAlign: 'center' },
-  issueTextOn: { color: '#B45309' },
+  issueBtn: { width: '31%', alignItems: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 16, backgroundColor: PAGE },
+  issueBtnOn: { backgroundColor: '#111827' },
+  issueText: { fontSize: 12.5, color: '#111827', textAlign: 'center', fontFamily: 'Inter_600SemiBold' },
+  issueTextOn: { color: '#FFFFFF' },
   dateRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  dateChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 9999, borderWidth: 1,
-    borderColor: '#A7F3D0', backgroundColor: '#FFFFFF', paddingVertical: 8, paddingHorizontal: 14,
-  },
-  dateChipOn:     { backgroundColor: '#059669', borderColor: '#059669' },
-  dateChipText:   { fontSize: 13, fontWeight: '600', color: '#065F46' },
+  dateChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 14, backgroundColor: PAGE, minHeight: 44, paddingHorizontal: 16 },
+  dateChipOn: { backgroundColor: '#111827' },
+  dateChipText: { fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' },
   dateChipTextOn: { color: '#FFFFFF' },
-  stageLine: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: 10, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 4,
-  },
-  stageLineText:   { flex: 1, fontSize: 12, color: '#374151' },
-  stageLineChange: { fontSize: 12, fontWeight: '700', color: '#059669' },
-  mInputBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10,
-    backgroundColor: '#FFFFFF', paddingHorizontal: 14, height: 52,
-  },
-  mInput: { flex: 1, fontSize: 15, color: '#111827' },
-  mDropMenu: {
-    marginTop: 4, backgroundColor: '#FFFFFF',
-    borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB',
-    overflow: 'hidden',
-  },
+  stageLine: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: PAGE, marginBottom: 4 },
+  stageLineText: { flex: 1, fontSize: 13, color: '#111827', fontFamily: 'Inter_500Medium' },
+  stageLineChange: { fontSize: 13, color: '#059669', fontFamily: 'Inter_700Bold' },
+  mInputBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, backgroundColor: PAGE, paddingHorizontal: 16, height: 52 },
+  mInput: { flex: 1, fontSize: 15, color: '#111827', fontFamily: 'Inter_500Medium' },
+  mDropMenu: { marginTop: 6, backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   mDropItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 16,
@@ -2007,22 +1925,12 @@ const s = StyleSheet.create({
   mDropItemText:   { fontSize: 14, color: '#6B7280', fontWeight: '500' },
   mDropItemActive: { color: '#059669', fontWeight: '700' },
   /* Primary action — solid green, white text */
-  mSaveBtn: {
-    flex: 1,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, height: 50, backgroundColor: '#059669', borderRadius: 12,
-    shadowColor: '#059669', shadowOpacity: 0.18, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  mSaveBtnText:  { fontSize: 14, color: '#FFFFFF', fontWeight: '700', letterSpacing: 0.2 },
+  mSaveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, backgroundColor: '#111827', borderRadius: 18 },
+  mSaveBtnText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 
   /* Secondary action — ghost with hairline border */
-  mCancelBtn: {
-    flex: 1, height: 50, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF',
-  },
-  mCancelBtnText: { fontSize: 14, fontWeight: '600', color: '#6B7280' },
+  mCancelBtn: { flex: 1, height: 54, borderRadius: 18, justifyContent: 'center', alignItems: 'center', backgroundColor: PAGE },
+  mCancelBtnText: { fontSize: 15, color: '#111827', fontFamily: 'Inter_600SemiBold' },
 
   /* ── BUOD tab: Farm Banner (Card 1) ── */
   bannerCard: {

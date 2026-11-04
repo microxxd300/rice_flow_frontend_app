@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { colors } from '@/theme';
+import { LOOK } from '@/theme/look';
+import { useTranslation } from '@/i18n/useTranslation';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 import { useGuideReminders, useReminderTap } from '@/hooks/useGuideReminders';
 import { useFarmerNotices } from '@/hooks/useFarmerNotices';
@@ -82,73 +83,73 @@ const ProfileStack: React.FC = () => (
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-const ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName }> = {
-  HomeTab:     { active: 'home',        inactive: 'home-outline' },
-  ProgressTab: { active: 'trending-up', inactive: 'trending-up-outline' },
-  AITab:       { active: 'sparkles',    inactive: 'sparkles' },
-  PlantingTab: { active: 'book',        inactive: 'book-outline' },
-  ProfileTab:  { active: 'person',      inactive: 'person-outline' },
+const ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName; label: string }> = {
+  HomeTab:     { active: 'home',        inactive: 'home-outline',        label: 'navHome' },
+  ProgressTab: { active: 'trending-up', inactive: 'trending-up-outline', label: 'navProgress' },
+  PlantingTab: { active: 'book',        inactive: 'book-outline',        label: 'navGuide' },
+  ProfileTab:  { active: 'person',      inactive: 'person-outline',      label: 'navProfile' },
 };
+// The AI chat sits apart, in its own round button beside the bar
+const AI_TAB = 'AITab';
 
 
 /* ── Custom floating pill tab bar ──────────────────── */
 
 const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
+  const tr = useTranslation();
   const keyboardOpen = useKeyboardOpen();
   if (keyboardOpen) return null;   // otherwise it can cover the field being typed in
+
+  const go = (route: (typeof state.routes)[number], isFocused: boolean) => {
+    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    if (!isFocused && !event.defaultPrevented) navigation.navigateDeprecated(route.name);
+  };
+  const focused = state.routes[state.index]?.name;
+  const ai = state.routes.find(r => r.name === AI_TAB);
+
   return (
-    <View style={[tb.wrapper, { bottom: Math.max(insets.bottom, 8) + 12 }]} pointerEvents="box-none">
+    <View style={[tb.wrapper, { bottom: Math.max(insets.bottom, 8) + 10 }]} pointerEvents="box-none">
+      {/* Home, Progress, Guide, Profile: icon over a word; the open one sits in a gray pill */}
       <View style={tb.pill}>
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
-          const isCenter  = route.name === 'AITab';
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigateDeprecated(route.name);
-            }
-          };
-
-          if (isCenter) {
-            return (
-              <TouchableOpacity
-                key={route.key}
-                onPress={onPress}
-                style={tb.centerWrap}
-                activeOpacity={0.85}
-              >
-                <View style={[tb.centerBtn, isFocused && tb.centerBtnActive]}>
-                  <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-                </View>
-              </TouchableOpacity>
-            );
-          }
-
+        {state.routes.filter(r => r.name !== AI_TAB).map(route => {
+          const isFocused = focused === route.name;
           const icons = ICONS[route.name];
           return (
             <TouchableOpacity
               key={route.key}
-              onPress={onPress}
-              style={tb.tabBtn}
+              onPress={() => go(route, isFocused)}
+              style={[tb.tab, isFocused && tb.tabOn]}
               activeOpacity={0.7}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
             >
-              <View style={[tb.iconChip, isFocused && tb.iconChipActive]}>
-                <Ionicons
-                  name={isFocused ? icons.active : icons.inactive}
-                  size={21}
-                  color={isFocused ? colors.navActive : '#BDBDBD'}
-                />
-              </View>
+              <Ionicons
+                name={isFocused ? icons.active : icons.inactive}
+                size={22}
+                color={isFocused ? LOOK.green : LOOK.ink}
+              />
+              <Text style={[tb.label, isFocused && tb.labelOn]} numberOfLines={1}>
+                {(tr as any)[icons.label]}
+              </Text>
             </TouchableOpacity>
           );
         })}
       </View>
+
+      {/* The AI chat */}
+      {ai && (
+        <TouchableOpacity
+          onPress={() => go(ai, focused === AI_TAB)}
+          style={[tb.ai, focused === AI_TAB && tb.aiOn]}
+          activeOpacity={0.85}
+          accessibilityRole="tab"
+          accessibilityLabel="AI"
+          accessibilityState={{ selected: focused === AI_TAB }}
+        >
+          <Ionicons name="sparkles" size={24} color={focused === AI_TAB ? '#FFFFFF' : LOOK.green} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -218,66 +219,33 @@ export const AppNavigator: React.FC<{ initialTab?: string }> = ({ initialTab }) 
 
 /* ── Tab bar styles ────────────────────────────────── */
 
+const BAR_SHADOW = {
+  shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.10, shadowRadius: 22, elevation: 12,
+} as const;
+
 const tb = StyleSheet.create({
   wrapper: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
+    position: 'absolute', left: 16, right: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
   },
   pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    height: 72, padding: 6, borderRadius: 36,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 12,
+    ...BAR_SHADOW,
   },
-  tabBtn: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-    gap: 3,
+  tab: {
+    flex: 1, height: '100%', borderRadius: 30,
+    alignItems: 'center', justifyContent: 'center', gap: 3,
   },
-  iconChip: {
-    width: 40,
-    height: 30,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
+  tabOn:   { backgroundColor: LOOK.page },
+  label:   { fontSize: 11, color: LOOK.ink, fontFamily: 'Inter_600SemiBold' },
+  labelOn: { color: LOOK.green },
+  ai: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: LOOK.ink,
+    justifyContent: 'center', alignItems: 'center',
+    ...BAR_SHADOW,
   },
-  iconChipActive: {
-    borderRadius: 12,
-    backgroundColor: `${colors.navActive}26`,
-  },
-  centerWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  centerBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: colors.navActive,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.navActive,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  centerBtnActive: {
-    backgroundColor: '#047857',
-  },
+  aiOn: { backgroundColor: LOOK.green },
 });
