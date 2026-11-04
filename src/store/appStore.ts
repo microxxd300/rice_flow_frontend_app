@@ -5,6 +5,9 @@ import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { isAppLog } from '@/utils/progressLogs';
 
+/** How many notifications the bell keeps (newest first). */
+export const NOTIFICATION_LIMIT = 30;
+
 export interface AppNotification {
   id:        string;
   title:     string;
@@ -53,6 +56,7 @@ interface AppState {
   addNotification:          (n: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => void;
   markNotificationRead:     (id: string) => void;
   markAllNotificationsRead: () => void;
+  removeNotification:       (id: string) => void;
   hydrateNotifications:     (list: AppNotification[]) => void;
   setPendingLogStep:        (stepId: string | null) => void;
   setForecast:              (forecast: { key: string; data: WeatherResponse; at: number } | null) => void;
@@ -188,8 +192,8 @@ export const useAppStore = create<AppState>((set) => ({
       read:      false,
       ...n,
     };
-    // Keep only the 3 most recent so the bell panel stays compact
-    const list = [next, ...state.notifications].slice(0, 3);
+    // The bell keeps the newest ones (tabs and dismiss keep the list easy to read)
+    const list = [next, ...state.notifications].slice(0, NOTIFICATION_LIMIT);
     set({ notifications: list });
     storage.setItem(STORAGE_KEYS.NOTIFICATIONS, list).catch(() => {});
     try { Vibration.vibrate(50); } catch {}   // short haptic buzz
@@ -207,7 +211,13 @@ export const useAppStore = create<AppState>((set) => ({
     storage.setItem(STORAGE_KEYS.NOTIFICATIONS, list).catch(() => {});
   },
 
-  hydrateNotifications: (list) => set({ notifications: list.slice(0, 3) }),
+  removeNotification: (id) => {
+    const list = useAppStore.getState().notifications.filter(n => n.id !== id);
+    set({ notifications: list });
+    storage.setItem(STORAGE_KEYS.NOTIFICATIONS, list).catch(() => {});
+  },
+
+  hydrateNotifications: (list) => set({ notifications: list.slice(0, NOTIFICATION_LIMIT) }),
 
   setPendingLogStep: (stepId) => set({ pendingLogStep: stepId }),
   setForecast: (forecast) => set({ forecast }),

@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Pressable,
+  View, Text, StyleSheet, TouchableOpacity, Modal, FlatList, Pressable, Image,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useAppStore, type AppNotification } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { noticeMessage } from '@/utils/farmerNotices';
 import { relTime } from '@/utils/relativeTime';
+import { notificationGroup, notificationsFor, unreadByTab, type NotificationTab } from '@/utils/notificationGroups';
+import { empty } from '@/assets/illustrations';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -15,113 +18,158 @@ const CATEGORY_ICON: Record<string, IoniconsName> = {
   planting:        'leaf-outline',
   fertilizer:      'flask-outline',
   pest_prevention: 'shield-checkmark-outline',
-  irrigation:      'water-outline',
+  irrigation:      'rainy-outline',
   harvesting:      'basket-outline',
 };
 
-// Soft, category-aware colours for the icon chip — mirrors the Planting Guide
-// palette so a notification reads as the same "kind" of thing at a glance.
+// The icon tile's colours: the Planting Guide's palette, so a notice reads as its kind
 const CATEGORY_COLOR: Record<string, { fg: string; bg: string }> = {
-  planting:        { fg: '#059669', bg: '#ECFDF5' },
-  fertilizer:      { fg: '#D97706', bg: '#FFF7ED' },
-  pest_prevention: { fg: '#DC2626', bg: '#FEF2F2' },
-  irrigation:      { fg: '#2563EB', bg: '#EFF6FF' },
-  harvesting:      { fg: '#B45309', bg: '#FFFBEB' },
+  planting:        { fg: '#059669', bg: '#E8F5EF' },
+  fertilizer:      { fg: '#B45309', bg: '#FEF3DC' },
+  pest_prevention: { fg: '#DC2626', bg: '#FDECEC' },
+  irrigation:      { fg: '#2563EB', bg: '#EAF1FD' },
+  harvesting:      { fg: '#B45309', bg: '#FDF3E1' },
 };
-const DEFAULT_COLOR = { fg: '#059669', bg: '#F0FDF4' };
+const FARM_COLOR  = { fg: '#059669', bg: '#E8F5EF' };
+const ADMIN_COLOR = { fg: '#111827', bg: '#F1F2F1' };
 
 interface NotificationBellProps {
   color?: string;
   size?:  number;
 }
 
-export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#059669', size = 22 }) => {
+/**
+ * The bell and its notifications, as a bottom sheet: tabs with unread counts (All, Farm,
+ * Admin), one card per notification (icon tile, title, text, time, unread dot, dismiss),
+ * and "Mark all as read". Tapping a guide or weather notice opens the Planting Guide.
+ */
+export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#111827', size = 22 }) => {
   const navigation               = useNavigation<any>();
   const tr                       = useTranslation();
-  const notifications            = useAppStore(s => s.notifications);
-  const markNotificationRead     = useAppStore(s => s.markNotificationRead);
-  const markAllNotificationsRead = useAppStore(s => s.markAllNotificationsRead);
+  const { bottom }               = useSafeAreaInsets();
+  const notifications            = useAppStore(st => st.notifications);
+  const markNotificationRead     = useAppStore(st => st.markNotificationRead);
+  const markAllNotificationsRead = useAppStore(st => st.markAllNotificationsRead);
+  const removeNotification       = useAppStore(st => st.removeNotification);
   const [open, setOpen]          = useState(false);
+  const [tab,  setTab]           = useState<NotificationTab>('all');
 
-  const unread = notifications.filter(n => !n.read).length;
+  const unread = unreadByTab(notifications);
+  const shown  = notificationsFor(notifications, tab);
+  const TABS: { id: NotificationTab; label: string }[] = [
+    { id: 'all',   label: tr.notifTabAll },
+    { id: 'farm',  label: tr.notifTabFarm },
+    { id: 'admin', label: tr.notifTabAdmin },
+  ];
 
-  const onTapNotification = (n: AppNotification) => {
+  const onTap = (n: AppNotification) => {
     markNotificationRead(n.id);
     if (n.category) {
+      setOpen(false);
       try { navigation.navigateDeprecated('PlantingTab'); } catch { /* navigator may not have this route */ }
     }
-    setOpen(false);
   };
 
   return (
     <>
-      <TouchableOpacity style={s.btn} onPress={() => setOpen(true)} activeOpacity={0.7}>
+      <TouchableOpacity style={s.btn} onPress={() => setOpen(true)} activeOpacity={0.7} accessibilityLabel={tr.notifTitle}>
         <Ionicons name="notifications-outline" size={size} color={color} />
-        {unread > 0 && (
+        {unread.all > 0 && (
           <View style={s.badge}>
-            <Text style={s.badgeText}>{unread > 9 ? '9+' : unread}</Text>
+            <Text style={s.badgeText}>{unread.all > 9 ? '9+' : unread.all}</Text>
           </View>
         )}
       </TouchableOpacity>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <Pressable style={s.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={s.panel} onPress={e => e.stopPropagation()}>
+          <Pressable style={[s.sheet, { paddingBottom: Math.max(bottom, 12) + 8 }]} onPress={e => e.stopPropagation()}>
+            <View style={s.handle} />
 
             <View style={s.header}>
-              <View style={s.headerTitleRow}>
-                <Text style={s.headerTitle}>{tr.notifTitle}</Text>
-                {unread > 0 && (
-                  <View style={s.headerCount}>
-                    <Text style={s.headerCountText}>{unread > 9 ? '9+' : unread}</Text>
-                  </View>
-                )}
-              </View>
-              {notifications.length > 0 && unread > 0 && (
-                <TouchableOpacity onPress={markAllNotificationsRead} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={s.headerAction}>{tr.notifMarkAll}</Text>
-                </TouchableOpacity>
-              )}
+              <Text style={s.title}>{tr.notifTitle}</Text>
+              <TouchableOpacity style={s.close} onPress={() => setOpen(false)} activeOpacity={0.7} accessibilityLabel={tr.notifClose}>
+                <Ionicons name="close" size={20} color="#111827" />
+              </TouchableOpacity>
             </View>
 
-            {notifications.length === 0 ? (
+            {/* Tabs with how many are unread in each */}
+            <View style={s.tabs}>
+              {TABS.map(t => {
+                const on = tab === t.id;
+                const count = unread[t.id];
+                return (
+                  <TouchableOpacity key={t.id} style={[s.tab, on && s.tabOn]} onPress={() => setTab(t.id)} activeOpacity={0.8}>
+                    <Text style={[s.tabText, on && s.tabTextOn]} numberOfLines={1}>{t.label}</Text>
+                    {count > 0 && (
+                      <View style={[s.tabCount, on && s.tabCountOn]}>
+                        <Text style={[s.tabCountText, on && s.tabCountTextOn]}>{count > 9 ? '9+' : count}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {shown.length === 0 ? (
               <View style={s.empty}>
-                <Ionicons name="notifications-off-outline" size={32} color="#D1D5DB" />
+                <Image source={empty.no_logs} style={{ width: 120, height: 120 }} resizeMode="contain" />
                 <Text style={s.emptyText}>{tr.notifEmpty}</Text>
               </View>
             ) : (
               <FlatList
-                data={notifications}
+                data={shown}
                 keyExtractor={n => n.id}
-                contentContainerStyle={{ paddingVertical: 6 }}
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+                showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => {
+                  const admin = notificationGroup(item) === 'admin';
                   const icon = (item.icon as IoniconsName)
                     || (item.category ? CATEGORY_ICON[item.category] : undefined)
                     || 'notifications-outline';
-                  const tone = (item.category && CATEGORY_COLOR[item.category]) || DEFAULT_COLOR;
+                  const tone = admin ? ADMIN_COLOR : (item.category && CATEGORY_COLOR[item.category]) || FARM_COLOR;
                   const text = item.notice ? noticeMessage({ ...item.notice, title: item.title, body: item.body }, tr) : item;
                   return (
-                    <TouchableOpacity
-                      style={[s.item, !item.read && s.itemUnread]}
-                      onPress={() => onTapNotification(item)}
-                      activeOpacity={0.75}
-                    >
-                      {!item.read && <View style={[s.unreadAccent, { backgroundColor: tone.fg }]} />}
-                      <View style={[s.itemIcon, { backgroundColor: tone.bg }]}>
-                        <Ionicons name={icon} size={16} color={tone.fg} />
+                    <TouchableOpacity style={[s.card, !item.read && s.cardUnread]} onPress={() => onTap(item)} activeOpacity={0.8}>
+                      <View style={[s.iconTile, { backgroundColor: tone.bg }]}>
+                        <Ionicons name={icon} size={19} color={tone.fg} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={[s.itemTitle, !item.read && s.itemTitleUnread]} numberOfLines={1}>{text.title}</Text>
-                        <Text style={s.itemBody} numberOfLines={2}>{text.body}</Text>
-                        <Text style={s.itemTime}>{relTime(item.createdAt, tr)}</Text>
+                        <View style={s.cardTop}>
+                          {!item.read && <View style={s.dot} />}
+                          <Text style={[s.cardTitle, !item.read && s.cardTitleUnread]} numberOfLines={2}>{text.title}</Text>
+                        </View>
+                        {!!text.body && <Text style={s.cardBody} numberOfLines={3}>{text.body}</Text>}
+                        <View style={s.metaRow}>
+                          <Text style={s.cardTime}>{relTime(item.createdAt, tr)}</Text>
+                          <View style={s.kind}>
+                            <Text style={s.kindText}>{admin ? tr.notifTabAdmin : tr.notifTabFarm}</Text>
+                          </View>
+                        </View>
                       </View>
-                      {!item.read && <View style={[s.unreadDot, { backgroundColor: tone.fg }]} />}
+                      <TouchableOpacity
+                        onPress={() => removeNotification(item.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.6}
+                        accessibilityLabel={tr.notifDismiss}
+                      >
+                        <Ionicons name="close" size={17} color="#9CA3AF" />
+                      </TouchableOpacity>
                     </TouchableOpacity>
                   );
                 }}
               />
             )}
 
+            <View style={s.footer}>
+              <TouchableOpacity onPress={markAllNotificationsRead} disabled={unread.all === 0} activeOpacity={0.7}>
+                <Text style={[s.markAll, unread.all === 0 && { color: '#9CA3AF', textDecorationLine: 'none' }]}>{tr.notifMarkAll}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.doneBtn} onPress={() => setOpen(false)} activeOpacity={0.85}>
+                <Text style={s.doneText}>{tr.notifClose}</Text>
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -129,56 +177,57 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ color = '#05
   );
 };
 
+const INK  = '#111827';
+const PAGE = '#F1F2F1';
+
 const s = StyleSheet.create({
-  btn:  { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  btn:   { width: 42, height: 42, justifyContent: 'center', alignItems: 'center' },
   badge: {
-    position: 'absolute', top: 4, right: 4,
-    minWidth: 16, height: 16, borderRadius: 8,
+    position: 'absolute', top: 4, right: 4, minWidth: 17, height: 17, borderRadius: 9,
     backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 4, borderWidth: 1.5, borderColor: '#FFFFFF',
   },
-  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontFamily: 'Inter_700Bold' },
 
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-start', paddingTop: 70, paddingHorizontal: 16 },
-  panel: {
-    backgroundColor: '#FFFFFF', borderRadius: 18,
-    maxHeight: '75%', overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.18, shadowRadius: 18, elevation: 10,
-  },
+  backdrop: { flex: 1, backgroundColor: 'rgba(17,24,39,0.45)', justifyContent: 'flex-end' },
+  sheet:    { backgroundColor: PAGE, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 16, paddingTop: 10, maxHeight: '85%' },
+  handle:   { width: 44, height: 5, borderRadius: 3, backgroundColor: '#D1D5DB', alignSelf: 'center', marginBottom: 10 },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle:  { fontSize: 15, fontWeight: '800', color: '#111827', letterSpacing: 0.2 },
-  headerCount: {
-    minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6,
-    backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center',
-  },
-  headerCountText: { fontSize: 11, fontWeight: '800', color: '#059669' },
-  headerAction: { fontSize: 12, fontWeight: '700', color: '#059669' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: 12 },
+  title:  { fontSize: 21, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
+  close:  { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
 
-  empty:     { paddingVertical: 40, alignItems: 'center', gap: 10 },
-  emptyText: { fontSize: 13, color: '#9CA3AF', fontWeight: '500' },
+  tabs:           { flexDirection: 'row', backgroundColor: '#E4E6E4', borderRadius: 16, padding: 4, marginBottom: 12 },
+  tab:            { flex: 1, height: 40, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  tabOn:          { backgroundColor: '#FFFFFF' },
+  tabText:        { fontSize: 13, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
+  tabTextOn:      { color: INK, fontFamily: 'Inter_700Bold' },
+  tabCount:       { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center' },
+  tabCountOn:     { backgroundColor: INK },
+  tabCountText:   { fontSize: 11, color: INK, fontFamily: 'Inter_700Bold' },
+  tabCountTextOn: { color: '#FFFFFF' },
 
-  item: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    paddingLeft: 16, paddingRight: 14, paddingVertical: 13,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6',
+  card: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 14, borderRadius: 20, backgroundColor: '#FFFFFF',
+    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 1,
   },
-  itemUnread: { backgroundColor: '#F6FEF9' },
-  unreadAccent: {
-    position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2,
-  },
-  itemIcon: {
-    width: 34, height: 34, borderRadius: 11,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  itemTitle: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 2 },
-  itemTitleUnread: { color: '#111827' },
-  itemBody:  { fontSize: 12, color: '#4B5563', lineHeight: 16, marginBottom: 4 },
-  itemTime:  { fontSize: 10, color: '#9CA3AF', fontWeight: '600' },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#059669', marginTop: 6 },
+  cardUnread:      { borderWidth: 1.5, borderColor: '#A7E3C9' },
+  iconTile:        { width: 42, height: 42, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+  cardTop:         { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot:             { width: 8, height: 8, borderRadius: 4, backgroundColor: '#059669' },
+  cardTitle:       { flex: 1, fontSize: 14, color: '#374151', fontFamily: 'Inter_600SemiBold' },
+  cardTitleUnread: { color: INK, fontFamily: 'Inter_700Bold' },
+  cardBody:        { fontSize: 13, color: '#4B5563', lineHeight: 18, marginTop: 3 },
+  metaRow:         { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  cardTime:        { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+  kind:            { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: PAGE },
+  kindText:        { fontSize: 11, color: '#374151', fontFamily: 'Inter_600SemiBold' },
+
+  empty:     { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  emptyText: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter_500Medium' },
+
+  footer:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 14, paddingHorizontal: 4 },
+  markAll:  { fontSize: 14, color: INK, fontFamily: 'Inter_700Bold', textDecorationLine: 'underline' },
+  doneBtn:  { height: 46, paddingHorizontal: 22, borderRadius: 16, backgroundColor: INK, justifyContent: 'center' },
+  doneText: { fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },
 });
