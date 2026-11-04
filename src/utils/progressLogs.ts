@@ -20,7 +20,7 @@ export function stageLabel(stageNo?: number | null): string {
 }
 
 export const ISSUE_TO_API: Record<string, string> = {
-  Insect: 'pest', Disease: 'disease', Drought: 'weather', Flood: 'weather', Other: 'other',
+  Insect: 'pest', Disease: 'disease', Drought: 'weather', Flood: 'weather', Nutrient: 'nutrient', Other: 'other',
 };
 export const ISSUE_FROM_API: Record<string, string> = {
   pest: 'Insect', disease: 'Disease', weather: 'Weather', nutrient: 'Nutrient', other: 'Other',
