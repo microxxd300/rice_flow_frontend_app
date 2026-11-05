@@ -16,12 +16,12 @@ import { Button } from '../components';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
 import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
-import { useStepWeather } from '@/hooks/useFarmForecast';
+import { useStepAdvice } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
 import { SOWING_KEY, daysAgoISO } from '@/utils/sowing';
-import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
@@ -525,8 +525,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     useAppStore.getState().setPendingLogStep(null);
   }, [pendingLogStep]);
 
-  // What the weather means for the step this log finishes
-  const { adviceFor } = useStepWeather();
+  // What the weather or time of day means for the step this log finishes
+  const { adviceFor } = useStepAdvice();
   const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
 
   // Real seasonal yields — one record per cycle that has a saved yield
@@ -1343,12 +1343,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {logWeather && (
                 <View style={[s.logWeather, logWeather.level === 'stop' && s.logWeatherStop]}>
                   <Ionicons
-                    name={logWeather.level === 'stop' ? 'warning' : 'rainy-outline'}
+                    name={logWeather.level === 'stop' ? 'warning' : logWeather.code === 'nightWork' ? 'moon-outline' : 'rainy-outline'}
                     size={15}
                     color={logWeather.level === 'stop' ? '#B91C1C' : '#92400E'}
                   />
                   <Text style={[s.logWeatherText, logWeather.level === 'stop' && { color: '#B91C1C' }, T && { fontSize: 14 }]}>
-                    {(tr as any)[ADVICE_TEXT[logWeather.code]]}
+                    {(tr as any)[STEP_ADVICE_TEXT[logWeather.code]]}
                   </Text>
                 </View>
               )}

@@ -11,8 +11,8 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
-import { farmKey, useStepWeather } from '@/hooks/useFarmForecast';
-import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { farmKey, useStepAdvice } from '@/hooks/useFarmForecast';
+import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { LOG_WORD_KEYS, stageLabel } from '@/utils/progressLogs';
 import { useAuthStore } from '@/features/auth/store';
 import { Skeleton } from '@/components/Skeleton';
@@ -89,7 +89,7 @@ export const HomeDashboardScreen: React.FC = () => {
   const wxData    = forecast && forecast.key === farmKey(selectedFarm) ? forecast.data : null;
   const wxCurrent = wxData?.current ?? null;
   const hourly    = (wxData?.hourly ?? []).map(h => ({ time: hourFmt(h.time), img: weatherIcon(h.weather_code, forecastHour(h.time)), temp: Math.round(h.temp) }));
-  const { adviceFor } = useStepWeather();
+  const { adviceFor } = useStepAdvice();
 
   // ── My crop ──
   // Only a growing crop: a finished season leaves the card asking for the next one
@@ -272,9 +272,9 @@ export const HomeDashboardScreen: React.FC = () => {
                     <Text style={[s.rowTitle, i === 0 && s.rowTitleNow, T && { fontSize: 16 }]} numberOfLines={2}>{t.title}</Text>
                     {t.advice && (
                       <View style={[s.advice, { backgroundColor: stop ? '#FDECEC' : '#FEF3DC' }]}>
-                        <Ionicons name="rainy-outline" size={14} color={stop ? '#DC2626' : '#B45309'} />
+                        <Ionicons name={t.advice.code === 'nightWork' ? 'moon-outline' : 'rainy-outline'} size={14} color={stop ? '#DC2626' : '#B45309'} />
                         <Text style={[s.adviceText, { color: stop ? '#B91C1C' : '#92400E' }, T && { fontSize: 13 }]} numberOfLines={2}>
-                          {(tr as any)[ADVICE_TEXT[t.advice.code]]}
+                          {(tr as any)[STEP_ADVICE_TEXT[t.advice.code]]}
                         </Text>
                       </View>
                     )}
