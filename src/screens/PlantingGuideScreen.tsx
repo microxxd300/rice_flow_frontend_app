@@ -12,9 +12,9 @@ import { loadGuide } from '@/services/guideLoader';
 import { plantingCalendar } from '@/utils/plantingCalendar';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
-import { ADVICE_TEXT } from '@/utils/stepWeather';
+import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { rainfedWaitAdvice } from '@/utils/seasonAdvice';
-import { useStepWeather } from '@/hooks/useFarmForecast';
+import { useStepAdvice } from '@/hooks/useFarmForecast';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
@@ -143,8 +143,8 @@ export const PlantingGuideScreen: React.FC = () => {
   const today    = guideDay(latestGuide);
   const pct      = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
   const explainOpen = !!current && explainedId === current.id;
-  // The app's shared forecast (useFarmForecast): warnings for the current step
-  const { adviceFor, updatedAt } = useStepWeather();
+  // Live weather and time-of-day advice for the current step
+  const { adviceFor, updatedAt } = useStepAdvice();
 
   // Data-driven "Angkop na Buwan sa Pagtatanim" — built from the chosen variety's
   // preferred season, Davao Type IV climate pattern, and today's date. The guide's
@@ -392,15 +392,15 @@ export const PlantingGuideScreen: React.FC = () => {
 
               <Text style={[s.stepTitle, T && { fontSize: 23 }]}>{current.title}</Text>
 
-              {/* What the forecast means for this step */}
+              {/* What the weather or time of day means for this step */}
               {weather && (
                 <View style={[s.softBox, { backgroundColor: WX_TONE[weather.level].bg }]}>
-                  <Ionicons name={weather.level === 'stop' ? 'warning' : 'rainy-outline'} size={18} color={WX_TONE[weather.level].fg} />
+                  <Ionicons name={weather.level === 'stop' ? 'warning' : weather.code === 'nightWork' ? 'moon-outline' : 'rainy-outline'} size={18} color={WX_TONE[weather.level].fg} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.softBoxText, { color: WX_TONE[weather.level].fg, fontFamily: 'Inter_600SemiBold' }, T && { fontSize: 15, lineHeight: 22 }]}>
-                      {(tr as any)[ADVICE_TEXT[weather.code]]}
+                      {(tr as any)[STEP_ADVICE_TEXT[weather.code]]}
                     </Text>
-                    {updatedAt != null && (
+                    {updatedAt != null && weather.code !== 'nightWork' && (
                       <Text style={s.softBoxTime}>{tr.wxUpdatedAt.replace('{time}', clock(updatedAt))}</Text>
                     )}
                   </View>

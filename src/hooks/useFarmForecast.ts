@@ -6,6 +6,7 @@ import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useTranslation } from '@/i18n/useTranslation';
 import { guideDay, guideProgress, guideSteps, type GuideStep } from '@/utils/guideSteps';
 import { ADVICE_TEXT, stepWeather, usableOutlook, type StepWeather } from '@/utils/stepWeather';
+import { stepTimeAdvice, type StepAdvice } from '@/utils/stepTime';
 
 // The server keeps a forecast for 10 minutes, so asking more often brings nothing new
 export const FORECAST_REFRESH_MS = 10 * 60 * 1000;
@@ -53,6 +54,18 @@ export function useStepWeather() {
   return {
     adviceFor: (step: GuideStep | null | undefined): StepWeather | null => stepWeather(step, outlook, today),
     updatedAt: outlook && forecast ? forecast.at : null,
+  };
+}
+
+/** Live advice shown on screens: weather first, then a nighttime safety reminder. */
+export function useStepAdvice() {
+  const weather = useStepWeather();
+  const guide   = useAppStore(s => s.latestGuide);
+  const today   = guideDay(guide);
+  return {
+    adviceFor: (step: GuideStep | null | undefined): StepAdvice | null =>
+      weather.adviceFor(step) ?? stepTimeAdvice(step, today),
+    updatedAt: weather.updatedAt,
   };
 }
 
