@@ -60,7 +60,7 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
   const [waitForGuess, setWaitForGuess] = useState(log.problem_key === 'unknown' && !!log.observation?.trim());
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);   // "Show all": every step, don't and tip point
-  const [asked, setAsked] = useState(false);   // the farmer tapped "Explain for my farm"
+  const [open, setOpen] = useState(false);   // the GeoRice AI explanation is showing
 
   useEffect(() => {
     apiAdvice.problem(log.problem_key, lang).then(r => setCard(r.data)).catch(() => {});
@@ -68,9 +68,9 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
 
   // The GeoRice AI tip for this farm, when the farmer asks: a saved tip opens at once,
   // otherwise the AI is asked (once; the server saves it on the log)
-  const explain = () => {
-    setAsked(true);
-    if (tip) return;
+  const toggleExplain = () => {
+    setOpen(o => !o);
+    if (open || tip) return;
     apiAdvice.explain({ problem: log.problem_key, language: lang, farm: farmId, log: log.id })
       .then(r => setTip(r.data))
       .catch(() => setTip({ problem: log.problem_key, ai_used: false, not_covered: false, note: 'ai_unavailable', points: [] }));
@@ -98,7 +98,7 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
     }
   };
 
-  const tipLoading = asked && !tip;   // a failure still sets a tip (with a note)
+  const tipLoading = open && !tip;   // a failure still sets a tip (with a note)
   const sevWord = log.severity === 'high' ? tr.sevHigh : log.severity === 'medium' ? tr.sevMedium
     : log.severity === 'low' ? tr.sevLow : '';
   const note = tip && !tip.ai_used
@@ -146,34 +146,16 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
         </>
       )}
 
-      {/* GeoRice AI: a tip for this farm, from the booklet advice above, when asked */}
-      {asked && <View style={s.ai}>
-        <AiBadge dark />
-        {tipLoading && (
-          <View style={s.aiLoading}>
-            <ActivityIndicator color="#6EE7B7" size="small" />
-            <Text style={s.aiNote}>{tr.probExplainLoading}</Text>
-          </View>
-        )}
-        {note && <Text style={s.aiNote}>{note}</Text>}
-        {tip?.ai_used && (all ? tip.points : tip.points.slice(0, SHORT.tip)).map((p, i) => (
-          <View key={i} style={{ paddingVertical: 4 }}>
-            <Text style={s.aiText}>{p.text}</Text>
-            <SourceChips sources={p.sources} dark />
-          </View>
-        ))}
-        {tip?.ai_used && tip.not_covered && <Text style={s.aiNote}>{tr.probNotCovered}</Text>}
-      </View>}
-
       {!!card && all && <Text style={s.help}>{card.get_help.text}</Text>}
 
       {/* Ask GeoRice AI (after any guess), and the rest of the advice */}
       {!!card && (
         <View style={s.actions}>
-          {!asked && !waitForGuess && (
-            <TouchableOpacity onPress={explain} style={s.explainBtn} activeOpacity={0.8} accessibilityRole="button">
-              <Ionicons name="sparkles" size={15} color={LOOK.green} />
-              <Text style={s.explainText}>{tr.probExplainBtn}</Text>
+          {!waitForGuess && (
+            <TouchableOpacity onPress={toggleExplain} style={s.explainBtn} activeOpacity={0.75} accessibilityRole="button"
+              accessibilityState={{ expanded: open }}>
+              <Ionicons name={open ? 'chevron-up' : 'sparkles'} size={16} color={open ? LOOK.ink : LOOK.green} />
+              <Text style={s.explainText}>{open ? tr.guideHideExplain : tr.probExplainBtn}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity onPress={() => setAll(a => !a)} style={s.more} accessibilityRole="button">
@@ -182,6 +164,25 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
           </TouchableOpacity>
         </View>
       )}
+
+      {/* GeoRice AI: a tip for this farm, from the booklet advice above, when opened */}
+      {open && <View style={s.ai}>
+        <AiBadge />
+        {tipLoading && (
+          <View style={s.aiLoading}>
+            <ActivityIndicator color="#1E3A8A" size="small" />
+            <Text style={s.aiNote}>{tr.probExplainLoading}</Text>
+          </View>
+        )}
+        {note && <Text style={s.aiNote}>{note}</Text>}
+        {tip?.ai_used && (all ? tip.points : tip.points.slice(0, SHORT.tip)).map((p, i) => (
+          <View key={i} style={{ paddingVertical: 4 }}>
+            <Text style={s.aiText}>{p.text}</Text>
+            <SourceChips sources={p.sources} />
+          </View>
+        ))}
+        {tip?.ai_used && tip.not_covered && <Text style={s.aiNote}>{tr.probNotCovered}</Text>}
+      </View>}
 
       <TouchableOpacity style={s.fixed} disabled={busy} activeOpacity={0.85}
         onPress={() => patch({ resolved_at: new Date().toISOString() })}>
@@ -219,16 +220,18 @@ const s = StyleSheet.create({
   guessYesText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
   guessNoText:  { fontSize: 14, fontWeight: '700', color: LOOK.ink },
   section:   { fontSize: 14.5, fontWeight: '800', color: LOOK.ink, marginTop: 14 },
-  ai:        { marginTop: 14, padding: 14, borderRadius: 18, backgroundColor: LOOK.ink, gap: 6 },
+  // The guide's explanation box (PlantingGuideScreen explainBody)
+  ai:        { marginTop: 10, padding: 14, borderRadius: 16, backgroundColor: '#EAF1FD', gap: 6 },
   aiLoading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  aiText:    { fontSize: 14.5, lineHeight: 21, color: '#F9FAFB' },
-  aiNote:    { fontSize: 13.5, lineHeight: 19, color: '#FDE68A' },
+  aiText:    { fontSize: 14, lineHeight: 21, color: '#1E3A8A' },
+  aiNote:    { fontSize: 13.5, lineHeight: 19, color: '#92400E' },
   help:      { fontSize: 13, lineHeight: 19, color: LOOK.soft, marginTop: 12 },
   actions:   { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
                gap: 10, marginTop: 12 },
-  explainBtn:{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 40,
-               borderRadius: 20, backgroundColor: '#ECFDF5' },
-  explainText: { fontSize: 14, fontWeight: '700', color: '#047857' },
+  // The guide's "Explain this step" button (PlantingGuideScreen explainBtn)
+  explainBtn:{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14,
+               borderRadius: 14, backgroundColor: LOOK.page },
+  explainText: { fontSize: 14, color: LOOK.ink, fontFamily: 'Inter_600SemiBold' },
   more:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8 },
   moreText:  { fontSize: 14, fontWeight: '700', color: LOOK.green },
   waiting:   { fontSize: 13, color: LOOK.soft, textAlign: 'center', marginTop: 10 },
