@@ -811,6 +811,10 @@ const t = {
     probNo:                   'Hindi',
     probFixed:                'Ayos na ang problema',
     plogWhichProblem:         'Alin dito?',
+    probShowAll:              'Ipakita lahat',
+    probShowLess:             'Mas kaunti',
+    probWaitingOne:           'May 1 pang problema pagkatapos nito',
+    probWaitingMany:          'May {n} pang problema pagkatapos nito',
     // Field-problem advice (the problem card under the planting guide)
     sevLow:                   'Kaunti',
     sevMedium:                'Katamtaman',
@@ -1602,6 +1606,10 @@ const t = {
     probNo:                   'No',
     probFixed:                'The problem is fixed',
     plogWhichProblem:         'Which one is it?',
+    probShowAll:              'Show all',
+    probShowLess:             'Show less',
+    probWaitingOne:           '1 more problem after this',
+    probWaitingMany:          '{n} more problems after this',
     // Field-problem advice (the problem card under the planting guide)
     sevLow:                   'A little',
     sevMedium:                'Some',
@@ -2393,6 +2401,10 @@ const t = {
     probNo:                   'Dili',
     probFixed:                'Okay na ang problema',
     plogWhichProblem:         'Unsa man kini?',
+    probShowAll:              'Ipakita tanan',
+    probShowLess:             'Gamay ra',
+    probWaitingOne:           'Naa pay 1 ka problema human ani',
+    probWaitingMany:          'Naa pay {n} ka problema human ani',
     // Field-problem advice (the problem card under the planting guide)
     sevLow:                   'Gamay',
     sevMedium:                'Medyo',

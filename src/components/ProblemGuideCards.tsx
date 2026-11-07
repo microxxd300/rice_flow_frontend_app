@@ -9,17 +9,20 @@ import { apiAdvice, apiProgress, type AdviceExplanation, type ProblemCard } from
 import { fetchActiveCycleLogs } from '@/utils/progressLogs';
 import { AdviceRow, AiBadge, SourceChips } from './AdviceParts';
 
-const SHOWN = 2;   // the newest open problems; older ones wait until these are fixed
+// One problem at a time: the most severe first, then the newest
+const SEVERITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+const SHORT = { doNow: 2, dont: 1, tip: 2 };   // what the card shows before "Show all"
 
 type OpenLog = { id: number; problem_key: string; severity: string; observation: string; advice_tip: any };
 
 /**
- * Under the planting guide: each problem the farmer logged and has not marked fixed,
- * with the PhilRice booklet advice and a GeoRice AI tip for this farm. The tip loads by
- * itself and is saved on the log, so each problem asks the AI only once.
+ * Under the planting guide: the most urgent problem the farmer logged and has not marked
+ * fixed (one at a time), with the PhilRice booklet advice and a GeoRice AI tip for this
+ * farm. The tip loads by itself and is saved on the log, so each problem asks the AI once.
+ * When it is fixed, the next one shows.
  */
 export const ProblemGuideCards: React.FC<{ farmId?: number }> = ({ farmId }) => {
-  const [open, setOpen] = useState<OpenLog[]>([]);
+  const [open, setOpen] = useState<OpenLog[]>([]);   // every open problem, most urgent first
 
   const load = useCallback(() => {
     let alive = true;
@@ -29,8 +32,8 @@ export const ProblemGuideCards: React.FC<{ farmId?: number }> = ({ farmId }) => 
         if (!alive || !res) return;
         setOpen((res.data as any[])
           .filter(l => l.problem_key && !l.resolved_at)
-          .sort((a, b) => String(b.log_date).localeCompare(String(a.log_date)) || b.id - a.id)
-          .slice(0, SHOWN));
+          .sort((a, b) => (SEVERITY_RANK[a.severity] ?? 3) - (SEVERITY_RANK[b.severity] ?? 3)
+            || String(b.log_date).localeCompare(String(a.log_date)) || b.id - a.id));
       })
       .catch(() => {});
     return () => { alive = false; };
@@ -38,17 +41,15 @@ export const ProblemGuideCards: React.FC<{ farmId?: number }> = ({ farmId }) => 
   useFocusEffect(load);
 
   if (!open.length) return null;
+  const log = open[0];
   return (
-    <>
-      {open.map(log => (
-        <ProblemCardView key={`${log.id}-${log.problem_key}`} log={log} farmId={farmId}
-          onChanged={load} />
-      ))}
-    </>
+    <ProblemCardView key={`${log.id}-${log.problem_key}`} log={log} farmId={farmId}
+      waiting={open.length - 1} onChanged={load} />
   );
 };
 
-const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; onChanged: () => void }> = ({ log, farmId, onChanged }) => {
+const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number; onChanged: () => void }> =
+  ({ log, farmId, waiting, onChanged }) => {
   const tr = useTranslation();
   const lang = useLanguageStore(st => st.language);
   const [card, setCard] = useState<ProblemCard | null>(null);
@@ -58,6 +59,7 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; onChanged: () =
   // "Not sure" with a description: no tip until GeoRice AI's guess is answered (one AI request less)
   const [waitForGuess, setWaitForGuess] = useState(log.problem_key === 'unknown' && !!log.observation?.trim());
   const [busy, setBusy] = useState(false);
+  const [all, setAll] = useState(false);   // "Show all": every step, don't and tip point
 
   useEffect(() => {
     apiAdvice.problem(log.problem_key, lang).then(r => setCard(r.data)).catch(() => {});
@@ -138,9 +140,9 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; onChanged: () =
       {!card ? <ActivityIndicator color={LOOK.green} style={{ marginVertical: 16 }} /> : (
         <>
           <Text style={s.section}>{tr.probDoNow}</Text>
-          {card.do_now.map((l, i) => <AdviceRow key={`d${i}`} line={l} mark="do" />)}
+          {(all ? card.do_now : card.do_now.slice(0, SHORT.doNow)).map((l, i) => <AdviceRow key={`d${i}`} line={l} mark="do" />)}
           {card.dont.length > 0 && <Text style={s.section}>{tr.probDont}</Text>}
-          {card.dont.map((l, i) => <AdviceRow key={`x${i}`} line={l} mark="dont" />)}
+          {(all ? card.dont : card.dont.slice(0, SHORT.dont)).map((l, i) => <AdviceRow key={`x${i}`} line={l} mark="dont" />)}
         </>
       )}
 
@@ -154,7 +156,7 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; onChanged: () =
           </View>
         )}
         {note && <Text style={s.aiNote}>{note}</Text>}
-        {tip?.ai_used && tip.points.map((p, i) => (
+        {tip?.ai_used && (all ? tip.points : tip.points.slice(0, SHORT.tip)).map((p, i) => (
           <View key={i} style={{ paddingVertical: 4 }}>
             <Text style={s.aiText}>{p.text}</Text>
             <SourceChips sources={p.sources} dark />
@@ -163,7 +165,16 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; onChanged: () =
         {tip?.ai_used && tip.not_covered && <Text style={s.aiNote}>{tr.probNotCovered}</Text>}
       </View>}
 
-      {!!card && <Text style={s.help}>{card.get_help.text}</Text>}
+      {!!card && all && <Text style={s.help}>{card.get_help.text}</Text>}
+
+      {/* The rest of the advice, on request */}
+      {!!card && (card.do_now.length > SHORT.doNow || card.dont.length > SHORT.dont
+        || (tip?.points.length ?? 0) > SHORT.tip || !all) && (
+        <TouchableOpacity onPress={() => setAll(a => !a)} style={s.more} accessibilityRole="button">
+          <Text style={s.moreText}>{all ? tr.probShowLess : tr.probShowAll}</Text>
+          <Ionicons name={all ? 'chevron-up' : 'chevron-down'} size={16} color={LOOK.green} />
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity style={s.fixed} disabled={busy} activeOpacity={0.85}
         onPress={() => patch({ resolved_at: new Date().toISOString() })}>
@@ -174,6 +185,9 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; onChanged: () =
           </>
         )}
       </TouchableOpacity>
+      {waiting > 0 && (
+        <Text style={s.waiting}>{(waiting === 1 ? tr.probWaitingOne : tr.probWaitingMany).replace('{n}', String(waiting))}</Text>
+      )}
     </View>
   );
 };
@@ -203,6 +217,9 @@ const s = StyleSheet.create({
   aiText:    { fontSize: 14.5, lineHeight: 21, color: '#F9FAFB' },
   aiNote:    { fontSize: 13.5, lineHeight: 19, color: '#FDE68A' },
   help:      { fontSize: 13, lineHeight: 19, color: LOOK.soft, marginTop: 12 },
+  more:      { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginTop: 12 },
+  moreText:  { fontSize: 14, fontWeight: '700', color: LOOK.green },
+  waiting:   { fontSize: 13, color: LOOK.soft, textAlign: 'center', marginTop: 10 },
   fixed:     { marginTop: 14, height: 48, borderRadius: 16, backgroundColor: LOOK.green, flexDirection: 'row',
                alignItems: 'center', justifyContent: 'center', gap: 8 },
   fixedText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
