@@ -6,7 +6,6 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
 import { empty } from '@/assets/illustrations';
 import { apiAI } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
@@ -195,7 +194,6 @@ function TypingDots() {
 }
 
 export const AIChatScreen: React.FC = () => {
-  const navigation = useNavigation<any>();   // opened from the Help tab, so it can go back
   const { bottom: bottomInset } = useSafeAreaInsets();
   // Floating tab bar: bottom = max(insets.bottom, 8) + 10, bar 72 px tall, + 12 px gap
   const tabClearance = Math.max(bottomInset, 8) + 10 + 72 + 12;
@@ -281,17 +279,9 @@ export const AIChatScreen: React.FC = () => {
 
         {/* ── Header ─────────────────────────────────────────── */}
         <View style={s.header}>
-          <View style={{ flexDirection: 'row' }}>
-            {navigation.canGoBack() && (
-              <TouchableOpacity style={s.headerIconBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}
-                accessibilityLabel="Back">
-                <Ionicons name="chevron-back" size={24} color="#111827" />
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={s.headerIconBtn} onPress={openDrawer} activeOpacity={0.7}>
-              <Ionicons name="menu" size={22} color="#111827" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={s.headerIconBtn} onPress={openDrawer} activeOpacity={0.7}>
+            <Ionicons name="menu" size={22} color="#111827" />
+          </TouchableOpacity>
 
           <View style={s.headerCenter}>
             <View style={s.headerDot} />

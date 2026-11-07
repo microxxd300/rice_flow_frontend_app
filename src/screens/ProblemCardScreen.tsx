@@ -7,21 +7,15 @@ import { LOOK } from '@/theme/look';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useLanguageStore } from '@/store/languageStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
-import { apiAdvice, apiProgress, type AdviceExplanation, type ProblemCard } from '@/services/apiService';
-import { fetchActiveCycleLogs } from '@/utils/progressLogs';
-import { AdviceRow, SourceChips } from '@/components/AdviceParts';
+import { apiAdvice, type AdviceExplanation, type ProblemCard } from '@/services/apiService';
+import { AdviceRow, AiBadge, Fold, SourceChips, StepHeader } from '@/components/AdviceParts';
 
-type Severity = 'low' | 'medium' | 'high';
-
-function today(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+export type Severity = 'low' | 'medium' | 'high';
 
 /**
- * One field problem: the PhilRice booklet card (always shown, no AI), the AI's
- * explanation of it for this farm (every point with its booklet page), and saving
- * the problem and what the farmer did to the field log.
+ * Step 2 of a problem in the field: the PhilRice booklet advice (always shown, no AI).
+ * What to do and what not to do are open; the rest folds. GeoRice AI can explain the
+ * advice for this farm, every point with its booklet page. Step 3 saves it.
  */
 export const ProblemCardScreen: React.FC = () => {
   const tr = useTranslation();
@@ -36,11 +30,6 @@ export const ProblemCardScreen: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [explaining, setExplaining] = useState(false);
   const [explained, setExplained] = useState<AdviceExplanation | null>(null);
-  const [action, setAction] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(!!params.saved);
-  const [noCycle, setNoCycle] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
 
   useEffect(() => {
     apiAdvice.problem(params.problemKey, lang).then(r => setCard(r.data)).catch(() => setFailed(true));
@@ -60,47 +49,19 @@ export const ProblemCardScreen: React.FC = () => {
     }
   };
 
-  const save = async () => {
-    if (!card) return;
-    setSaving(true);
-    setSaveFailed(false);
-    try {
-      const { cycle } = await fetchActiveCycleLogs(farmId);
-      if (!cycle) { setNoCycle(true); return; }
-      await apiProgress.createLog({
-        farm_cycle: cycle.id,
-        log_date: today(),
-        observation: params.description || card.name,
-        problem_key: card.key,
-        severity: severity ?? '',
-        action_taken: action.trim(),
-      });
-      fetchActiveCycleLogs(farmId).catch(() => {});   // the Progress tab shows it next time
-      setSaved(true);
-    } catch {
-      setSaveFailed(true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const note = explained && !explained.ai_used
     ? (explained.note === 'daily_limit' ? tr.probNoteLimit
       : explained.note === 'rejected' ? tr.probNoteRejected : tr.probNoteUnavailable)
     : null;
 
   return (
-    <SafeAreaView style={s.root} edges={['top']}>
-      <View style={s.header}>
-        <TouchableOpacity style={s.back} onPress={() => navigation.goBack()} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={24} color={LOOK.ink} />
-        </TouchableOpacity>
-        <Text style={s.headerTitle} numberOfLines={1}>{card?.name ?? ''}</Text>
-      </View>
+    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+      <StepHeader step={2} title={card?.name ?? ''} onBack={() => navigation.goBack()} />
 
       {failed ? <Text style={[s.muted, { padding: 20 }]}>{tr.probLoadError}</Text>
         : !card ? <ActivityIndicator color={LOOK.green} style={{ marginTop: 40 }} />
         : (
+        <>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
 
@@ -113,8 +74,8 @@ export const ProblemCardScreen: React.FC = () => {
             {!card.checked_by_validator && <Text style={s.unchecked}>{tr.probNotChecked}</Text>}
           </View>
 
-          {/* How bad is it */}
-          {!saved && (
+          {/* How bad is it (not asked again for a problem already saved) */}
+          {!params.saved && (
             <View style={s.card}>
               <Text style={s.cardTitle}>{tr.probSeverity}</Text>
               <View style={s.chips}>
@@ -127,28 +88,16 @@ export const ProblemCardScreen: React.FC = () => {
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
-          )}
-          {severity === 'high' && (
-            <View style={s.urgent}>
-              <Ionicons name="alert-circle" size={22} color="#B91C1C" />
-              <Text style={s.urgentText}>{card.urgent}</Text>
+              {severity === 'high' && (
+                <View style={s.urgent}>
+                  <Ionicons name="alert-circle" size={22} color="#B91C1C" />
+                  <Text style={s.urgentText}>{card.urgent}</Text>
+                </View>
+              )}
             </View>
           )}
 
-          {/* The booklet card */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>{tr.probIdentify}</Text>
-            {card.identify.map((l, i) => <AdviceRow key={i} line={l} />)}
-            {card.serious_when && (
-              <View style={s.serious}>
-                <Text style={s.seriousTitle}>{tr.probSerious}</Text>
-                <Text style={s.seriousText}>{card.serious_when.text}</Text>
-                <SourceChips sources={card.serious_when.sources} />
-              </View>
-            )}
-          </View>
-
+          {/* The advice: open */}
           <View style={s.card}>
             <Text style={s.cardTitle}>{tr.probDoNow}</Text>
             {card.do_now.map((l, i) => <AdviceRow key={i} line={l} mark="do" />)}
@@ -161,8 +110,9 @@ export const ProblemCardScreen: React.FC = () => {
             </View>
           )}
 
-          {/* The AI explains the card for this farm */}
+          {/* GeoRice AI explains the advice for this farm */}
           <View style={s.aiCard}>
+            <AiBadge dark />
             {!explained?.ai_used && (
               <>
                 <TextInput style={s.aiInput} value={question} onChangeText={setQuestion} maxLength={300}
@@ -177,10 +127,7 @@ export const ProblemCardScreen: React.FC = () => {
             {note && <Text style={s.aiNote}>{note}</Text>}
             {explained?.ai_used && (
               <>
-                <View style={s.aiHead}>
-                  <Ionicons name="sparkles" size={16} color="#6EE7B7" />
-                  <Text style={s.aiTitle}>{tr.probExplainTitle}</Text>
-                </View>
+                <Text style={s.aiTitle}>{tr.probExplainTitle}</Text>
                 {explained.points.map((p, i) => (
                   <View key={i} style={s.aiPoint}>
                     <Text style={s.aiText}>{p.text}</Text>
@@ -193,40 +140,45 @@ export const ProblemCardScreen: React.FC = () => {
             )}
           </View>
 
-          {card.next_season.length > 0 && (
-            <View style={s.card}>
-              <Text style={s.cardTitle}>{tr.probNextSeason}</Text>
-              {card.next_season.map((l, i) => <AdviceRow key={i} line={l} />)}
-            </View>
-          )}
-
-          <View style={s.card}>
-            <Text style={s.cardTitle}>{tr.probGetHelp}</Text>
-            <Text style={s.helpText}>{card.get_help.text}</Text>
-          </View>
-
-          {/* Save the problem and what was done */}
-          <View style={s.card}>
-            <Text style={s.cardTitle}>{tr.probSaveTitle}</Text>
-            {saved ? (
-              <View style={s.savedRow}>
-                <Ionicons name="checkmark-circle" size={20} color={LOOK.green} />
-                <Text style={s.savedText}>{tr.probSaved}</Text>
-              </View>
-            ) : noCycle ? (
-              <Text style={s.muted}>{tr.probNoCycle}</Text>
-            ) : (
-              <>
-                <TextInput style={s.input} value={action} onChangeText={setAction} multiline maxLength={300}
-                  placeholder={tr.probActionPlaceholder} placeholderTextColor="#9CA3AF" />
-                {saveFailed && <Text style={[s.muted, { marginTop: 8 }]}>{tr.probLoadError}</Text>}
-                <TouchableOpacity style={s.saveBtn} onPress={save} disabled={saving} activeOpacity={0.85}>
-                  {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={s.saveText}>{tr.probSaveBtn}</Text>}
-                </TouchableOpacity>
-              </>
+          {/* The rest of the booklet card: folded */}
+          <View style={[s.card, { paddingVertical: 4 }]}>
+            <Fold title={tr.probIdentify} first>
+              {card.identify.map((l, i) => <AdviceRow key={i} line={l} />)}
+            </Fold>
+            {card.serious_when && (
+              <Fold title={tr.probSerious}>
+                <Text style={s.body}>{card.serious_when.text}</Text>
+                <SourceChips sources={card.serious_when.sources} />
+              </Fold>
             )}
+            {card.next_season.length > 0 && (
+              <Fold title={tr.probNextSeason}>
+                {card.next_season.map((l, i) => <AdviceRow key={i} line={l} />)}
+              </Fold>
+            )}
+            <Fold title={tr.probGetHelp}>
+              <Text style={s.body}>{card.get_help.text}</Text>
+            </Fold>
           </View>
         </ScrollView>
+
+        {/* Step 3 */}
+        <View style={s.footer}>
+          {params.saved ? (
+            <TouchableOpacity style={s.nextBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+              <Text style={s.nextText}>{tr.probDone}</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={s.nextBtn} activeOpacity={0.85}
+              onPress={() => navigation.navigate('ProblemSave', {
+                problemKey: card.key, name: card.name, severity, description: params.description ?? '',
+              })}>
+              <Text style={s.nextText}>{tr.probNext}</Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+        </View>
+        </>
       )}
     </SafeAreaView>
   );
@@ -237,11 +189,9 @@ const shadow = { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14,
 
 const s = StyleSheet.create({
   root:        { flex: 1, backgroundColor: LOOK.page },
-  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
-  back:        { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: 20, fontWeight: '800', color: LOOK.ink },
-  scroll:      { padding: 20, paddingTop: 4, paddingBottom: 150, gap: 12 },
+  scroll:      { padding: 20, paddingTop: 4, paddingBottom: 24, gap: 12 },
   muted:       { fontSize: 14, color: LOOK.soft, lineHeight: 20 },
+  body:        { fontSize: 14.5, lineHeight: 21, color: LOOK.ink },
   badgeRow:    { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   badge:       { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5,
                  borderRadius: 12, backgroundColor: '#ECFDF5' },
@@ -256,30 +206,22 @@ const s = StyleSheet.create({
   chipHigh:    { backgroundColor: '#B91C1C' },
   chipText:    { fontSize: 14, fontWeight: '700', color: LOOK.ink },
   chipTextOn:  { color: '#FFFFFF' },
-  urgent:      { flexDirection: 'row', gap: 10, padding: 16, borderRadius: 20, backgroundColor: '#FEF2F2',
-                 borderWidth: 1, borderColor: '#FECACA' },
+  urgent:      { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 16, backgroundColor: '#FEF2F2',
+                 marginTop: 12 },
   urgentText:  { flex: 1, fontSize: 14, lineHeight: 20, color: '#7F1D1D', fontWeight: '600' },
-  serious:     { marginTop: 8, padding: 14, borderRadius: 16, backgroundColor: '#FFFBEB' },
-  seriousTitle:{ fontSize: 13, fontWeight: '800', color: '#92400E' },
-  seriousText: { fontSize: 14, lineHeight: 20, color: LOOK.ink, marginTop: 4 },
   aiCard:      { backgroundColor: LOOK.ink, borderRadius: 24, padding: 18, gap: 10 },
   aiInput:     { height: 46, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14,
                  fontSize: 14.5, color: '#FFFFFF' },
   aiBtn:       { height: 48, borderRadius: 16, backgroundColor: '#FFFFFF', flexDirection: 'row',
                  alignItems: 'center', justifyContent: 'center', gap: 8 },
   aiBtnText:   { fontSize: 15, fontWeight: '700', color: LOOK.ink },
-  aiHead:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
   aiTitle:     { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
   aiPoint:     { paddingVertical: 6 },
   aiText:      { fontSize: 14.5, lineHeight: 21, color: '#F9FAFB' },
   aiNote:      { fontSize: 13.5, lineHeight: 19, color: '#FDE68A' },
   aiFoot:      { fontSize: 11.5, color: '#9CA3AF' },
-  helpText:    { fontSize: 14.5, lineHeight: 21, color: LOOK.ink, marginTop: 4 },
-  input:       { minHeight: 64, borderRadius: 16, backgroundColor: LOOK.page, padding: 14, fontSize: 15,
-                 color: LOOK.ink, textAlignVertical: 'top', marginTop: 8 },
-  saveBtn:     { marginTop: 12, height: 50, borderRadius: 16, backgroundColor: LOOK.ink, alignItems: 'center',
-                 justifyContent: 'center' },
-  saveText:    { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-  savedRow:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-  savedText:   { fontSize: 14.5, fontWeight: '600', color: LOOK.ink },
+  footer:      { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, backgroundColor: LOOK.page },
+  nextBtn:     { height: 54, borderRadius: 18, backgroundColor: LOOK.ink, flexDirection: 'row', alignItems: 'center',
+                 justifyContent: 'center', gap: 8 },
+  nextText:    { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
 });

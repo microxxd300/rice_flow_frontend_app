@@ -23,6 +23,7 @@ import { shortDate } from '@/components/SowingQuestion';
 import { SOWING_KEY, daysAgoISO } from '@/utils/sowing';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
+import { NEW_LOG } from '@/utils/logRequests';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { cropDays } from '@/utils/cropDays';
@@ -521,7 +522,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   useEffect(() => {
     if (!pendingLogStep) return;
     setSelectedTab('logs');
-    openLogFor(pendingLogStep);
+    if (pendingLogStep === NEW_LOG) setShowAddLog(true);   // the menu's "Add a field log"
+    else openLogFor(pendingLogStep);
     useAppStore.getState().setPendingLogStep(null);
   }, [pendingLogStep]);
 
