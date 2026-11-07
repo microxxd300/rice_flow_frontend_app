@@ -268,6 +268,56 @@ export const apiPredictions = {
   predict: (data: YieldPredictRequest)  => apiClient.post<{ predicted_yield_t_ha: number; model_used: string; r2_score: number }>(API_ROUTES.predictions.predict, data),
 };
 
+/* ── Field-problem advice (booklets + AI) ───────────── */
+
+export type AdviceLang = 'en' | 'fil' | 'ceb';
+
+/** Where a line of advice comes from: a PhilRice / PalayCheck booklet and its page. */
+export interface AdviceSource { title: string; publisher: string; pages: string; url: string }
+export interface AdviceLine   { text: string; sources: AdviceSource[] }
+
+export interface ProblemSummary {
+  key: string;
+  category: 'pest' | 'disease' | 'weather' | 'nutrient' | 'other';
+  name: string;
+  hint: string;
+}
+
+export interface ProblemCard {
+  key: string;
+  category: ProblemSummary['category'];
+  name: string;
+  identify: AdviceLine[];
+  serious_when: AdviceLine | null;
+  do_now: AdviceLine[];
+  dont: AdviceLine[];
+  next_season: AdviceLine[];
+  get_help: AdviceLine;
+  urgent: string;
+  checked_by_validator: boolean;
+}
+
+export interface AdviceExplanation {
+  problem: string;
+  ai_used: boolean;
+  not_covered: boolean;
+  note: null | 'ai_unavailable' | 'daily_limit' | 'rejected';
+  points: { text: string; cards: string[]; sources: AdviceSource[] }[];
+}
+
+export const apiAdvice = {
+  problems: (language: AdviceLang) =>
+    apiClient.get<ProblemSummary[]>(`${API_ROUTES.advice.problems}?language=${language}`),
+  // The booklet card: no AI, so it works even when the AI is busy or out of quota
+  problem: (key: string, language: AdviceLang) =>
+    apiClient.get<ProblemCard>(`${API_ROUTES.advice.problem(key)}?language=${language}`),
+  match: (text: string, language: AdviceLang) =>
+    apiClient.post<{ matches: { key: string; name: string; why: string }[]; ai_used: boolean }>(
+      API_ROUTES.advice.match, { text, language }, { timeout: 35000 }),
+  explain: (data: { problem: string; language: AdviceLang; farm?: number | null; question?: string }) =>
+    apiClient.post<AdviceExplanation>(API_ROUTES.advice.explain, data, { timeout: 35000 }),
+};
+
 export const apiAI = {
   chat: (
     message: string,

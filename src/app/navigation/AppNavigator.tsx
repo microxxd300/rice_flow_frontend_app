@@ -33,6 +33,9 @@ import {
   AnalysisLoadingScreen,
   SuitabilityResultsScreen,
   PlantingGuideHandoffScreen,
+  HelpHomeScreen,
+  ProblemPickerScreen,
+  ProblemCardScreen,
 } from '@/screens';
 
 const Stack     = createStackNavigator();
@@ -57,9 +60,13 @@ const PlantingStack: React.FC = () => (
   </Stack.Navigator>
 );
 
+// The middle button: Help. A problem in the field (booklet advice the AI explains) or the chat.
 const AIStack: React.FC = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="AIChat" component={AIChatScreen} />
+    <Stack.Screen name="HelpHome"      component={HelpHomeScreen} />
+    <Stack.Screen name="ProblemPicker" component={ProblemPickerScreen} />
+    <Stack.Screen name="ProblemCard"   component={ProblemCardScreen} />
+    <Stack.Screen name="AIChat"        component={AIChatScreen} />
   </Stack.Navigator>
 );
 
@@ -89,7 +96,7 @@ const ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName; labe
   PlantingTab: { active: 'book',        inactive: 'book-outline',        label: 'navGuide' },
   ProfileTab:  { active: 'person',      inactive: 'person-outline',      label: 'navProfile' },
 };
-// The AI chat sits apart, in its own round button beside the bar
+// Help (problem advice and the AI chat) sits apart, in its own round button beside the bar
 const AI_TAB = 'AITab';
 
 
@@ -137,14 +144,14 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
         })}
       </View>
 
-      {/* The AI chat */}
+      {/* Help: problem advice and the AI chat */}
       {ai && (
         <TouchableOpacity
           onPress={() => go(ai, focused === AI_TAB)}
           style={[tb.ai, focused === AI_TAB && tb.aiOn]}
           activeOpacity={0.85}
           accessibilityRole="tab"
-          accessibilityLabel="AI"
+          accessibilityLabel={(tr as any).helpTitle}
           accessibilityState={{ selected: focused === AI_TAB }}
         >
           <Ionicons name="sparkles" size={24} color={focused === AI_TAB ? '#FFFFFF' : LOOK.green} />
