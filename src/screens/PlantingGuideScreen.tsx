@@ -381,7 +381,7 @@ export const PlantingGuideScreen: React.FC = () => {
                   <Text style={[s.catLabel, { color: cfg.color }]}>{cfg.label}</Text>
                   <Text style={[s.stepDay, late > 0 && { color: '#B45309' }, T && { fontSize: 14 }]}>
                     {dayLabel(current.daysAfterPlanting)}
-                    {late > 0 ? ` · ${tr.guideLate.replace('{n}', String(late))}` : ''}
+                    {late > 0 ? ` · ${late === 1 ? tr.guideLateOne : tr.guideLate.replace('{n}', String(late))}` : ''}
                   </Text>
                 </View>
                 {current.keyCheck != null && (

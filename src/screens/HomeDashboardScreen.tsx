@@ -116,7 +116,8 @@ export const HomeDashboardScreen: React.FC = () => {
     }));
   })();
   const dayLabel = (offset: number) =>
-    offset < 0 ? tr.guideLate.replace('{n}', String(-offset))
+    offset === -1 ? tr.guideLateOne
+    : offset < 0 ? tr.guideLate.replace('{n}', String(-offset))
     : offset === 0 ? tr.homeToday
     : offset === 1 ? tr.homeTomorrow
     : tr.homeInDays.replace('{n}', String(offset));
