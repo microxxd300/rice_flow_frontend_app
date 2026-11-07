@@ -7,7 +7,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { empty } from '@/assets/illustrations';
-import { apiAI } from '@/services/apiService';
+import { apiAI, type AdviceSource } from '@/services/apiService';
+import { SourceChips } from '@/components/AdviceParts';
 import { useLanguageStore } from '@/store/languageStore';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
@@ -20,6 +21,7 @@ interface Message {
   role: 'user' | 'ai';
   text: string;
   time: string;
+  sources?: AdviceSource[];   // the booklet pages the answer came from
 }
 
 interface HistoryItem {
@@ -253,7 +255,8 @@ export const AIChatScreen: React.FC = () => {
     try {
       const res   = await apiAI.chat(trimmed, history, language, selectedFarmId);
       const reply = res.data.reply;
-      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: reply, time: nowTime() }]);
+      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: reply, time: nowTime(),
+                                      sources: res.data.sources ?? [] }]);
     } catch (err: any) {
       // Say so, never a canned answer: it would read as AI advice for a question nobody answered
       const text = err?.response?.status === 429 ? tr.aiDailyLimit : tr.aiUnavailable;
@@ -348,6 +351,7 @@ export const AIChatScreen: React.FC = () => {
                   </View>
                   <View style={[s.aiContent, s.aiBubble]}>
                     <MarkdownMessage text={msg.text} />
+                    {!!msg.sources?.length && <SourceChips sources={msg.sources} />}
                     <Text style={s.aiTime}>{msg.time}</Text>
                   </View>
                 </View>

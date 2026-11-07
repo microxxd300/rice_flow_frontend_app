@@ -58,6 +58,13 @@ export const API_ROUTES = {
   ai: {
     chat: 'ai/chat/',
   },
+  // Field-problem advice: PhilRice booklet cards, and the AI explaining them
+  advice: {
+    problems: 'advice/problems/',
+    problem:  (key: string) => `advice/problems/${key}/`,
+    match:    'advice/match/',
+    explain:  'advice/explain/',
+  },
   activity: {
     notices: 'activity/notices/',
   },

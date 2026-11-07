@@ -268,6 +268,57 @@ export const apiPredictions = {
   predict: (data: YieldPredictRequest)  => apiClient.post<{ predicted_yield_t_ha: number; model_used: string; r2_score: number }>(API_ROUTES.predictions.predict, data),
 };
 
+/* ── Field-problem advice (booklets + AI) ───────────── */
+
+export type AdviceLang = 'en' | 'fil' | 'ceb';
+
+/** Where a line of advice comes from: a PhilRice / PalayCheck booklet and its page. */
+export interface AdviceSource { title: string; publisher: string; pages: string; url: string }
+export interface AdviceLine   { text: string; sources: AdviceSource[] }
+
+export interface ProblemSummary {
+  key: string;
+  category: 'pest' | 'disease' | 'weather' | 'nutrient' | 'other';
+  name: string;
+  hint: string;
+}
+
+export interface ProblemCard {
+  key: string;
+  category: ProblemSummary['category'];
+  name: string;
+  identify: AdviceLine[];
+  serious_when: AdviceLine | null;
+  do_now: AdviceLine[];
+  dont: AdviceLine[];
+  next_season: AdviceLine[];
+  get_help: AdviceLine;
+  urgent: string;
+  checked_by_validator: boolean;
+}
+
+export interface AdviceExplanation {
+  problem: string;
+  ai_used: boolean;
+  not_covered: boolean;
+  note: null | 'ai_unavailable' | 'daily_limit' | 'rejected';
+  points: { text: string; cards: string[]; sources: AdviceSource[] }[];
+}
+
+export const apiAdvice = {
+  problems: (language: AdviceLang) =>
+    apiClient.get<ProblemSummary[]>(`${API_ROUTES.advice.problems}?language=${language}`),
+  // The booklet card: no AI, so it works even when the AI is busy or out of quota
+  problem: (key: string, language: AdviceLang) =>
+    apiClient.get<ProblemCard>(`${API_ROUTES.advice.problem(key)}?language=${language}`),
+  match: (text: string, language: AdviceLang) =>
+    apiClient.post<{ matches: { key: string; name: string; why: string }[]; ai_used: boolean }>(
+      API_ROUTES.advice.match, { text, language }, { timeout: 35000 }),
+  // With `log`, the farmer's observation is the question and the tip is saved on the log
+  explain: (data: { problem: string; language: AdviceLang; farm?: number | null; question?: string; log?: number }) =>
+    apiClient.post<AdviceExplanation>(API_ROUTES.advice.explain, data, { timeout: 35000 }),
+};
+
 export const apiAI = {
   chat: (
     message: string,
@@ -275,7 +326,8 @@ export const apiAI = {
     language?: 'en' | 'fil' | 'ceb',
     farm?: number | null,   // the selected farm: answers use its crop, soil and logs
   ) =>
-    apiClient.post<{ reply: string; language?: string }>(API_ROUTES.ai.chat, {
+    // sources: the PhilRice / PalayCheck booklet pages the answer came from (empty when none)
+    apiClient.post<{ reply: string; language?: string; sources?: AdviceSource[]; grounded?: boolean }>(API_ROUTES.ai.chat, {
       message,
       history: history ?? [],
       language: language ?? 'en',
@@ -309,6 +361,7 @@ export const apiProgress = {
   listLogs:     (cycleId?: number) =>
     listOf<any>(`${API_ROUTES.progress.logs}?page_size=100${cycleId ? `&cycle_id=${cycleId}` : ''}`),
   createLog:    (data: any) => apiClient.post<any>(API_ROUTES.progress.logs, data),
+  updateLog:    (id: number, data: any) => apiClient.patch<any>(API_ROUTES.progress.log(id), data),
   // Logs store the stage as a GrowthStage id, so the screen maps its stage names through this list
   growthStages: () => listOf<any>(API_ROUTES.varieties.growthStages),
   getYield:    (cycleId: number) => apiClient.get<any>(API_ROUTES.progress.yield(cycleId)),
