@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "rice-flow",
+    "name": "RiceFlow",
     "slug": "rice-flow",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -23,7 +23,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/icon/adaptive-icon.png",
         "backgroundColor": "#111827"
-      }
+      },
+      "versionCode": 1
     },
     "web": {
       "bundler": "metro",
@@ -56,6 +57,12 @@
     "experiments": {
       "tsconfigPaths": true
     },
-    "icon": "./src/assets/icon/icon.png"
+    "icon": "./src/assets/icon/icon.png",
+    "extra": {
+      "eas": {
+        "projectId": "b52119a7-6fee-438b-8db2-ae4a8386c560"
+      }
+    },
+    "owner": "kurtlumpayao"
   }
 }
