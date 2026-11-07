@@ -15,7 +15,7 @@ import { Button } from '../components';
 
 import { useAccessibility } from '../context/AccessibilityContext';
 import { useTranslation } from '@/i18n/useTranslation';
-import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
+import { apiAdvice, apiProgress, apiPredictions, apiScan, type ProblemSummary } from '@/services/apiService';
 import { useStepAdvice } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
@@ -23,7 +23,6 @@ import { shortDate } from '@/components/SowingQuestion';
 import { SOWING_KEY, daysAgoISO } from '@/utils/sowing';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
-import { NEW_LOG } from '@/utils/logRequests';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { cropDays } from '@/utils/cropDays';
@@ -71,6 +70,9 @@ const PROBLEM_OPTIONS: { value: string; icon: IoniconsName }[] = [
   { value: 'Nutrient', icon: 'color-palette-outline' },
   { value: 'Other',    icon: 'help-circle-outline' },
 ];
+
+// The booklet problems (apps/advice) shown under each kind of problem; the rest have none
+const BOOKLET_CATEGORY: Record<string, 'pest' | 'disease'> = { Insect: 'pest', Disease: 'disease' };
 
 // The words the farmer sees for each log choice. The saved values stay English: the
 // server and STAGE_NO / ISSUE_TO_API read them.
@@ -251,6 +253,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const [logDate,      setLogDate]      = useState(daysAgoISO(0));   // the phone's day, not UTC's
   const [pickDate,     setPickDate]     = useState(false);
   const [logIssue,     setLogIssue]     = useState('');
+  const [logProblem,   setLogProblem]   = useState('');   // the booklet problem, e.g. 'stem_borer'
+  const [bookletProblems, setBookletProblems] = useState<ProblemSummary[]>([]);
   const [logSeverity,  setLogSeverity]  = useState<'' | 'Low' | 'Medium' | 'High'>('');
   const [logAction,    setLogAction]    = useState('');
   const [logNotes,     setLogNotes]     = useState('');
@@ -504,6 +508,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // Today's day of the guide (0 = sowing); a step before it is overdue
   const guideToday     = guideDay(latestGuide);
 
+  const formLang = useLanguageStore(st => st.language);
+  useEffect(() => {
+    if (!showAddLog) return;
+    apiAdvice.problems(formLang).then(r => setBookletProblems(r.data)).catch(() => {});
+  }, [showAddLog, formLang]);
+
   // "Log this step" opens the form for one step; a closed form forgets it
   const openLogFor = (stepId: string) => {
     setLogStep(stepId);
@@ -522,8 +532,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   useEffect(() => {
     if (!pendingLogStep) return;
     setSelectedTab('logs');
-    if (pendingLogStep === NEW_LOG) setShowAddLog(true);   // the menu's "Add a field log"
-    else openLogFor(pendingLogStep);
+    openLogFor(pendingLogStep);
     useAppStore.getState().setPendingLogStep(null);
   }, [pendingLogStep]);
 
@@ -573,6 +582,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     // Only a problem log has an issue
     const issueClean = logKind === 'problem' ? logIssue.trim() : '';
     const issueIsReal = !!issueClean;
+    const problemKey  = issueIsReal && BOOKLET_CATEGORY[issueClean] ? (logProblem || 'unknown') : '';
     const stageName   = shownStage;
     const doneStep    = finishesStep && logStepTarget && !isNaN(Number(logStepTarget.id)) ? logStepTarget : null;
 
@@ -592,6 +602,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         action_taken: issueIsReal ? logAction.trim() : '',
         observation,
         guide_step:   doneStep ? Number(doneStep.id) : null,
+        // Insect or disease: which booklet problem ("Not sure" when none was picked)
+        problem_key:  problemKey,
       });
       saved = res.data;
     } catch {
@@ -638,9 +650,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         category, icon,
       });
     }
-    setLogIssue(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
+    setLogIssue(''); setLogProblem(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
     setLogStage(''); closeLog();
     afterGuideLog(doneStep?.key, saved?.sowing_estimate);
+    // A booklet problem: its advice and GeoRice AI tip wait under the planting guide
+    if (problemKey) navigation.navigateDeprecated('PlantingTab');
   };
 
   // The crop cycle follows the guide: after a step is logged, its stage (and, for the
@@ -1367,7 +1381,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                           <TouchableOpacity
                             key={opt.value}
                             style={[s.issueBtn, active && s.issueBtnOn]}
-                            onPress={() => setLogIssue(opt.value)}
+                            onPress={() => { setLogIssue(opt.value); setLogProblem(''); }}
                             activeOpacity={0.8}
                           >
                             <Ionicons name={opt.icon} size={22} color={active ? '#FFFFFF' : '#111827'} />
@@ -1379,6 +1393,27 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       })}
                     </View>
                   </View>
+
+                  {!!BOOKLET_CATEGORY[logIssue] && bookletProblems.length > 0 && (
+                    <View style={s.mFieldWrap}>
+                      <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogWhichProblem}</Text>
+                      <View style={s.problemChips}>
+                        {bookletProblems
+                          .filter(p => p.category === BOOKLET_CATEGORY[logIssue] || p.key === 'unknown')
+                          .map(p => {
+                            const active = (logProblem || 'unknown') === p.key;
+                            return (
+                              <TouchableOpacity key={p.key} style={[s.problemChip, active && s.problemChipOn]}
+                                onPress={() => setLogProblem(p.key)} activeOpacity={0.8}>
+                                <Text style={[s.problemChipText, active && s.problemChipTextOn, T && { fontSize: 14 }]}>
+                                  {p.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                      </View>
+                    </View>
+                  )}
 
                   <View style={s.mFieldWrap}>
                     <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogSeverity}</Text>
@@ -1764,6 +1799,11 @@ const s = StyleSheet.create({
 
   /* Log tab buttons */
   logBtnRow: { flexDirection: 'row', gap: 10, marginTop: 14, marginBottom: 12 },
+  problemChips:   { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  problemChip:    { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: '#F3F4F6' },
+  problemChipOn:  { backgroundColor: '#111827' },
+  problemChipText:   { fontSize: 13.5, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  problemChipTextOn: { color: '#FFFFFF' },
   logActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 18 },
   logActionBtnPrimary: { backgroundColor: '#111827' },
   logActionBtnPrimaryText: { fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' },

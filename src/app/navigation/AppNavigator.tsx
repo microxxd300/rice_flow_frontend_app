@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Pressable, Modal } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,8 +13,6 @@ import { useFarmerNotices } from '@/hooks/useFarmerNotices';
 import { useFarmForecast, useStepWeatherAlert } from '@/hooks/useFarmForecast';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { fetchActiveCycleLogs } from '@/utils/progressLogs';
-import { useAppStore } from '@/store/appStore';
-import { NEW_LOG } from '@/utils/logRequests';
 import {
   HomeDashboardScreen,
   GISFarmPinningScreen,
@@ -35,9 +33,6 @@ import {
   AnalysisLoadingScreen,
   SuitabilityResultsScreen,
   PlantingGuideHandoffScreen,
-  ProblemPickerScreen,
-  ProblemCardScreen,
-  ProblemSaveScreen,
 } from '@/screens';
 
 const Stack     = createStackNavigator();
@@ -94,16 +89,8 @@ const ICONS: Record<string, { active: IoniconsName; inactive: IoniconsName; labe
   PlantingTab: { active: 'book',        inactive: 'book-outline',        label: 'navGuide' },
   ProfileTab:  { active: 'person',      inactive: 'person-outline',      label: 'navProfile' },
 };
-// The round button beside the bar opens a menu of things to do (the chat is one of them)
+// The AI chat sits apart, in its own round button beside the bar
 const AI_TAB = 'AITab';
-
-// The menu, top to bottom: the most used sits lowest, nearest the thumb
-const MENU = [
-  { key: 'harvest', icon: 'basket-outline',        title: 'menuHarvest',      sub: '' },
-  { key: 'log',     icon: 'create-outline',        title: 'menuLog',          sub: '' },
-  { key: 'ai',      icon: 'sparkles',              title: 'helpAskTitle',     sub: 'menuAskSub' },
-  { key: 'problem', icon: 'medkit-outline',        title: 'helpProblemTitle', sub: 'menuProblemSub' },
-] as const;
 
 
 /* ── Custom floating pill tab bar ──────────────────── */
@@ -112,7 +99,6 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
   const tr = useTranslation();
   const keyboardOpen = useKeyboardOpen();
-  const [menuOpen, setMenuOpen] = useState(false);
   if (keyboardOpen) return null;   // otherwise it can cover the field being typed in
 
   const go = (route: (typeof state.routes)[number], isFocused: boolean) => {
@@ -121,49 +107,9 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   };
   const focused = state.routes[state.index]?.name;
   const ai = state.routes.find(r => r.name === AI_TAB);
-  const bottom = Math.max(insets.bottom, 8) + 10;
-
-  const pick = (key: (typeof MENU)[number]['key']) => {
-    setMenuOpen(false);
-    if (key === 'problem') navigation.navigate('ProblemPicker' as never);
-    else if (key === 'ai' && ai) go(ai, focused === AI_TAB);
-    else if (key === 'harvest') navigation.navigateDeprecated('ProgressTab', { screen: 'YieldRecord' });
-    else if (key === 'log') {
-      // Progress opens its add-log form, where the farmer picks what to log
-      useAppStore.getState().setPendingLogStep(NEW_LOG);
-      navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
-    }
-  };
 
   return (
-    <>
-    {/* The menu in its own full-screen layer: on Android, taps on views drawn outside
-        the tab bar's area do not always arrive. Its own close button sits where the
-        menu button is. */}
-    <Modal visible={menuOpen} transparent animationType="fade" statusBarTranslucent navigationBarTranslucent
-      onRequestClose={() => setMenuOpen(false)}>
-      <Pressable style={tb.backdrop} onPress={() => setMenuOpen(false)} accessibilityLabel={tr.probClose} />
-      <View style={[tb.menu, { bottom: bottom + 84 }]}>
-        {MENU.map((item, i) => (
-          <TouchableOpacity key={item.key} style={[tb.menuRow, i > 0 && tb.menuBorder]} activeOpacity={0.7}
-            onPress={() => pick(item.key)} accessibilityRole="button">
-            <View style={[tb.menuIcon, item.key === 'problem' && tb.menuIconProblem]}>
-              <Ionicons name={item.icon as any} size={20}
-                color={item.key === 'problem' ? '#FFFFFF' : LOOK.green} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={tb.menuTitle}>{(tr as any)[item.title]}</Text>
-              {!!item.sub && <Text style={tb.menuSub} numberOfLines={1}>{(tr as any)[item.sub]}</Text>}
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity style={[tb.ai, tb.aiOn, tb.menuClose, { bottom }]} onPress={() => setMenuOpen(false)}
-        activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={tr.probClose}>
-        <Ionicons name="close" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
-    </Modal>
-    <View style={[tb.wrapper, { bottom }]} pointerEvents="box-none">
+    <View style={[tb.wrapper, { bottom: Math.max(insets.bottom, 8) + 10 }]} pointerEvents="box-none">
       {/* Home, Progress, Guide, Profile: icon over a word; the open one sits in a gray pill */}
       <View style={tb.pill}>
         {state.routes.filter(r => r.name !== AI_TAB).map(route => {
@@ -191,21 +137,20 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
         })}
       </View>
 
-      {/* The menu button: three lines, a cross while the menu is open */}
+      {/* The AI chat */}
       {ai && (
         <TouchableOpacity
-          onPress={() => setMenuOpen(o => !o)}
-          style={[tb.ai, (menuOpen || focused === AI_TAB) && tb.aiOn]}
+          onPress={() => go(ai, focused === AI_TAB)}
+          style={[tb.ai, focused === AI_TAB && tb.aiOn]}
           activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={tr.menuOpen}
-          accessibilityState={{ expanded: menuOpen }}
+          accessibilityRole="tab"
+          accessibilityLabel="AI"
+          accessibilityState={{ selected: focused === AI_TAB }}
         >
-          <Ionicons name={menuOpen ? 'close' : 'menu'} size={28} color="#FFFFFF" />
+          <Ionicons name="sparkles" size={24} color={focused === AI_TAB ? '#FFFFFF' : LOOK.green} />
         </TouchableOpacity>
       )}
     </View>
-    </>
   );
 };
 
@@ -269,11 +214,6 @@ export const AppNavigator: React.FC<{ initialTab?: string }> = ({ initialTab }) 
     <RootStack.Screen name="AnalysisLoading"      component={AnalysisLoadingScreen} />
     <RootStack.Screen name="SuitabilityResults"   component={SuitabilityResultsScreen} />
     <RootStack.Screen name="PlantingGuideHandoff" component={PlantingGuideHandoffScreen} />
-
-    {/* A problem in the field: what you see, the booklet advice, then saving it */}
-    <RootStack.Screen name="ProblemPicker" component={ProblemPickerScreen} />
-    <RootStack.Screen name="ProblemCard"   component={ProblemCardScreen} />
-    <RootStack.Screen name="ProblemSave"   component={ProblemSaveScreen} />
   </RootStack.Navigator>
 );
 
@@ -308,18 +248,4 @@ const tb = StyleSheet.create({
     ...BAR_SHADOW,
   },
   aiOn: { backgroundColor: LOOK.green },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17,24,39,0.35)' },
-  menuClose: { position: 'absolute', right: 16 },
-  menu: {
-    position: 'absolute', right: 16, width: 300, maxWidth: '92%',
-    backgroundColor: '#FFFFFF', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4,
-    ...BAR_SHADOW,
-  },
-  menuRow:    { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
-  menuBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB' },
-  menuIcon:   { width: 40, height: 40, borderRadius: 14, backgroundColor: '#ECFDF5',
-                alignItems: 'center', justifyContent: 'center' },
-  menuIconProblem: { backgroundColor: LOOK.ink },
-  menuTitle:  { fontSize: 15.5, color: LOOK.ink, fontFamily: 'Inter_700Bold' },
-  menuSub:    { fontSize: 12.5, color: LOOK.soft, marginTop: 2 },
 });

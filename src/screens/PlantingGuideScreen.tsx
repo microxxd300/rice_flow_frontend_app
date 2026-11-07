@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAccessibility } from '../context/AccessibilityContext';
 import { apiRecommendations, apiScan, apiWeather } from '@/services/apiService';
+import { ProblemGuideCards } from '@/components/ProblemGuideCards';
 import { loadGuide } from '@/services/guideLoader';
 import { plantingCalendar } from '@/utils/plantingCalendar';
 import { useAppStore } from '@/store/appStore';
@@ -462,6 +463,9 @@ export const PlantingGuideScreen: React.FC = () => {
             <Text style={[s.logHint, { textAlign: 'center' }, T && { fontSize: 13 }]}>{tr.guideAllDoneBody}</Text>
           </View>
         )}
+
+        {/* ── Problems the farmer logged: the booklet advice and a GeoRice AI tip, until fixed ── */}
+        <ProblemGuideCards farmId={selectedFarmId} />
 
         {/* ── Up next ── */}
         {progress.next.length > 0 && (

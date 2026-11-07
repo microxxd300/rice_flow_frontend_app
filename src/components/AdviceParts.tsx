@@ -54,25 +54,6 @@ export const AdviceRow: React.FC<{ line: AdviceLine; mark?: 'dot' | 'do' | 'dont
   </View>
 );
 
-/** The problem flow's header: back, the step it is on (of 3), and the title. */
-export const StepHeader: React.FC<{ step: 1 | 2 | 3; title: string; onBack: () => void }> = ({ step, title, onBack }) => {
-  const tr = useTranslation();
-  return (
-    <View style={s.stepHead}>
-      <TouchableOpacity style={s.back} onPress={onBack} accessibilityLabel="Back">
-        <Ionicons name="chevron-back" size={24} color={LOOK.ink} />
-      </TouchableOpacity>
-      <View style={{ flex: 1 }}>
-        <Text style={s.stepOf}>{tr.probStep.replace('{n}', String(step))}</Text>
-        <Text style={s.stepTitle} numberOfLines={1}>{title}</Text>
-      </View>
-      <View style={s.dots}>
-        {[1, 2, 3].map(n => <View key={n} style={[s.stepDot, n <= step && s.stepDotOn]} />)}
-      </View>
-    </View>
-  );
-};
-
 /** Marks text the AI wrote, the same way everywhere it appears. */
 export const AiBadge: React.FC<{ dark?: boolean }> = ({ dark }) => {
   const tr = useTranslation();
@@ -84,37 +65,12 @@ export const AiBadge: React.FC<{ dark?: boolean }> = ({ dark }) => {
   );
 };
 
-/** A card section the farmer can open and close. */
-export const Fold: React.FC<{ title: string; children: React.ReactNode; first?: boolean }> = ({ title, children, first }) => {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <View style={!first && s.fold}>
-      <TouchableOpacity style={s.foldHead} onPress={() => setOpen(o => !o)} activeOpacity={0.7}
-        accessibilityRole="button" accessibilityState={{ expanded: open }}>
-        <Text style={s.foldTitle}>{title}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={20} color={LOOK.soft} />
-      </TouchableOpacity>
-      {open && <View style={{ paddingBottom: 8 }}>{children}</View>}
-    </View>
-  );
-};
-
 const s = StyleSheet.create({
-  stepHead:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 4 },
-  back:         { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  stepOf:       { fontSize: 12, fontWeight: '700', color: LOOK.green, letterSpacing: 0.3 },
-  stepTitle:    { fontSize: 20, fontWeight: '800', color: LOOK.ink },
-  dots:         { flexDirection: 'row', gap: 5, paddingRight: 8 },
-  stepDot:      { width: 8, height: 8, borderRadius: 4, backgroundColor: '#D1D5DB' },
-  stepDotOn:    { backgroundColor: LOOK.ink },
   aiBadge:      { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8,
                   paddingVertical: 3, borderRadius: 10, backgroundColor: '#ECFDF5' },
   aiBadgeDark:  { backgroundColor: 'rgba(110,231,183,0.14)' },
   aiBadgeText:  { fontSize: 11.5, fontWeight: '800', color: '#047857' },
   aiBadgeTextDark: { color: '#6EE7B7' },
-  fold:         { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB' },
-  foldHead:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
-  foldTitle:    { fontSize: 15, fontWeight: '700', color: LOOK.ink },
   chips:       { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
   chip:         { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4,
                   borderRadius: 10, backgroundColor: '#ECFDF5', maxWidth: '100%' },
