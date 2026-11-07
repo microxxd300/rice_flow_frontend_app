@@ -60,21 +60,21 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
   const [waitForGuess, setWaitForGuess] = useState(log.problem_key === 'unknown' && !!log.observation?.trim());
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);   // "Show all": every step, don't and tip point
+  const [asked, setAsked] = useState(false);   // the farmer tapped "Explain for my farm"
 
   useEffect(() => {
     apiAdvice.problem(log.problem_key, lang).then(r => setCard(r.data)).catch(() => {});
   }, [log.problem_key, lang]);
 
-  // The GeoRice AI tip for this farm: asked once, then read from the log
-  useEffect(() => {
-    if (tip || waitForGuess) return;
-    let alive = true;
+  // The GeoRice AI tip for this farm, when the farmer asks: a saved tip opens at once,
+  // otherwise the AI is asked (once; the server saves it on the log)
+  const explain = () => {
+    setAsked(true);
+    if (tip) return;
     apiAdvice.explain({ problem: log.problem_key, language: lang, farm: farmId, log: log.id })
-      .then(r => { if (alive) setTip(r.data); })
-      .catch(() => { if (alive) setTip({ problem: log.problem_key, ai_used: false, not_covered: false, note: 'ai_unavailable', points: [] }); });
-    return () => { alive = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log.id, log.problem_key, lang, waitForGuess]);
+      .then(r => setTip(r.data))
+      .catch(() => setTip({ problem: log.problem_key, ai_used: false, not_covered: false, note: 'ai_unavailable', points: [] }));
+  };
 
   // "Not sure": GeoRice AI reads what the farmer wrote and guesses which problem it is
   useEffect(() => {
@@ -98,7 +98,7 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
     }
   };
 
-  const tipLoading = !tip && !waitForGuess;   // asked once; a failure still sets a tip (with a note)
+  const tipLoading = asked && !tip;   // a failure still sets a tip (with a note)
   const sevWord = log.severity === 'high' ? tr.sevHigh : log.severity === 'medium' ? tr.sevMedium
     : log.severity === 'low' ? tr.sevLow : '';
   const note = tip && !tip.ai_used
@@ -139,15 +139,15 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
 
       {!card ? <ActivityIndicator color={LOOK.green} style={{ marginVertical: 16 }} /> : (
         <>
-          <Text style={s.section}>{tr.probDoNow}</Text>
+          {/* One list: do (✓) and don't (✕) */}
+          <Text style={s.section}>{tr.probWhatToDo}</Text>
           {(all ? card.do_now : card.do_now.slice(0, SHORT.doNow)).map((l, i) => <AdviceRow key={`d${i}`} line={l} mark="do" />)}
-          {card.dont.length > 0 && <Text style={s.section}>{tr.probDont}</Text>}
           {(all ? card.dont : card.dont.slice(0, SHORT.dont)).map((l, i) => <AdviceRow key={`x${i}`} line={l} mark="dont" />)}
         </>
       )}
 
-      {/* GeoRice AI: a tip for this farm, from the booklet advice above (after any guess) */}
-      {!waitForGuess && <View style={s.ai}>
+      {/* GeoRice AI: a tip for this farm, from the booklet advice above, when asked */}
+      {asked && <View style={s.ai}>
         <AiBadge dark />
         {tipLoading && (
           <View style={s.aiLoading}>
@@ -167,13 +167,20 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
 
       {!!card && all && <Text style={s.help}>{card.get_help.text}</Text>}
 
-      {/* The rest of the advice, on request */}
-      {!!card && (card.do_now.length > SHORT.doNow || card.dont.length > SHORT.dont
-        || (tip?.points.length ?? 0) > SHORT.tip || !all) && (
-        <TouchableOpacity onPress={() => setAll(a => !a)} style={s.more} accessibilityRole="button">
-          <Text style={s.moreText}>{all ? tr.probShowLess : tr.probShowAll}</Text>
-          <Ionicons name={all ? 'chevron-up' : 'chevron-down'} size={16} color={LOOK.green} />
-        </TouchableOpacity>
+      {/* Ask GeoRice AI (after any guess), and the rest of the advice */}
+      {!!card && (
+        <View style={s.actions}>
+          {!asked && !waitForGuess && (
+            <TouchableOpacity onPress={explain} style={s.explainBtn} activeOpacity={0.8} accessibilityRole="button">
+              <Ionicons name="sparkles" size={15} color={LOOK.green} />
+              <Text style={s.explainText}>{tr.probExplainBtn}</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => setAll(a => !a)} style={s.more} accessibilityRole="button">
+            <Text style={s.moreText}>{all ? tr.probShowLess : tr.probShowAll}</Text>
+            <Ionicons name={all ? 'chevron-up' : 'chevron-down'} size={16} color={LOOK.green} />
+          </TouchableOpacity>
+        </View>
       )}
 
       <TouchableOpacity style={s.fixed} disabled={busy} activeOpacity={0.85}
@@ -217,7 +224,12 @@ const s = StyleSheet.create({
   aiText:    { fontSize: 14.5, lineHeight: 21, color: '#F9FAFB' },
   aiNote:    { fontSize: 13.5, lineHeight: 19, color: '#FDE68A' },
   help:      { fontSize: 13, lineHeight: 19, color: LOOK.soft, marginTop: 12 },
-  more:      { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginTop: 12 },
+  actions:   { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+               gap: 10, marginTop: 12 },
+  explainBtn:{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, height: 40,
+               borderRadius: 20, backgroundColor: '#ECFDF5' },
+  explainText: { fontSize: 14, fontWeight: '700', color: '#047857' },
+  more:      { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8 },
   moreText:  { fontSize: 14, fontWeight: '700', color: LOOK.green },
   waiting:   { fontSize: 13, color: LOOK.soft, textAlign: 'center', marginTop: 10 },
   fixed:     { marginTop: 14, height: 48, borderRadius: 16, backgroundColor: LOOK.green, flexDirection: 'row',
