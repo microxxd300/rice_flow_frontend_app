@@ -10,15 +10,25 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
 import { goBackFromStep } from '@/utils/navigation';
 import { SetupHeader } from '@/components/SetupHeader';
+import { useTranslation } from '@/i18n/useTranslation';
 
 type Nav = StackNavigationProp<any>;
 
 export const FarmDetailsFormScreen: React.FC = () => {
   const navigation  = useNavigation<Nav>();
   const userProfile = useAppStore(s => s.user);
+  const tr = useTranslation();
 
   const [farmName, setFarmName] = useState('');
   const [area,     setArea]     = useState('');
+  const [ecosystem, setEcosystem] = useState('');
+
+  // The farm type picks the rice varieties and the planting guide
+  const farmTypes = [
+    { value: 'irrigated_lowland', title: tr.farmTypeIrrigated, sub: tr.farmTypeIrrigatedSub },
+    { value: 'rainfed_lowland',   title: tr.farmTypeRainfed,   sub: tr.farmTypeRainfedSub },
+    { value: 'upland',            title: tr.farmTypeUpland,    sub: tr.farmTypeUplandSub },
+  ];
 
   // Remember this step so an interrupted setup resumes here after the app reopens
   const setSetupProgress = useAppStore(s => s.setSetupProgress);
@@ -29,11 +39,11 @@ export const FarmDetailsFormScreen: React.FC = () => {
   const province     = userProfile?.province    || '';
   const accountLoc   = [barangay, municipality, province].filter(Boolean).join(', ');
 
-  const isValid = Boolean(farmName.trim());
+  const isValid = Boolean(farmName.trim() && ecosystem);
 
   const handleContinue = () => {
     navigation.navigateDeprecated('LocationPermission', {
-      farmData: { farmName, barangay, municipality, province, area },
+      farmData: { farmName, barangay, municipality, province, area, ecosystem },
     });
   };
 
@@ -77,6 +87,27 @@ export const FarmDetailsFormScreen: React.FC = () => {
             estimates — your rice variety recommendation is based on your
             farm's location.
           </Text>
+
+          <Text style={[f.label, s.typeLabel]}>{tr.farmTypeQuestion}<Text style={f.req}> *</Text></Text>
+          {farmTypes.map(type => {
+            const picked = ecosystem === type.value;
+            return (
+              <TouchableOpacity
+                key={type.value}
+                style={[s.type, picked && s.typePicked]}
+                onPress={() => setEcosystem(type.value)}
+                activeOpacity={0.85}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: picked }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.typeTitle, picked && s.typeOnDark]}>{type.title}</Text>
+                  <Text style={[s.typeSub, picked && s.typeOnDarkSoft]}>{type.sub}</Text>
+                </View>
+                {picked && <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />}
+              </TouchableOpacity>
+            );
+          })}
 
           {/* Account location — read-only, plain row, no decorative chip */}
           {accountLoc ? (
@@ -165,6 +196,14 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 24 },
   lead: { fontSize: 15, color: '#374151', lineHeight: 22, marginBottom: 18, paddingHorizontal: 4, fontFamily: 'Inter_500Medium' },
   fieldNote: { fontSize: 13, color: '#6B7280', lineHeight: 19, marginTop: -4, paddingHorizontal: 4 },
+
+  typeLabel: { marginTop: 18, paddingHorizontal: 4 },
+  type: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, marginBottom: 8, borderRadius: 18, backgroundColor: '#FFFFFF' },
+  typePicked: { backgroundColor: '#111827' },
+  typeTitle: { fontSize: 15, color: '#111827', fontFamily: 'Inter_700Bold' },
+  typeSub: { fontSize: 13, color: '#6B7280', marginTop: 2, fontFamily: 'Inter_500Medium' },
+  typeOnDark: { color: '#FFFFFF' },
+  typeOnDarkSoft: { color: '#D1D5DB' },
 
   accountLoc: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, padding: 14, backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   locTile: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },

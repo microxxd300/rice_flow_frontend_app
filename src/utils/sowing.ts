@@ -6,10 +6,13 @@ import { guideDay, guideSteps } from '@/utils/guideSteps';
  * Home and the 7 AM reminder ask. The server moves the plan to the answer (guides/sowing.py).
  */
 export const SOWING_KEY = 'seedbed';
+// Upland and rainfed farms sow directly in the field, with no seedbed
+export const SOWING_KEYS = [SOWING_KEY, 'up_sow', 'rf_sow'];
+export const HARVEST_KEYS = ['harvest', 'up_harvest', 'rf_harvest'];
 
 /** The guide's sowing step, if it has one. */
 export function sowingStep(guide: any) {
-  return guideSteps(guide).find(st => st.key === SOWING_KEY) ?? null;
+  return guideSteps(guide).find(st => SOWING_KEYS.includes(st.key)) ?? null;
 }
 
 /** True when the planned sowing day has come and sowing is not logged yet. */

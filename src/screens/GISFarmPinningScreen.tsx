@@ -74,21 +74,6 @@ function formatScanDate(iso?: string) {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-/**
- * Auto-derive "Uri ng Lupa" (ecosystem) from the farm's measured terrain.
- * Upland  = high elevation OR steep slope
- * Lowland = flat + low-altitude (typical Davao paddy land)
- */
-function deriveEcosystem(farm: any): string {
-  const elev  = num(farm?.elevation_m) ?? 0;
-  const slope = num(farm?.slope_pct)   ?? 0;
-  if (elev > 500 || slope > 8) return 'upland';
-  // Within lowland: if very flat + close to sea level, assume irrigated paddy;
-  // otherwise rainfed lowland.
-  if (elev <= 100 && slope <= 2) return 'irrigated_lowland';
-  return 'rainfed_lowland';
-}
-
 export const GISFarmPinningScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
@@ -335,7 +320,7 @@ export const GISFarmPinningScreen: React.FC = () => {
             {infoRows([
               { icon: 'location-outline',    label: tr.gisBarangay,  value: dispBarangay },
               { icon: 'expand-outline',      label: tr.gisFarmSize,  value: selectedFarm.area_hectares != null ? `${selectedFarm.area_hectares} ${tr.gisHectareUnit}` : '—' },
-              { icon: 'leaf-outline',        label: tr.envSoilType,  value: ecosystemLabel(deriveEcosystem(selectedFarm), tr) },
+              { icon: 'leaf-outline',        label: tr.envSoilType,  value: ecosystemLabel(selectedFarm.ecosystem, tr) },
               { icon: 'trending-up-outline', label: tr.envElevation, value: selectedFarm.elevation_m != null ? `${Math.round(selectedFarm.elevation_m)} m` : '—' },
               { icon: 'navigate-outline',    label: tr.gisLatitude,  value: sLat != null ? `${sLat.toFixed(5)}°N` : '—' },
               { icon: 'compass-outline',     label: tr.gisLongitude, value: sLng != null ? `${sLng.toFixed(5)}°E` : '—' },
