@@ -4,6 +4,8 @@ export { WelcomeScreen } from './WelcomeScreen';
 export { OnboardingScreen } from './OnboardingScreen';
 export { LoginScreen } from './LoginScreen';
 export { RegisterScreen } from './RegisterScreen';
+export { ForgotPasswordScreen } from './ForgotPasswordScreen';
+export { ResetPasswordScreen } from './ResetPasswordScreen';
 export { OTPVerificationScreen } from './OTPVerificationScreen';
 export { PrivacyNoticeScreen } from './PrivacyNoticeScreen';
 export { HomeDashboardScreen } from './HomeDashboardScreen';
