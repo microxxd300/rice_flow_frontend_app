@@ -14,6 +14,8 @@ export const API_ROUTES = {
     register: 'auth/register/',
     profile:  'auth/profile/',
     logout:   'auth/logout/',
+    passwordResetRequest: 'auth/password-reset/request/',
+    passwordResetConfirm: 'auth/password-reset/confirm/',
   },
   token: {
     refresh: 'token/refresh/',

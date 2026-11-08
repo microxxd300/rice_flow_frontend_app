@@ -123,6 +123,13 @@ export const authLogin = (data: LoginRequest) =>
 export const authRegister = (data: RegisterRequest) =>
   apiClient.post<UserProfile>(API_ROUTES.auth.register, data);
 
+export const authPasswordResetRequest = (email: string) =>
+  apiClient.post<{ detail: string }>(API_ROUTES.auth.passwordResetRequest, { email });
+
+export const authPasswordResetConfirm = (data: {
+  email: string; code: string; new_password: string; new_password2: string;
+}) => apiClient.post<{ detail: string }>(API_ROUTES.auth.passwordResetConfirm, data);
+
 export const authProfile = () =>
   apiClient.get<UserProfile>(API_ROUTES.auth.profile);
 

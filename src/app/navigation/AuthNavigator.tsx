@@ -3,6 +3,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { ROUTES } from '@/constants/routes';
 import {
   SplashScreen, WelcomeScreen, LoginScreen, RegisterScreen, OTPVerificationScreen, PrivacyNoticeScreen,
+  ForgotPasswordScreen, ResetPasswordScreen,
 } from '@/screens';
 
 const Stack = createStackNavigator();
@@ -41,6 +42,16 @@ export const AuthNavigator: React.FC = () => {
       <Stack.Screen
         name="Register"
         component={RegisterScreen}
+        options={{ cardStyle: { backgroundColor: '#FFFFFF' } }}
+      />
+      <Stack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{ cardStyle: { backgroundColor: '#FFFFFF' } }}
+      />
+      <Stack.Screen
+        name="ResetPassword"
+        component={ResetPasswordScreen}
         options={{ cardStyle: { backgroundColor: '#FFFFFF' } }}
       />
       <Stack.Screen

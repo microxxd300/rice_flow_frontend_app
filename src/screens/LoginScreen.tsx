@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, KeyboardAvoidingView,
-  Platform, TouchableOpacity, ScrollView, Alert,
+  Platform, TouchableOpacity, ScrollView,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
@@ -89,13 +89,9 @@ export const LoginScreen: React.FC = () => {
               }
             />
 
-            {/* No self-service reset: agriculturists set a new password from the admin site */}
             <TouchableOpacity
               style={s.forgotBtn}
-              onPress={() => Alert.alert(
-                'Forgot your password?',
-                'Ask your agriculturist or rice technician to reset it. They can set a new password for you in RiceFlow, then you can log in again.',
-              )}
+              onPress={() => navigation.navigate('ForgotPassword', username.includes('@') ? { email: username.trim() } : undefined)}
               activeOpacity={0.7}
             >
               <Text style={s.forgotText}>{tr.authForgot}</Text>

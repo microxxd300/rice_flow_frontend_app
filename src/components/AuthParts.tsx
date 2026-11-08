@@ -82,6 +82,31 @@ export const AuthField: React.FC<{
   );
 };
 
+/** The red message at the top of a form. */
+export const AuthErrorBanner: React.FC<{ message: string }> = ({ message }) => (
+  <View style={b.errorBanner}>
+    <Ionicons name="alert-circle" size={18} color="#B91C1C" />
+    <Text style={b.errorText}>{message}</Text>
+  </View>
+);
+
+/** The dark full-width button that submits a form. */
+export const AuthSubmitButton: React.FC<{ label: string; loading: boolean; onPress: () => void }> = ({ label, loading, onPress }) => (
+  <TouchableOpacity style={[b.submit, loading && b.submitBusy]} onPress={onPress} disabled={loading} activeOpacity={0.85} accessibilityRole="button">
+    {loading
+      ? <Ionicons name="hourglass-outline" size={18} color="#FFFFFF" />
+      : <Text style={b.submitText}>{label}</Text>}
+  </TouchableOpacity>
+);
+
+const b = StyleSheet.create({
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FDECEC', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14 },
+  errorText:   { flex: 1, fontSize: 13, color: '#B91C1C', fontFamily: 'Inter_600SemiBold' },
+  submit:      { height: 56, borderRadius: 20, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', marginTop: 6 },
+  submitBusy:  { opacity: 0.6 },
+  submitText:  { fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' },
+});
+
 const SHADOW = { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 } as const;
 
 const h = StyleSheet.create({

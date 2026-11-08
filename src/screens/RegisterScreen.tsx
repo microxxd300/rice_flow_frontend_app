@@ -9,6 +9,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuthStore } from '@/features/auth/store';
 import { useTranslation } from '@/i18n/useTranslation';
 import { AuthHeader, AuthField } from '@/components/AuthParts';
+import { isGmailAddress } from '@/utils/gmail';
 
 type Nav = StackNavigationProp<any>;
 
@@ -38,12 +39,7 @@ export const RegisterScreen: React.FC = () => {
   const validate = (): FieldErrors => {
     const fe: FieldErrors = {};
     if (!fullName.trim()) fe.fullName = 'Please enter your full name.';
-    const emailTrim = email.trim();
-    if (!emailTrim) {
-      fe.email = 'Please enter your email.';
-    } else if (emailTrim.includes('@') && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailTrim)) {
-      fe.email = 'Enter a valid email address.';
-    }
+    if (!isGmailAddress(email)) fe.email = tr.authGmailOnly;
     if (password.length < 8) fe.password = 'Password must be at least 8 characters.';
     if (confirmPassword !== password) fe.confirmPassword = "Passwords don't match.";
     if (!agreed) fe.terms = 'Please accept the Terms to continue.';
@@ -67,9 +63,8 @@ export const RegisterScreen: React.FC = () => {
     const last_name  = nameParts.slice(1).join(' ');
 
     try {
-      const emailVal = email.trim().includes('@') ? email.trim() : `${email.trim()}@georice.app`;
       await register({
-        email:        emailVal,
+        email:        email.trim(),
         password,
         password2:    confirmPassword,
         first_name,
@@ -145,9 +140,9 @@ export const RegisterScreen: React.FC = () => {
             <AuthField label={tr.authNameLbl} icon="person-outline" value={fullName}
               onChangeText={(v) => { setFullName(v); clear('fullName'); }}
               placeholder="Juan Dela Cruz" autoCapitalize="words" error={fieldErrors.fullName} />
-            <AuthField label={tr.authEmailLbl} icon="mail-outline" value={email}
+            <AuthField label={tr.authGmailLbl} icon="mail-outline" value={email}
               onChangeText={(v) => { setEmail(v); clear('email'); }}
-              placeholder="juan@example.com" autoCapitalize="none" keyboardType="email-address" error={fieldErrors.email} />
+              placeholder="juan@gmail.com" autoCapitalize="none" keyboardType="email-address" error={fieldErrors.email} />
 
             <AuthField
               label={tr.authPwLbl}
