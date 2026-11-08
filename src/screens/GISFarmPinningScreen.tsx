@@ -1,6 +1,6 @@
 ﻿import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
+  View, Text, StyleSheet, ScrollView, Image,
   TouchableOpacity, TextInput as RNTextInput,
   Dimensions,
 } from 'react-native';
@@ -12,13 +12,15 @@ import MapView, { UrlTile, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useAppStore } from '@/store/appStore';
 import { apiFarms, apiScan, type EnvironmentalScan } from '@/services/apiService';
 import { useTranslation } from '@/i18n/useTranslation';
+import { farmPhoto } from '@/assets/illustrations';
+import { useAccessibility } from '../context/AccessibilityContext';
 
 type Nav = StackNavigationProp<any>;
 type Tr = ReturnType<typeof useTranslation>;
 
 const SCREEN_W   = Dimensions.get('window').width;
-const MAP_H      = 300;
-const MAP_W      = SCREEN_W - 48;
+const MAP_H      = 280;
+const MAP_W      = SCREEN_W - 32 - 20;   // page padding 16 x 2, card padding 10 x 2
 const DEFAULT_LAT = 7.3086;     // Panabo City
 const DEFAULT_LNG = 125.6830;
 const DELTA       = 0.02;
@@ -72,24 +74,10 @@ function formatScanDate(iso?: string) {
   return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
 }
 
-/**
- * Auto-derive "Uri ng Lupa" (ecosystem) from the farm's measured terrain.
- * Upland  = high elevation OR steep slope
- * Lowland = flat + low-altitude (typical Davao paddy land)
- */
-function deriveEcosystem(farm: any): string {
-  const elev  = num(farm?.elevation_m) ?? 0;
-  const slope = num(farm?.slope_pct)   ?? 0;
-  if (elev > 500 || slope > 8) return 'upland';
-  // Within lowland: if very flat + close to sea level, assume irrigated paddy;
-  // otherwise rainfed lowland.
-  if (elev <= 100 && slope <= 2) return 'irrigated_lowland';
-  return 'rainfed_lowland';
-}
-
 export const GISFarmPinningScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const tr = useTranslation();
+  const { isLargeText: T } = useAccessibility();
   const route      = useRoute<any>();
   const mapRef     = useRef<MapView>(null);
 
@@ -128,7 +116,6 @@ export const GISFarmPinningScreen: React.FC = () => {
   const dispBarangay     = selectedFarm?.barangay || '—';
   const dispMunicipality = 'Panabo City';
   const dispProvince     = 'Davao del Norte';
-  const dispLocation     = [dispBarangay, dispMunicipality, dispProvince].filter(Boolean).join(', ');
 
   // Latest environmental scan for the selected farm — drives the Kalagayan card
   const [latestScan, setLatestScan] = useState<EnvironmentalScan | null>(null);
@@ -171,45 +158,61 @@ export const GISFarmPinningScreen: React.FC = () => {
   };
 
 
-  return (
-    <SafeAreaView style={s.root}>
-      {/* Header */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color="#111111" />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={s.headerTitle}>{tr.gisMapTitle}</Text>
-          <Text style={s.headerSub}>{tr.gisHeaderSub}</Text>
+  // Rows of the two info cards: label on the left, value on the right
+  const infoRows = (rows: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }[]) => (
+    <>
+      {rows.map((row, i) => (
+        <View key={row.label} style={[s.row, i > 0 && s.rowLine]}>
+          <View style={s.rowIcon}><Ionicons name={row.icon} size={15} color={INK} /></View>
+          <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
+          <Text style={[s.rowValue, T && { fontSize: 15 }]}>{row.value}</Text>
         </View>
+      ))}
+    </>
+  );
+
+  const sLat = num(selectedFarm?.latitude);
+  const sLng = num(selectedFarm?.longitude);
+
+  return (
+    <SafeAreaView style={s.root} edges={['top']}>
+      {/* Header: round back button and a big title, like the other new-look screens */}
+      <View style={s.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={s.headerBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={22} color={INK} />
+        </TouchableOpacity>
+        <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.gisMapTitle}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-        {/* Search */}
-        <View style={s.searchRow}>
-          <View style={s.searchBox}>
-            <Ionicons name="search-outline" size={16} color="#BBBBBB" />
+        {/* Search only helps when there are many farms */}
+        {realFarms.length > 3 && (
+          <View style={s.search}>
+            <Ionicons name="search" size={18} color={SOFT} />
             <RNTextInput
-              style={s.searchInput}
+              style={[s.searchInput, T && { fontSize: 16 }]}
               placeholder={tr.gisSearchPh}
-              placeholderTextColor="#BBBBBB"
+              placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={16} color="#BBBBBB" />
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close-circle" size={18} color="#9CA3AF" />
               </TouchableOpacity>
             )}
           </View>
-          <TouchableOpacity style={s.locateBtn} activeOpacity={0.75}>
-            <Ionicons name="navigate" size={18} color="#059669" />
-          </TouchableOpacity>
-        </View>
+        )}
 
-        {/* Map card — real OpenStreetMap with farm markers */}
-        <View style={s.mapCard}>
+        {/* Map card: OpenStreetMap with a dot for each farm */}
+        <View style={s.card}>
           <View style={[s.mapArea, { width: MAP_W, height: MAP_H }]}>
             <MapView
               ref={mapRef}
@@ -242,447 +245,204 @@ export const GISFarmPinningScreen: React.FC = () => {
                     tracksViewChanges={false}
                     onPress={() => setSelectedId(farm.id)}
                   >
-                    <View style={[
-                      s.farmDot,
-                      farm.id === selectedId && s.farmDotActive,
-                    ]} />
+                    <View style={[s.farmDot, farm.id === selectedId && s.farmDotActive]} />
                   </Marker>
                 ))}
             </MapView>
 
-            {/* Center-on-selected button overlay */}
-            <TouchableOpacity
-              style={s.gpsCircle}
-              activeOpacity={0.75}
-              onPress={() => selectedFarm && focusFarm(selectedFarm)}
-            >
-              <Ionicons name="locate-outline" size={18} color="#333333" />
-            </TouchableOpacity>
-
-            {/* Coordinate bar */}
-            {(() => {
-              const sLat = num(selectedFarm?.latitude);
-              const sLng = num(selectedFarm?.longitude);
-              if (sLat == null || sLng == null) return null;
-              return (
-                <View style={s.coordBar}>
-                  <Text style={s.coordText}>
-                    {sLat.toFixed(4)}°N, {sLng.toFixed(4)}°E
-                  </Text>
-                </View>
-              );
-            })()}
+            {/* Go back to the picked farm */}
+            {selectedFarm && (
+              <TouchableOpacity
+                style={s.mapBtn}
+                activeOpacity={0.75}
+                onPress={() => focusFarm(selectedFarm)}
+                accessibilityRole="button"
+                accessibilityLabel="Show my farm"
+              >
+                <Ionicons name="locate" size={20} color={INK} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          {/* Map footer — real location from reverse-geocoding */}
           {selectedFarm && (
-            <View style={s.mapFooter}>
-              <Ionicons name="location" size={14} color="#059669" />
-              <Text style={s.mapFooterText} numberOfLines={1}>
-                {dispLocation || '—'}
-              </Text>
+            <View style={s.mapFoot}>
+              <Ionicons name="location-sharp" size={15} color={INK} />
+              <Text style={[s.mapFootText, T && { fontSize: 15 }]} numberOfLines={1}>{dispBarangay}, {dispMunicipality}</Text>
               {selectedFarm.area_hectares != null && (
-                <View style={s.mapFooterChip}>
-                  <Text style={s.mapFooterChipText}>{selectedFarm.area_hectares} ha</Text>
-                </View>
+                <View style={s.pill}><Text style={s.pillText}>{selectedFarm.area_hectares} ha</Text></View>
               )}
             </View>
           )}
         </View>
 
-        {/* Farm list */}
-        <Text style={s.listHeading}>{tr.gisYourFarms}</Text>
-
-        {realFarms.length === 0 && (
-          <TouchableOpacity
-            style={[s.farmCard, { justifyContent: 'center' }]}
-            onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
-            activeOpacity={0.8}
-          >
-            <View style={s.farmIconBox}>
-              <Ionicons name="add" size={18} color="#059669" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.farmName}>{tr.gisAddFarm}</Text>
-              <Text style={s.farmMeta}>{tr.gisNoFarmsYet}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {filteredFarms.map(farm => {
-          const isSelected = farm.id === selectedId;
-          const derivedEco = deriveEcosystem(farm);
-          const ecoLabel   = ecosystemLabel(derivedEco, tr);
-          const badge      = derivedEco === 'upland' ? 'Highland' : 'Lowland';
-          return (
-            <TouchableOpacity
-              key={farm.id}
-              style={[s.farmCard, isSelected && s.farmCardActive]}
-              onPress={() => focusFarm(farm)}
-              activeOpacity={0.75}
-            >
-              <View style={[s.farmIconBox, isSelected && s.farmIconBoxActive]}>
-                <Ionicons name="leaf" size={16} color={isSelected ? '#FFFFFF' : '#059669'} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.farmName, isSelected && s.farmNameActive]} numberOfLines={1}>{farm.name}</Text>
-                <Text style={s.farmMeta} numberOfLines={1}>
-                  {farm.barangay || '—'}{farm.area_hectares != null ? ` · ${farm.area_hectares} ha` : ''}
-                </Text>
-                {(() => {
-                  const fLat = num(farm.latitude);
-                  const fLng = num(farm.longitude);
-                  if (fLat == null || fLng == null) return null;
-                  return (
-                    <View style={s.farmCoordRow}>
-                      <Ionicons name="location-outline" size={11} color="#BBBBBB" />
-                      <Text style={s.farmCoord}>{fLat.toFixed(4)}°N, {fLng.toFixed(4)}°E</Text>
-                    </View>
-                  );
-                })()}
-              </View>
-              <View style={[s.farmTypeBadge, isSelected && s.farmTypeBadgeActive]}>
-                <Text style={[s.farmTypeBadgeText, isSelected && s.farmTypeBadgeTextActive]}>
-                  {badge}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-
-        {/* Add Farm CTA (always available) */}
-        {realFarms.length > 0 && (
-          <TouchableOpacity
-            style={s.addFarmRow}
-            onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
-            activeOpacity={0.75}
-          >
-            <View style={s.addFarmIcon}>
-              <Ionicons name="add" size={18} color="#059669" />
-            </View>
-            <Text style={s.addFarmText}>{tr.gisAddFarm}</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Spatial data card */}
-        {selectedFarm && (
-          <>
-            <View style={[s.dataCard, { marginTop: 20 }]}>
-              <View style={s.dataCardHeader}>
-                <View style={s.dataIconBox}>
-                  <Ionicons name="globe-outline" size={18} color="#059669" />
+        {/* Farms: the same tiles as Home; the dark one is on the map */}
+        <Text style={[s.sectionTitle, T && { fontSize: 19 }]}>{tr.gisYourFarms}</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.farms}>
+          {filteredFarms.map(farm => {
+            const isSel = farm.id === selectedId;
+            return (
+              <TouchableOpacity
+                key={farm.id}
+                style={[s.farmTile, isSel && s.farmTileSel]}
+                onPress={() => focusFarm(farm)}
+                activeOpacity={0.85}
+              >
+                {/* A rice-field photo for looks only, not this farm's own field */}
+                <View style={s.farmArt}>
+                  <Image source={farmPhoto(farm.id as number)} style={s.farmPhoto} resizeMode="cover" />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.dataCardTitle}>{selectedFarm.name}</Text>
-                  <Text style={s.dataCardSub}>{ecosystemLabel(selectedFarm.ecosystem, tr)}</Text>
-                </View>
-              </View>
-
-
-              {[
-                { icon: 'location-outline'    as const, label: tr.gisBarangay,  value: dispBarangay },
-                { icon: 'business-outline'    as const, label: tr.gisCity,      value: dispMunicipality || '—' },
-                { icon: 'map-outline'         as const, label: tr.gisProvince,  value: dispProvince     || '—' },
-                { icon: 'expand-outline'      as const, label: tr.gisFarmSize,  value: selectedFarm.area_hectares != null ? `${selectedFarm.area_hectares} ${tr.gisHectareUnit}` : '—' },
-                { icon: 'navigate-outline'    as const, label: tr.gisLatitude,  value: (() => { const v = num(selectedFarm.latitude);  return v != null ? `${v.toFixed(5)}°N` : '—'; })() },
-                { icon: 'compass-outline'     as const, label: tr.gisLongitude, value: (() => { const v = num(selectedFarm.longitude); return v != null ? `${v.toFixed(5)}°E` : '—'; })() },
-                { icon: 'leaf-outline'        as const, label: tr.envSoilType,  value: ecosystemLabel(deriveEcosystem(selectedFarm), tr) },
-                { icon: 'trending-up-outline' as const, label: tr.envElevation, value: selectedFarm.elevation_m != null ? `${Math.round(selectedFarm.elevation_m)} m` : '—' },
-              ].map((row, i, arr) => (
-                <View key={row.label} style={[s.dataRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                  <View style={s.dataRowIcon}>
-                    <Ionicons name={row.icon} size={14} color="#888888" />
-                  </View>
-                  <Text style={s.dataLabel}>{row.label}</Text>
-                  <Text style={s.dataValue}>{row.value}</Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Kalagayan ng Lupa at Panahon — pulled from the latest scan */}
-        {selectedFarm && (
-          <>
-            <View style={[s.dataCard, { marginTop: 20 }]}>
-              <View style={s.dataCardHeader}>
-                <View style={s.dataIconBox}>
-                  <Ionicons name="thermometer-outline" size={18} color="#059669" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.dataCardTitle}>{tr.gisSoilWeather}</Text>
-                  <Text style={s.dataCardSub} numberOfLines={1}>
-                    {latestScan
-                      ? tr.gisLastScanned.replace('{date}', formatScanDate((latestScan as any).scanned_at))
-                      : tr.gisNoScan}
+                <View style={s.farmFoot}>
+                  <Text style={[s.farmName, isSel && s.onDark, T && { fontSize: 16 }]} numberOfLines={1}>{farm.name}</Text>
+                  <Text style={[s.farmMeta, isSel && s.onDarkSoft]} numberOfLines={1}>
+                    {farm.barangay || '—'}{farm.area_hectares != null ? ` · ${farm.area_hectares} ha` : ''}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  onPress={handleRescan}
-                  disabled={rescanning}
-                  style={s.rescanBtn}
-                  activeOpacity={0.75}
-                >
-                  <Ionicons name={rescanning ? 'sync' : 'refresh-outline'} size={12} color="#059669" />
-                  <Text style={s.rescanBtnText}>{rescanning ? tr.gisUpdating : tr.gisUpdate}</Text>
-                </TouchableOpacity>
-              </View>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity
+            style={[s.farmTile, s.farmAdd]}
+            onPress={() => navigation.navigateDeprecated('FarmDetailsForm')}
+            activeOpacity={0.85}
+          >
+            <View style={s.addBadge}><Ionicons name="add" size={22} color="#FFFFFF" /></View>
+            <Text style={[s.farmName, { marginTop: 10 }]}>{tr.gisAddFarm}</Text>
+            {realFarms.length === 0 && <Text style={[s.farmMeta, { textAlign: 'center' }]}>{tr.gisNoFarmsYet}</Text>}
+          </TouchableOpacity>
+        </ScrollView>
 
-              {latestScan && [
-                { icon: 'water-outline'        as const, label: tr.envFloodRisk,   value: floodLabel(latestScan.flood_risk, tr) },
-                { icon: 'flask-outline'        as const, label: tr.gisSoilPh,      value: latestScan.soil_ph != null ? `${latestScan.soil_ph}` : '—' },
-                { icon: 'layers-outline'       as const, label: tr.gisSoilTexture, value: soilTextureLabel(latestScan.soil_texture, tr) },
-                { icon: 'funnel-outline'       as const, label: tr.gisDrainage,    value: drainageLabel(latestScan.drainage, tr) },
-                { icon: 'rainy-outline'        as const, label: tr.gisAnnualRain,  value: (latestScan as any).annual_rainfall_mm != null ? `${Math.round((latestScan as any).annual_rainfall_mm)} mm` : '—' },
-                { icon: 'thermometer-outline'  as const, label: tr.gisAvgTemp,     value: (latestScan as any).avg_temperature != null ? `${(latestScan as any).avg_temperature}°C` : '—' },
-              ].map((row, i, arr) => (
-                <View key={row.label} style={[s.dataRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                  <View style={s.dataRowIcon}>
-                    <Ionicons name={row.icon} size={14} color="#888888" />
-                  </View>
-                  <Text style={s.dataLabel}>{row.label}</Text>
-                  <Text style={s.dataValue}>{row.value}</Text>
-                </View>
-              ))}
-            </View>
-          </>
+        {/* About the picked farm */}
+        {selectedFarm && (
+          <View style={[s.card, s.infoCard]}>
+            <Text style={[s.cardTitle, T && { fontSize: 20 }]} numberOfLines={1}>{selectedFarm.name}</Text>
+            <Text style={s.cardSub} numberOfLines={1}>{dispMunicipality}, {dispProvince}</Text>
+            <View style={{ height: 8 }} />
+            {infoRows([
+              { icon: 'location-outline',    label: tr.gisBarangay,  value: dispBarangay },
+              { icon: 'expand-outline',      label: tr.gisFarmSize,  value: selectedFarm.area_hectares != null ? `${selectedFarm.area_hectares} ${tr.gisHectareUnit}` : '—' },
+              { icon: 'leaf-outline',        label: tr.envSoilType,  value: ecosystemLabel(selectedFarm.ecosystem, tr) },
+              { icon: 'trending-up-outline', label: tr.envElevation, value: selectedFarm.elevation_m != null ? `${Math.round(selectedFarm.elevation_m)} m` : '—' },
+              { icon: 'navigate-outline',    label: tr.gisLatitude,  value: sLat != null ? `${sLat.toFixed(5)}°N` : '—' },
+              { icon: 'compass-outline',     label: tr.gisLongitude, value: sLng != null ? `${sLng.toFixed(5)}°E` : '—' },
+            ])}
+          </View>
         )}
 
-        <View style={{ height: 20 }} />
+        {/* Soil and weather from the farm's latest scan */}
+        {selectedFarm && (
+          <View style={[s.card, s.infoCard]}>
+            <View style={s.cardHead}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cardTitle, T && { fontSize: 20 }]}>{tr.gisSoilWeather}</Text>
+                <Text style={s.cardSub} numberOfLines={1}>
+                  {latestScan
+                    ? tr.gisLastScanned.replace('{date}', formatScanDate((latestScan as any).scanned_at))
+                    : tr.gisNoScan}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleRescan} disabled={rescanning} style={s.updateBtn} activeOpacity={0.75}>
+                <Ionicons name={rescanning ? 'sync' : 'refresh'} size={14} color={INK} />
+                <Text style={s.updateText}>{rescanning ? tr.gisUpdating : tr.gisUpdate}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {latestScan && (
+              <>
+                <View style={{ height: 8 }} />
+                {infoRows([
+                  { icon: 'water-outline',       label: tr.envFloodRisk,   value: floodLabel(latestScan.flood_risk, tr) },
+                  { icon: 'flask-outline',       label: tr.gisSoilPh,      value: latestScan.soil_ph != null ? `${latestScan.soil_ph}` : '—' },
+                  { icon: 'layers-outline',      label: tr.gisSoilTexture, value: soilTextureLabel(latestScan.soil_texture, tr) },
+                  { icon: 'funnel-outline',      label: tr.gisDrainage,    value: drainageLabel(latestScan.drainage, tr) },
+                  { icon: 'rainy-outline',       label: tr.gisAnnualRain,  value: (latestScan as any).annual_rainfall_mm != null ? `${Math.round((latestScan as any).annual_rainfall_mm)} mm` : '—' },
+                  { icon: 'thermometer-outline', label: tr.gisAvgTemp,     value: (latestScan as any).avg_temperature != null ? `${(latestScan as any).avg_temperature}°C` : '—' },
+                ])}
+              </>
+            )}
+          </View>
+        )}
+
+        <View style={{ height: 130 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
+const BG   = '#F1F2F1';
+const INK  = '#111827';
+const SOFT = '#6B7280';
+
+const card = {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 26,
+  shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 },
+  elevation: 2,
+} as const;
+
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: '#F7F9F8' },
-  scroll: { padding: 24, paddingBottom: 110 },
+  root:   { flex: 1, backgroundColor: BG },
+  scroll: { paddingHorizontal: 16, paddingTop: 4 },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 24, paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
-  },
-  backBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827', letterSpacing: -0.3 },
-  headerSub:   { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  scanBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#059669', borderRadius: 9999,
-    paddingVertical: 7, paddingHorizontal: 12,
-  },
-  scanBtnText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+  /* Header */
+  header:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10 },
+  headerBtn:   { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 21, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.4 },
 
-  searchRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  searchBox: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
-    height: 48, borderWidth: 1, borderColor: '#E5E7EB',
-    borderRadius: 12, paddingHorizontal: 12, backgroundColor: '#FFFFFF',
-  },
-  searchInput: { flex: 1, fontSize: 14, color: '#111827' },
-  locateBtn: {
-    width: 48, height: 48, borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
+  /* Search */
+  search:      { flexDirection: 'row', alignItems: 'center', gap: 10, height: 52, borderRadius: 18, backgroundColor: '#FFFFFF', paddingHorizontal: 16, marginBottom: 12 },
+  searchInput: { flex: 1, fontSize: 14, color: INK, fontFamily: 'Inter_500Medium' },
+
+  /* Cards */
+  card:     { ...card, padding: 10 },
+  infoCard: { padding: 20, marginTop: 12 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cardTitle:{ fontSize: 18, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -0.3 },
+  cardSub:  { fontSize: 13, color: SOFT, fontFamily: 'Inter_500Medium', marginTop: 2 },
+
+  /* Map */
+  mapArea:     { borderRadius: 18, overflow: 'hidden', backgroundColor: '#E8F5EF' },
+  mapBtn:      {
+    position: 'absolute', right: 10, bottom: 10,
+    width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF',
     justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
-
-  mapCard: {
-    borderRadius: 16, overflow: 'hidden', marginBottom: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
-    borderWidth: 1, borderColor: '#E5E7EB',
-  },
-  mapArea: { overflow: 'hidden' },
-
-  terrain: { position: 'absolute', backgroundColor: '#BDE2DC' },
-  water:   { position: 'absolute', backgroundColor: '#4A8CBD' },
-  road:    { position: 'absolute', height: 5, backgroundColor: '#FFFFFF', borderRadius: 3 },
-  roadThin:{ position: 'absolute', height: 3, backgroundColor: '#FFFFFF', borderRadius: 2 },
-
-  pin: { position: 'absolute', alignItems: 'center' },
-  pinHead: {
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.55)',
-  },
-  pinDot:  { backgroundColor: '#FFFFFF' },
-  pinTail: {
-    width: 0, height: 0,
-    borderLeftColor: 'transparent', borderRightColor: 'transparent',
-    marginTop: -1,
-  },
-
-  ringMarker: {
-    position: 'absolute',
-    width: 20, height: 20, borderRadius: 10,
-    borderWidth: 2.5, borderColor: '#FFFFFF',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-  },
-
-  zoomStack:  { position: 'absolute', right: 10, top: 12 },
-  zoomCircle: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12, shadowRadius: 3, elevation: 2,
-  },
-
-  gpsCircle: {
-    position: 'absolute', right: 10, bottom: 40,
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12, shadowRadius: 3, elevation: 2,
-  },
-
-  coordBar: {
-    position: 'absolute', bottom: 8, left: 10,
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.88)', borderRadius: 6,
-    paddingVertical: 3, paddingHorizontal: 8,
-  },
-  coordText: { fontSize: 10, color: '#555555', fontWeight: '500' },
-  coordZoom: { fontSize: 10, color: '#6B7280', fontWeight: '600' },
-
-  mapFooter: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB',
-  },
-  mapFooterText: { flex: 1, fontSize: 12, color: '#6B7280' },
-  mapFooterChip: {
-    backgroundColor: '#ECFDF5', borderRadius: 9999,
-    paddingVertical: 3, paddingHorizontal: 8,
-    borderWidth: 1, borderColor: '#D1FAE5',
-  },
-  mapFooterChipText: { fontSize: 11, fontWeight: '700', color: '#065F46' },
-
-  listHeading: { fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 10, marginTop: 4 },
-
-  farmCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, marginBottom: 8,
-    borderWidth: 1.5, borderColor: '#E5E7EB',
-  },
-  farmCardActive: { borderColor: '#059669', backgroundColor: '#FFFFFF' },
-  farmIconBox: {
-    width: 38, height: 38, borderRadius: 10,
-    backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  farmIconBoxActive: { backgroundColor: '#059669', borderColor: '#059669' },
-  farmName:         { fontSize: 14, fontWeight: '700', color: '#9CA3AF' },
-  farmNameActive:   { color: '#111827' },
-  farmMeta:         { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
-  farmCoordRow:     { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  farmCoord:        { fontSize: 11, color: '#9CA3AF' },
-  farmTypeBadge: {
-    backgroundColor: '#F9FAFB', borderRadius: 9999,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    paddingVertical: 3, paddingHorizontal: 9,
-  },
-  farmTypeBadgeActive:     { backgroundColor: '#ECFDF5', borderColor: '#D1FAE5' },
-  farmTypeBadgeText:       { fontSize: 11, fontWeight: '600', color: '#6B7280' },
-  farmTypeBadgeTextActive: { color: '#065F46' },
-
-  /* Add Farm row */
-  addFarmRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderStyle: 'dashed', borderColor: '#A7F3D0',
-    paddingVertical: 14, paddingHorizontal: 14,
-    marginBottom: 10,
-  },
-  addFarmIcon: {
-    width: 30, height: 30, borderRadius: 9,
-    backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  addFarmText: { fontSize: 13.5, fontWeight: '700', color: '#059669' },
-
-  /* Green dot markers on the map */
+  mapFoot:     { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingTop: 12, paddingBottom: 6 },
+  mapFootText: { flex: 1, fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  pill:        { backgroundColor: BG, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 11 },
+  pillText:    { fontSize: 12, color: INK, fontFamily: 'Inter_700Bold' },
   farmDot: {
     width: 16, height: 16, borderRadius: 8,
-    backgroundColor: '#3D9D5E',
+    backgroundColor: '#6B7280',
     borderWidth: 2.5, borderColor: '#FFFFFF',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.22, shadowRadius: 3, elevation: 4,
   },
-  farmDotActive: {
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: '#059669',
-    borderWidth: 3,
-  },
+  farmDotActive: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#059669', borderWidth: 3 },
 
-  /* Scan CTA — clean white card */
-  scanCta: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#FFFFFF', borderRadius: 14,
-    borderWidth: 1, borderColor: '#E5E7EB',
-    paddingHorizontal: 14, paddingVertical: 14,
-    marginTop: 14, marginBottom: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
-  },
-  scanCtaIcon: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: '#059669',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  scanCtaTitle: { fontSize: 14, fontWeight: '700', color: '#111827', marginBottom: 2 },
-  scanCtaSub:   { fontSize: 12, color: '#9CA3AF' },
+  /* Farm tiles (same as Home) */
+  sectionTitle: { fontSize: 17, color: INK, fontFamily: 'Inter_700Bold', marginTop: 24, marginBottom: 10, paddingHorizontal: 4 },
+  farms:        { gap: 12, paddingRight: 4, paddingBottom: 6 },
+  farmTile:     { ...card, width: 170, padding: 10 },
+  farmTileSel:  { backgroundColor: INK },
+  farmArt:      { height: 96, borderRadius: 18, overflow: 'hidden', backgroundColor: '#E8F5EF' },
+  farmPhoto:    { width: '100%', height: '100%' },
+  farmFoot:     { marginTop: 10, paddingHorizontal: 4, paddingBottom: 2 },
+  farmName:     { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold' },
+  farmMeta:     { fontSize: 12, color: SOFT, fontFamily: 'Inter_500Medium', marginTop: 2 },
+  onDark:       { color: '#FFFFFF' },
+  onDarkSoft:   { color: '#9CA3AF' },
+  farmAdd:      { justifyContent: 'center', alignItems: 'center', minHeight: 150 },
+  addBadge:     { width: 40, height: 40, borderRadius: 20, backgroundColor: INK, justifyContent: 'center', alignItems: 'center' },
 
-  /* Location mismatch hint */
-  locHint: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: '#FFFBEB', borderRadius: 10,
-    borderWidth: 1, borderColor: '#FDE68A',
-    paddingHorizontal: 10, paddingVertical: 8,
-    marginBottom: 10,
-  },
-  locHintText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 16 },
+  /* Info rows */
+  row:      { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  rowLine:  { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E7EB' },
+  rowIcon:  { width: 32, height: 32, borderRadius: 16, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' },
+  rowLabel: { flex: 1, fontSize: 14, color: SOFT, fontFamily: 'Inter_500Medium' },
+  rowValue: { fontSize: 14, color: INK, fontFamily: 'Inter_600SemiBold', flexShrink: 1, textAlign: 'right' },
 
-  /* I-update scan button (inline) */
-  rescanBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999,
-    backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0',
-  },
-  rescanBtnText: { fontSize: 11, fontWeight: '700', color: '#059669' },
-  scanDateLine:  { fontSize: 11, fontWeight: '600', color: '#9CA3AF', marginBottom: 6 },
-
-  dataCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 12,
-    borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 16,
-  },
-  dataCardHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    padding: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  dataIconBox: {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  dataCardTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  dataCardSub:   { fontSize: 12, color: '#6B7280', marginTop: 1 },
-  dataRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 11, paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
-  },
-  dataRowIcon: { width: 24, alignItems: 'center' },
-  dataLabel:   { flex: 1, fontSize: 13, color: '#6B7280' },
-  dataValue:   { fontSize: 13, fontWeight: '600', color: '#111827' },
-
-  cta: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#059669', borderRadius: 12, padding: 16, marginBottom: 8,
-  },
-  ctaTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  ctaSub:   { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+  /* Update scan */
+  updateBtn:  { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: BG },
+  updateText: { fontSize: 13, color: INK, fontFamily: 'Inter_600SemiBold' },
 });

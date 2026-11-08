@@ -20,7 +20,7 @@ import { useStepAdvice } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
-import { SOWING_KEY, daysAgoISO } from '@/utils/sowing';
+import { HARVEST_KEYS, SOWING_KEYS, daysAgoISO } from '@/utils/sowing';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
 import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
@@ -662,7 +662,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const afterGuideLog = (stepKey: string | undefined, sowingEstimate: string | undefined) => {
     const language = useLanguageStore.getState().language;
     const recId = useAppStore.getState().latestRecommendation?.id;
-    if (stepKey === SOWING_KEY && recId) {
+    if (stepKey && SOWING_KEYS.includes(stepKey) && recId) {
       loadGuide(recId, language).catch(() => {});   // the plan moved to the real sowing day
     }
     void refreshCycle();
@@ -676,7 +676,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           answerSowing(true, sowingEstimate, language).catch(() => Alert.alert(tr.sowAskTitle, tr.sowFailed));
         } },
       ]);
-    } else if (stepKey === 'harvest') {
+    } else if (stepKey && HARVEST_KEYS.includes(stepKey)) {
       // The season ends when its yield is saved
       Alert.alert(tr.harvestAskTitle, tr.harvestAskBody, [
         { text: tr.sowLater, style: 'cancel' },
