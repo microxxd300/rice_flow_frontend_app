@@ -6,6 +6,9 @@ import { ResetPasswordScreen } from '@/screens/ResetPasswordScreen';
 import { authPasswordResetConfirm, authPasswordResetRequest } from '@/services/apiService';
 import { translations } from '@/i18n/translations';
 
+// The first render loads React Native for the first time, which takes over 5s on a clean CI run
+jest.setTimeout(30000);
+
 const tr = translations.en;
 const mockNavigate = jest.fn();
 const mockNavigateDeprecated = jest.fn();
