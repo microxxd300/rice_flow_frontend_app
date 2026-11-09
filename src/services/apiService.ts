@@ -343,7 +343,7 @@ export const apiAI = {
       history: history ?? [],
       language: language ?? 'en',
       farm: farm ?? null,
-    }),
+    }, { timeout: 35000 }),
 };
 
 // ── Admin notices ──────────────────────────────────────────────────────────

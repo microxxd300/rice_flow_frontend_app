@@ -13,7 +13,8 @@ import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
-import { daysAgoISO, validSowingDate } from '@/utils/sowing';
+import { OLDEST_SOWING_DAYS, dateFromISO, daysAgoISO, validSowingDate } from '@/utils/sowing';
+import { DatePickerField } from '@/components/DatePickerField';
 import { answerSowing } from '@/services/guideLoader';
 import { shortDate } from '@/components/SowingQuestion';
 import { useLanguageStore } from '@/store/languageStore';
@@ -247,9 +248,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                 <View key={row.label} style={[s.listRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                     <Ionicons name={row.icon} size={14} color="#9CA3AF" />
-                    <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label.replace(/\s*\(.*\)$/, '')}</Text>
+                    <Text style={[s.rowLabel, { flex: 1 }, T && { fontSize: 15 }]}>{row.label.replace(/\s*\(.*\)$/, '')}</Text>
                   </View>
-                  <Text style={[s.rowValue, T && { fontSize: 15 }]}>{row.value}</Text>
+                  <Text style={[s.rowValue, { flexShrink: 1, maxWidth: '58%', marginLeft: 12, textAlign: 'right' }, T && { fontSize: 15 }]}>{row.value}</Text>
                 </View>
               ))}
             </View>
@@ -336,17 +337,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                 ]}
                 onSelect={v => { if (v === 'pick') setPickDate(true); else { setHarvestDate(v); setPickDate(false); } }}
               />
-              {pickDate && (
-                <View style={[s.inputBox, { marginTop: 8 }]}>
-                  <RNTextInput
-                    style={[s.input, T && { fontSize: 16 }]}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9CA3AF"
-                    value={harvestDate}
-                    onChangeText={setHarvestDate}
-                  />
-                </View>
-              )}
+              {pickDate && <DatePickerField value={harvestDate} onChange={setHarvestDate} autoOpen style={{ marginTop: 8 }} />}
             </View>
 
             {/* Area actually harvested (the DA's yield is per area harvested) */}
@@ -445,15 +436,13 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           <View style={[s.section, { marginTop: 20 }]}>
             <View style={s.card}>
               <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhSowQuestion}</Text>
-              <View style={s.inputBox}>
-                <RNTextInput
-                  style={[s.input, T && { fontSize: 16 }]}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9CA3AF"
-                  value={sowingText}
-                  onChangeText={setSowingText}
-                />
-              </View>
+              <DatePickerField
+                value={sowingText}
+                onChange={setSowingText}
+                minimumDate={dateFromISO(daysAgoISO(OLDEST_SOWING_DAYS))}
+                maximumDate={new Date(dateFromISO(harvestDate).getTime() - 24 * 60 * 60 * 1000)}
+                autoOpen
+              />
               <TouchableOpacity style={[s.saveBtn, { flex: 0, marginTop: 12 }]} onPress={fixSowing} disabled={fixingSowing} activeOpacity={0.85}>
                 <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>{fixingSowing ? tr.yhSaving : tr.yhFixSowing}</Text>
               </TouchableOpacity>

@@ -326,9 +326,9 @@ export const AIChatScreen: React.FC = () => {
                       onPress={() => sendMessage(label)}
                       activeOpacity={0.7}
                     >
-                      <View style={s.suggestionIcon}><Ionicons name={icon} size={17} color="#059669" /></View>
+                      <View style={s.suggestionIcon}><Ionicons name={icon} size={14} color="#059669" /></View>
                       <Text style={s.suggestionText}>{label}</Text>
-                      <Ionicons name="arrow-forward" size={15} color="#9CA3AF" style={{ transform: [{ rotate: '-45deg' }] }} />
+                      <Ionicons name="arrow-forward" size={13} color="#9CA3AF" style={{ transform: [{ rotate: '-45deg' }] }} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -445,9 +445,9 @@ const s = StyleSheet.create({
   emptyDesc: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 21, marginBottom: 24, paddingHorizontal: 12, fontFamily: 'Inter_500Medium' },
 
   /* Suggestions — compact ghost rows, no tinted icon boxes */
-  suggestionsBlock: { width: '100%', gap: 10 },
-  suggestionChip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 20, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  suggestionText: { flex: 1, fontSize: 14, color: '#111827', lineHeight: 19, fontFamily: 'Inter_600SemiBold' },
+  suggestionsBlock: { width: '100%', gap: 6 },
+  suggestionChip: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 14, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  suggestionText: { flex: 1, fontSize: 12.5, color: '#111827', lineHeight: 16, fontFamily: 'Inter_500Medium' },
 
   /* AI row */
   aiRow:    { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
@@ -458,7 +458,7 @@ const s = StyleSheet.create({
   typingDot: { width: 7, height: 7, borderRadius: 9999, backgroundColor: '#9CA3AF' },
 
   aiBubble:  { backgroundColor: '#FFFFFF', borderRadius: 20, borderTopLeftRadius: 6, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  suggestionIcon: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
+  suggestionIcon: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#E8F5EF', justifyContent: 'center', alignItems: 'center' },
 
   /* Markdown renderer */
   mdH2: { fontSize: 14, color: '#111827', fontFamily: 'Inter_700Bold' },
