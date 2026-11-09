@@ -1,4 +1,4 @@
-import { daysAgoISO, sowingQuestionDue, sowingStep } from '@/utils/sowing';
+import { daysAgoISO, sowingQuestionDue, sowingStep, validSowingDate } from '@/utils/sowing';
 
 const guide = {
   start_date: '2026-11-14',           // the planned sowing day
@@ -31,5 +31,21 @@ describe('daysAgoISO', () => {
   it('counts back in the phone time', () => {
     expect(daysAgoISO(0, new Date(2026, 10, 14, 23, 30))).toBe('2026-11-14');
     expect(daysAgoISO(3, new Date(2026, 11, 2, 8))).toBe('2026-11-29');
+  });
+});
+
+describe('validSowingDate', () => {
+  const today = new Date(2026, 10, 30);   // Nov 30, 2026
+  it('accepts a real date up to 150 days back', () => {
+    expect(validSowingDate('2026-11-08', today)).toBe(true);
+    expect(validSowingDate('2026-11-30', today)).toBe(true);
+    expect(validSowingDate(daysAgoISO(150, today), today)).toBe(true);
+  });
+  it('refuses the future, too far back, and anything not a date', () => {
+    expect(validSowingDate('2026-12-01', today)).toBe(false);
+    expect(validSowingDate(daysAgoISO(151, today), today)).toBe(false);
+    expect(validSowingDate('2026-02-30', today)).toBe(false);
+    expect(validSowingDate('Nov 8', today)).toBe(false);
+    expect(validSowingDate('', today)).toBe(false);
   });
 });

@@ -341,7 +341,7 @@ export const PlantingGuideScreen: React.FC = () => {
         <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Language switch in flight: the old guide stays readable while the new words load */}
         {translating && (

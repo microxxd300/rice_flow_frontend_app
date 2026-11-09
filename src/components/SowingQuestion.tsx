@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAppStore } from '@/store/appStore';
 import { cropIsOver } from '@/utils/nextCrop';
@@ -7,7 +7,7 @@ import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useAccessibility } from '@/context/AccessibilityContext';
 import { answerSowing } from '@/services/guideLoader';
-import { daysAgoISO, sowingQuestionDue } from '@/utils/sowing';
+import { daysAgoISO, sowingQuestionDue, validSowingDate } from '@/utils/sowing';
 
 /** "Nov 14" from YYYY-MM-DD, in the app language's month names. */
 export function shortDate(iso: string | null | undefined, tr: any): string {
@@ -34,6 +34,8 @@ export const SowingQuestion: React.FC = () => {
   const completed = useAppStore(s => s.completedGuideSteps);
   const [busy, setBusy]       = useState(false);
   const [earlier, setEarlier] = useState(false);
+  const [typing, setTyping]   = useState(false);   // "Another day": for a sowing further back
+  const [typed, setTyped]     = useState('');
 
   if (cropOver || !sowingQuestionDue(guide, completed)) return null;
 
@@ -42,11 +44,20 @@ export const SowingQuestion: React.FC = () => {
     try {
       await answerSowing(sown, date, language);
       setEarlier(false);
+      setTyping(false);
     } catch {
       Alert.alert(tr.sowAskTitle, tr.sowFailed);
     } finally {
       setBusy(false);
     }
+  };
+
+  const sendTyped = () => {
+    if (!validSowingDate(typed)) {
+      Alert.alert(tr.sowAskTitle, tr.sowBadDate);
+      return;
+    }
+    void send(true, typed.trim());
   };
 
   return (
@@ -72,7 +83,25 @@ export const SowingQuestion: React.FC = () => {
                 </Text>
               </TouchableOpacity>
             ))}
+            <TouchableOpacity style={s.chip} onPress={() => setTyping(true)} activeOpacity={0.8}>
+              <Text style={[s.chipText, T && { fontSize: 14 }]}>{tr.plogPickDate}</Text>
+            </TouchableOpacity>
           </View>
+          {typing && (
+            <View style={s.dateRow}>
+              <TextInput
+                style={[s.dateInput, T && { fontSize: 16 }]}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#9CA3AF"
+                value={typed}
+                onChangeText={setTyped}
+                autoFocus
+              />
+              <TouchableOpacity style={s.dateBtn} onPress={sendTyped} activeOpacity={0.85}>
+                <Text style={[s.btnMainText, T && { fontSize: 15 }]}>{tr.sowUseDate}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </>
       ) : (
         <View style={s.buttons}>
@@ -114,4 +143,10 @@ const s = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 14,
   },
   chipText: { fontSize: 13, fontWeight: '600', color: '#065F46' },
+  dateRow:  { flexDirection: 'row', gap: 8, marginTop: 10 },
+  dateInput: {
+    flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#A7F3D0',
+    backgroundColor: '#FFFFFF', paddingHorizontal: 12, fontSize: 14, color: '#111827',
+  },
+  dateBtn: { height: 42, borderRadius: 10, backgroundColor: '#059669', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
 });

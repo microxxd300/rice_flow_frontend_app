@@ -1,9 +1,10 @@
-import { loadGuide, guideNeedsTranslation } from '@/services/guideLoader';
-import { apiGuides } from '@/services/apiService';
+import { loadGuide, guideNeedsTranslation, restoreGuide } from '@/services/guideLoader';
+import { apiGuides, apiRecommendations } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
 
-jest.mock('@/services/apiService', () => ({ apiGuides: { generate: jest.fn() } }));
+jest.mock('@/services/apiService', () => ({ apiGuides: { generate: jest.fn() }, apiRecommendations: { history: jest.fn() } }));
 const generate = apiGuides.generate as jest.Mock;
+const history = apiRecommendations.history as jest.Mock;
 
 const guide = (language: string, source = 'GEMINI') =>
   ({ id: 7, language, source, steps: [{ id: 1, is_completed: false }] });
@@ -37,5 +38,37 @@ describe('loadGuide', () => {
     useAppStore.setState({ latestGuide: guide('fil') });
     expect(guideNeedsTranslation('ceb')).toBe(true);
     expect(guideNeedsTranslation('fil')).toBe(false);
+  });
+});
+
+describe('restoreGuide', () => {
+  beforeEach(() => {
+    generate.mockReset();
+    history.mockReset();
+    useAppStore.setState({ latestGuide: null, latestRecommendation: null, completedGuideSteps: [], selectedFarmId: 3 } as any);
+  });
+
+  it('loads the guide of the latest recommendation after a login', async () => {
+    history.mockResolvedValue({ data: [{ id: 4 }, { id: 9 }, { id: 6 }] });
+    generate.mockResolvedValue({ data: guide('en', 'SAVED') });
+    await restoreGuide(3, 'en');
+    expect(generate.mock.calls[0][0]).toBe(9);
+    expect(useAppStore.getState().latestGuide).not.toBeNull();
+  });
+
+  it('does nothing for a farm with no recommendation', async () => {
+    history.mockResolvedValue({ data: [] });
+    await restoreGuide(3, 'en');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('keeps a guide that arrives after the farmer switched farms off the screen', async () => {
+    history.mockResolvedValue({ data: [{ id: 9 }] });
+    generate.mockImplementation(async () => {
+      useAppStore.setState({ selectedFarmId: 8 } as any);
+      return { data: guide('en', 'SAVED') };
+    });
+    await restoreGuide(3, 'en');
+    expect(useAppStore.getState().latestGuide).toBeNull();
   });
 });
