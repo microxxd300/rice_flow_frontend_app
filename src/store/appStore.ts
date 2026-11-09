@@ -65,6 +65,8 @@ interface AppState {
   setProgressLogs:          (logs: any[]) => void;
   addProgressLog:           (log: any) => void;
   hydrateProgressLogs:      (logs: any[]) => void;
+  markProgressLogFixed:     (id: string, at: string) => void;
+  startNewCrop:             () => void;
   setActiveCycle:           (cycle: any | null) => void;
   markGuideStepDone:        (stepId: string) => void;
   hydrateGuideSteps:        (stepIds: string[]) => void;
@@ -236,6 +238,18 @@ export const useAppStore = create<AppState>((set) => ({
     storage.setItem(STORAGE_KEYS.PROGRESS_LOGS, list).catch(() => {});
   },
   hydrateProgressLogs: (logs) => set({ progressLogs: logs.filter(isAppLog) }),
+  // The last season's guide, logs and check-offs must not carry over to the new crop
+  startNewCrop: () => {
+    set({ latestGuide: null, activeCycle: null, progressLogs: [], completedGuideSteps: [] });
+    storage.removeItem(STORAGE_KEYS.LATEST_GUIDE).catch(() => {});
+    storage.removeItem(STORAGE_KEYS.PROGRESS_LOGS).catch(() => {});
+    storage.removeItem(STORAGE_KEYS.COMPLETED_GUIDE_STEPS).catch(() => {});
+  },
+  markProgressLogFixed: (id, at) => {
+    const list = useAppStore.getState().progressLogs.map(l => (l.id === id ? { ...l, resolvedAt: at } : l));
+    set({ progressLogs: list });
+    storage.setItem(STORAGE_KEYS.PROGRESS_LOGS, list).catch(() => {});
+  },
   setActiveCycle:          cycle => set({ activeCycle: cycle }),
 
   markGuideStepDone: (stepId) => {

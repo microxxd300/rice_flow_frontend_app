@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { apiFarms, apiScan, apiRecommendations } from '@/services/apiService';
+import { fetchActiveCycleLogs } from '@/utils/progressLogs';
 import { useAppStore } from '@/store/appStore';
 
 type Nav = StackNavigationProp<any>;
@@ -49,6 +50,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
   const navigation = useNavigation<Nav>();
   const route      = useRoute<any>();
   const farmData   = route.params?.farmData ?? {};
+  const existingFarm = route.params?.existingFarm;   // the next crop on a farm already saved
 
   const [completedCount, setCompletedCount] = useState(0);
   const [apiDone, setApiDone] = useState(false);
@@ -89,6 +91,22 @@ export const AnalysisLoadingScreen: React.FC = () => {
       let failed = false;
       let step = 'init';
       try {
+        // The next crop in the same season: the saved top 3 still fit, so no new scan
+        if (existingFarm) {
+          step = 'reuse top 3';
+          const reused = await apiRecommendations.reuse(existingFarm.id).catch(() => null);
+          if (reused) {
+            recommendationRef.current = reused.data.recommendation;
+            scanRef.current = reused.data.scan;
+            useAppStore.getState().startNewCrop();
+            useAppStore.getState().setLatestRecommendation(reused.data.recommendation);
+            const { cycle } = await fetchActiveCycleLogs(existingFarm.id);
+            useAppStore.getState().setActiveCycle(cycle);
+            animDoneRef.current = true;   // nothing was analyzed, so no steps to wait through
+            return;
+          }
+        }
+
         step = 'build payload';
         // Round GPS coords to 6 decimals (~11 cm). The backend field is
         // DecimalField(max_digits=10, decimal_places=7), so a raw GPS value with
@@ -109,9 +127,12 @@ export const AnalysisLoadingScreen: React.FC = () => {
           location_confirmed: !!farmData.location_confirmed,
         };
         step = 'create farm';
-        const farmRes = await apiFarms.create(farmPayload);
-        const farm = farmRes.data;
-        useAppStore.getState().addFarm(farm);
+        let farm = existingFarm;
+        if (!farm) {
+          const farmRes = await apiFarms.create(farmPayload);
+          farm = farmRes.data;
+          useAppStore.getState().addFarm(farm);
+        }
 
         try {
           step = 'run scan';
@@ -131,7 +152,13 @@ export const AnalysisLoadingScreen: React.FC = () => {
           step = 'generate recommendation';
           const recRes = await apiRecommendations.generate(scan.id);
           recommendationRef.current = recRes.data;
+          if (existingFarm) useAppStore.getState().startNewCrop();
           useAppStore.getState().setLatestRecommendation(recRes.data);
+          if (existingFarm) {
+            // The recommendation has just started the new crop cycle
+            const { cycle } = await fetchActiveCycleLogs(farm.id);
+            useAppStore.getState().setActiveCycle(cycle);
+          }
 
           useAppStore.getState().addNotification({
             title: 'Your recommendations are ready',
@@ -139,8 +166,10 @@ export const AnalysisLoadingScreen: React.FC = () => {
             icon:  'ribbon-outline',
           });
         } catch (innerErr) {
-          try { await apiFarms.delete(farm.id); } catch {}
-          useAppStore.getState().removeFarm?.(farm.id);
+          if (!existingFarm) {   // never delete a farm the farmer already had
+            try { await apiFarms.delete(farm.id); } catch {}
+            useAppStore.getState().removeFarm?.(farm.id);
+          }
           throw innerErr;
         }
       } catch (err: any) {

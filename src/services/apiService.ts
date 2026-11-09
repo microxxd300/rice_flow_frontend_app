@@ -189,6 +189,7 @@ export interface WeatherOutlook {
   rain_mm_48h:      number;
   rain_prob_48h:    number;
   wind_kph_max_12h: number;
+  temp_c_max_24h?:  number;   // not sent by servers older than this field
 }
 export interface WeatherResponse {
   current:     WeatherCurrent;
@@ -213,6 +214,9 @@ export const apiRecommendations = {
     apiClient.post<Recommendation>(API_ROUTES.recommendations.generate(scanId), {}),
   history: (farmId: number) =>
     apiClient.get<Recommendation[]>(API_ROUTES.recommendations.history(farmId)),
+  // The next crop from the farm's saved top 3; 409 when the season changed and it needs a new scan
+  reuse: (farmId: number) =>
+    apiClient.post<{ recommendation: Recommendation; scan: any }>(API_ROUTES.recommendations.reuse(farmId), {}),
 };
 
 // ── Varieties ──────────────────────────────────────────────────────────────

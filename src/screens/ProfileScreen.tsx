@@ -18,6 +18,7 @@ import { STORAGE_KEYS } from '@/constants/api';
 import { dedupeName } from '@/utils/formatting';
 import { apiFarms, apiRecommendations, authUpdateProfile } from '@/services/apiService';
 import { fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
+import { APP_VERSION } from '@/config/env';
 import { loadGuide, guideNeedsTranslation } from '@/services/guideLoader';
 
 // The new RiceFlow logo (720 × 515)
@@ -153,10 +154,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
     }
   };
 
-  const handleLogout = async () => {
+  const doLogout = async () => {
     await logout();
     onLogout?.();
   };
+  const askLogout = () => Alert.alert(tr.profileLogout, tr.logoutAsk, [
+    { text: tr.leaveFormStay, style: 'cancel' },
+    { text: tr.profileLogout, style: 'destructive', onPress: doLogout },
+  ]);
 
   /* ── Data management actions ───────────────────────────────────────────── */
   // Both act only on this device's cached copy / a plain re-read. Neither
@@ -173,8 +178,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
     if (!farmId) return;
     // Same loading as the Progress screen: the season's logs in the app's shape
     try {
-      const { logs } = await fetchActiveCycleLogs(farmId);
-      st.setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs));
+      const { cycle, logs } = await fetchActiveCycleLogs(farmId);
+      const now = useAppStore.getState();
+      if (now.selectedFarmId === farmId) now.setProgressLogs(mergeLogs(logs, now.progressLogs, cycle?.id));
     } catch {}
     try {
       const recs = (await apiRecommendations.history(farmId)).data ?? [];
@@ -384,11 +390,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
         {/* Version */}
         <View style={s.versionCard}>
           <Image source={LogoImage} style={{ width: 132, height: 132 * (515 / 720) }} resizeMode="contain" />
-          <Text style={s.versionNum}>{tr.profileVersion.replace('{v}', '1.0.0')}</Text>
+          <Text style={s.versionNum}>{tr.profileVersion.replace('{v}', APP_VERSION)}</Text>
         </View>
 
         {/* Logout — ghost-style, less aggressive than red-tinted card */}
-        <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={s.logoutBtn} onPress={askLogout} activeOpacity={0.7}>
           <Ionicons name="log-out-outline" size={16} color="#DC2626" />
           <Text style={s.logoutBtnText}>{tr.profileLogout}</Text>
         </TouchableOpacity>
@@ -598,7 +604,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
                         <Image source={LogoImage} style={{ width: 168, height: 112, marginVertical: -30 }} resizeMode="contain" />
                         <Text style={[s.aboutName, T && { fontSize: 18 }]}>RiceFlow</Text>
                         <Text style={[s.aboutVer, T && { fontSize: 14 }]}>
-                          {tr.profileVersion.replace('{v}', '1.0.0')}
+                          {tr.profileVersion.replace('{v}', APP_VERSION)}
                         </Text>
                         <Text style={[s.aboutTag, T && { fontSize: 15 }]}>{tr.aboutTagline}</Text>
                       </View>

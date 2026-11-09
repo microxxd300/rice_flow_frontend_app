@@ -8,6 +8,11 @@ describe('cropDays', () => {
     expect(cropDays('2026-11-01', '2027-02-22', today)?.day).toBe(4);
   });
 
+  it('shows the days after sowing, the same as the guide', () => {
+    expect(cropDays('2026-11-04', '2027-02-22', today)?.daysAfterSowing).toBe(0);
+    expect(cropDays('2026-11-01', '2027-02-22', today)?.daysAfterSowing).toBe(3);
+  });
+
   it('gives the season length and the share gone', () => {
     const d = cropDays('2026-11-01', '2027-02-22', today)!;
     expect(d.total).toBe(113);

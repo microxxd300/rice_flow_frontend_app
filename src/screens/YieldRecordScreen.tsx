@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, Alert, Image,
@@ -14,6 +14,7 @@ import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { daysAgoISO } from '@/utils/sowing';
+import { firstError } from '@/utils/passwordReset';
 import { CAVAN_KG, DRY_MOISTURE, FRESH_MOISTURE, harvestFigures } from '@/utils/harvest';
 
 interface YieldRecordScreenProps {
@@ -74,8 +75,8 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
   const [saved,          setSaved]          = useState(false);
   const [loading,        setLoading]        = useState(false);
   const [predictedYield, setPredictedYield] = useState<number | null>(null);
-  const [modelUsed,      setModelUsed]      = useState('');
   const [harvestDate,    setHarvestDate]    = useState(daysAgoISO(0));
+  const [recordSaved,    setRecordSaved]    = useState(false);
   const [pickDate,       setPickDate]       = useState(false);
   const [areaHarvested,  setAreaHarvested]  = useState(farm?.area_hectares ? String(farm.area_hectares) : '');
   const [sacks,          setSacks]          = useState('');
@@ -86,9 +87,24 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
 
   const figures = harvestFigures(parseFloat(sacks), parseFloat(kgPerSack), parseFloat(areaHarvested), moisture);
 
+  // Android Back must not throw away a harvest that was typed in but not saved
+  const unsaved = sacks.trim() !== '' && !saved && !loading;
+  useEffect(() => navigation.addListener('beforeRemove', (e: any) => {
+    if (!unsaved) return;
+    e.preventDefault();
+    Alert.alert(tr.leaveFormTitle, tr.leaveFormBody, [
+      { text: tr.leaveFormStay, style: 'cancel' },
+      { text: tr.leaveFormLeave, style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+    ]);
+  }), [navigation, unsaved, tr]);
+
   const handleSave = async () => {
-    if (!figures) {
-      Alert.alert(tr.yieldRecordHeader, tr.yhNeed);
+    if (!figures || figures.impossible) {
+      Alert.alert(tr.yieldRecordHeader, figures ? tr.yhImpossible : tr.yhNeed);
+      return;
+    }
+    if (!cycleId) {   // nothing to attach it to: never report a harvest that was not saved
+      Alert.alert(tr.yhNotSavedT, tr.plogNotSavedB);
       return;
     }
     setLoading(true);
@@ -96,15 +112,25 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
       const area  = parseFloat(areaHarvested);
       const notes = [grainQuality && `Quality: ${grainQuality}`, harvestMethod && `Method: ${harvestMethod}`,
                      `${sacks} sacks × ${kgPerSack} kg`].filter(Boolean).join(' · ');
-      if (cycleId) {
-        await apiProgress.createYield(cycleId, {
-          harvest_date:      harvestDate,
-          area_harvested_ha: area,
-          gross_yield_kg:    figures.totalKg,
-          net_yield_kg:      figures.dryKg,     // dry palay at 14%, the DA basis
-          moisture_pct:      moisture,
-          notes,
-        });
+      const record = {
+        harvest_date:      harvestDate,
+        area_harvested_ha: area,
+        gross_yield_kg:    figures.totalKg,
+        net_yield_kg:      figures.dryKg,     // dry palay at 14%, the DA basis
+        moisture_pct:      moisture,
+        notes,
+      };
+      // A crop has one harvest record: editing changes it, it does not add another
+      const hasRecord = recordSaved || (activeCycle?.id === cycleId && activeCycle?.status === 'completed');
+      await (hasRecord ? apiProgress.updateYield(cycleId, record) : apiProgress.createYield(cycleId, record).catch((err: any) => {
+        // The phone's copy of the cycle can be older than the server's
+        if (/already exists/i.test(String(err?.response?.data?.detail ?? ''))) return apiProgress.updateYield(cycleId, record);
+        throw err;
+      }));
+      setRecordSaved(true);
+      // The server ends the season with the harvest: Home and Progress follow at once
+      if (activeCycle?.id === cycleId) {
+        useAppStore.getState().setActiveCycle({ ...activeCycle, status: 'completed', yield_per_ha: figures.tHa });
       }
       try {
         // Predict from the farm's own conditions (latest scan + variety), never from the
@@ -128,12 +154,12 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           season:            activeCycle?.season,
         });
         setPredictedYield(predRes.data.predicted_yield_t_ha);
-        setModelUsed(predRes.data.model_used);
       } catch {}
       onSaveYield?.({ harvestDate, variety, areaHarvested, actualYield: figures.dryKg, grainQuality, harvestMethod });
       setSaved(true);
-    } catch {
-      Alert.alert(tr.yhNotSavedT, tr.plogNotSavedB);
+    } catch (err: any) {
+      const data = err?.response?.data;
+      Alert.alert(tr.yhNotSavedT, firstError(data?.harvest_date) ?? firstError(data?.net_yield_kg) ?? tr.plogNotSavedB);
     } finally {
       setLoading(false);
     }
@@ -176,11 +202,11 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                 { icon: 'cube-outline'      as IoniconsName, label: tr.yhDryTotal,       value: figures ? `${figures.dryKg} kg` : '—' },
                 { icon: 'star-outline'      as IoniconsName, label: tr.yhQuality,        value: grainQuality ? word(QUALITY_OPTIONS.find(q => q.value === grainQuality)!.key) : '—' },
                 { icon: 'construct-outline' as IoniconsName, label: tr.yhMethod,         value: harvestMethod ? word(METHOD_OPTIONS.find(m => m.value === harvestMethod)!.key) : '—' },
-              ]).map((row, i, arr) => (
+              ]).filter(row => row.value !== '—').map((row, i, arr) => (
                 <View key={row.label} style={[s.listRow, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                     <Ionicons name={row.icon} size={14} color="#9CA3AF" />
-                    <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label}</Text>
+                    <Text style={[s.rowLabel, T && { fontSize: 15 }]}>{row.label.replace(/\s*\(.*\)$/, '')}</Text>
                   </View>
                   <Text style={[s.rowValue, T && { fontSize: 15 }]}>{row.value}</Text>
                 </View>
@@ -203,9 +229,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
 
           {predictedYield !== null && (
             <View style={[s.card, { width: '100%', marginTop: 12 }]}>
-              <Text style={{ fontSize: 12, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>AI YIELD PREDICTION ({modelUsed})</Text>
+              <Text style={{ fontSize: 12, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>{tr.yhPossible}</Text>
               <Text style={{ fontSize: 28, color: '#111827', fontFamily: 'Inter_700Bold', letterSpacing: -0.5 }}>{predictedYield} t/ha</Text>
-              <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>Based on your farm and weather data</Text>
+              <Text style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>{tr.yhPossibleNote}</Text>
             </View>
           )}
 
@@ -213,9 +239,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
             <TouchableOpacity style={s.cancelBtn} onPress={() => setSaved(false)} activeOpacity={0.7}>
               <Text style={[s.cancelBtnText, T && { fontSize: 15 }]}>{tr.commonEdit}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.saveBtn} onPress={() => navigation.navigateDeprecated('YieldProgress')} activeOpacity={0.85}>
+            <TouchableOpacity style={s.saveBtn} onPress={() => navigation.navigateDeprecated('ProgressDashboardHome', { tab: 'trends', at: Date.now() })} activeOpacity={0.85}>
               <Ionicons name="trending-up" size={16} color="#FFFFFF" />
-              <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>View Progress</Text>
+              <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>{tr.yhViewProgress}</Text>
             </TouchableOpacity>
           </View>
 
@@ -353,7 +379,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
                   <Text style={[s.resultText, figures.unusual && { color: '#92400E' }, T && { fontSize: 16 }]}>
                     {tr.yhResult.replace('{tha}', figures.tHa.toFixed(2)).replace('{cav}', String(figures.cavansHa))}
                   </Text>
-                  <Text style={s.resultNote}>{figures.unusual ? tr.yhCheck : tr.yhResultNote}</Text>
+                  <Text style={s.resultNote}>{figures.impossible ? tr.yhImpossible : figures.unusual ? tr.yhCheck : tr.yhResultNote}</Text>
                 </View>
               </View>
             )}
@@ -381,7 +407,7 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
           <TouchableOpacity
             style={[s.saveBtn, (loading || !figures) && { opacity: 0.5 }]}
             onPress={handleSave}
-            disabled={loading || !figures}
+            disabled={loading || !figures || figures.impossible}
             activeOpacity={0.85}
           >
             <Ionicons name={loading ? 'hourglass-outline' : 'checkmark'} size={18} color="#FFFFFF" />
@@ -400,7 +426,7 @@ const s = StyleSheet.create({
   scroll: { paddingBottom: 150 },   // room for the floating tab bar
 
   successScroll: {
-    paddingHorizontal: 20, paddingBottom: 40,
+    paddingHorizontal: 20, paddingBottom: 150,
     alignItems: 'center', justifyContent: 'center', flexGrow: 1,
   },
 

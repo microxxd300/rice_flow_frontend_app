@@ -299,6 +299,13 @@ export const ReportsScreen: React.FC = () => {
                   <Text style={[s.barLbl, b.isLatest && { color: '#059669' }]} numberOfLines={1}>{b.label}</Text>
                 </View>
               ))}
+              {/* Hollow bars: seasons with no harvest yet, as tall as the tallest real bar */}
+              {Array.from({ length: Math.max(0, 5 - chartBars.length) }, (_, i) => (
+                <View key={`empty${i}`} style={s.barWrap}>
+                  <View style={[s.barEmpty, { height: Math.max(8, Math.round((Math.max(...chartBars.map(b => b.value)) / chartMax) * 120)) }]} />
+                  <Text style={s.barLbl}> </Text>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -347,12 +354,7 @@ export const ReportsScreen: React.FC = () => {
             </View>
           ) : (
             [...filteredHistory].reverse().map((h, i) => (
-              <TouchableOpacity
-                key={h.id}
-                style={[s.historyRow, i > 0 && s.rowBorder]}
-                onPress={() => navigation.navigateDeprecated('YieldProgress')}
-                activeOpacity={0.85}
-              >
+              <View key={h.id} style={[s.historyRow, i > 0 && s.rowBorder]}>
                 <View style={s.historyIcon}>
                   <Ionicons name="basket-outline" size={20} color="#B45309" />
                 </View>
@@ -367,7 +369,7 @@ export const ReportsScreen: React.FC = () => {
                     <Text style={[s.badgeChipText, { color: h.badgeStatus === 'success' ? '#047857' : '#B45309' }]}>{h.badge}</Text>
                   </View>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))
           )}
         </View>
@@ -422,10 +424,11 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-end',
     justifyContent: 'space-between', height: 170, paddingTop: 6,
   },
-  barWrap: { alignItems: 'center', justifyContent: 'flex-end', flex: 1, maxWidth: 64 },
-  barVal: { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  barWrap: { alignItems: 'flex-start', justifyContent: 'flex-end', flex: 1, maxWidth: 64 },
+  barVal: { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold', minWidth: 26, textAlign: 'center' },
   bar: { width: 26, borderRadius: 13 },
-  barLbl: { fontSize: 11, color: '#6B7280', textAlign: 'center', marginTop: 8, lineHeight: 14, fontFamily: 'Inter_500Medium' },
+  barEmpty: { width: 26, borderRadius: 13, borderWidth: 1.5, borderColor: '#E5E7EB' },
+  barLbl: { fontSize: 11, color: '#6B7280', textAlign: 'center', marginTop: 8, lineHeight: 14, fontFamily: 'Inter_500Medium', minWidth: 26 },
 
   /* Variety perf */
   varietyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
@@ -472,7 +475,7 @@ const s = StyleSheet.create({
   pendingPill:{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 8, marginBottom: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F1F2F1' },
   pendingText:{ fontSize: 15, color: '#374151', fontFamily: 'Inter_600SemiBold' },
   tileUnit:   { fontSize: 11, color: '#6B7280', fontFamily: 'Inter_600SemiBold', marginLeft: 3, marginBottom: 3 },
-  bars:       { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', minHeight: 170, marginTop: 14 },
+  bars:       { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start', gap: 12, minHeight: 170, marginTop: 14 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   rankTile:   { width: 40, height: 40, borderRadius: 14, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
   rankTileTop:{ backgroundColor: '#111827' },

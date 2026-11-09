@@ -50,6 +50,32 @@ export function guideProgress(steps: GuideStep[], completedIds: Iterable<string>
   };
 }
 
+// The growth stage each step belongs to, as on the server (progress/stages.py, guides/direct_seeded.py).
+// Preparation before sowing has no stage.
+const STEP_STAGE: Record<string, number> = {
+  seedbed: 1, leveling: 2, transplant: 2, replant: 2,
+  fertilizer1: 3, lcc: 3, water: 3, weeds: 3, pests: 3, fertilizer2: 3,
+  fertilizerpi: 4, flowering: 6, drain: 8, harvest: 9, drystore: 10,
+  up_sow: 1, rf_sow: 1,
+  up_weed1: 3, up_fert: 3, up_stand: 3, up_weed2: 3, up_water: 3, up_pests: 3,
+  rf_water: 3, rf_weeds: 3, rf_top: 3, rf_pests: 3, rf_lcc: 3,
+  up_fertpi: 4, rf_drain: 8, up_harvest: 9, rf_harvest: 9, up_store: 10,
+};
+
+/**
+ * The growth stage the guide has reached: the furthest logged step, first stage at the least.
+ * Some stages have no step (Booting, Grain Filling), so the crop's age moves through those,
+ * but never past the next step still to log. Null with no guide.
+ */
+export function guideStageNo(steps: GuideStep[], completedIds: Iterable<string>, ageStage?: number | null): number | null {
+  if (steps.length === 0) return null;
+  const done = new Set(completedIds);
+  const stageOf = (st: GuideStep) => STEP_STAGE[st.key] ?? 0;
+  const reached = Math.max(1, ...steps.filter(st => done.has(st.id)).map(stageOf));
+  const next = Math.min(...steps.filter(st => !done.has(st.id) && stageOf(st) > reached).map(stageOf));   // Infinity when none is left
+  return Math.max(reached, Math.min(ageStage ?? 0, next - 1));
+}
+
 /** Today's day of the guide (0 = the guide's start date). */
 export function guideDay(guide: any, today: Date = new Date()): number {
   const start = guide?.start_date ? new Date(guide.start_date) : null;

@@ -32,6 +32,7 @@ export const API_ROUTES = {
   recommendations: {
     generate: (scanId: number) => `recommendations/generate/${scanId}/`,
     history:  (farmId: number) => `recommendations/history/${farmId}/`,
+    reuse:    (farmId: number) => `recommendations/reuse/${farmId}/`,
   },
   varieties: {
     list:   'varieties/',

@@ -21,11 +21,26 @@ export function dedupeName(name: string | null | undefined): string {
 }
 
 /**
- * Season label for a farm cycle: { season: 'wet', year: 2026 } → "Wet 2026"
+ * Season label for a farm cycle. The sowing day decides it, by the rule the planting guide
+ * uses (Wet May-October, Dry November-April across the new year): "Wet 2026", "Dry 2026-27".
+ * Without a sowing day it falls back on the cycle's own { season: 'wet', year: 2026 }.
  */
-export function seasonLabel(cycle: { season?: string | null; year?: number | string | null } | null | undefined): string {
+export function seasonLabel(cycle: { season?: string | null; year?: number | string | null; planting_date?: string | null } | null | undefined): string {
+  const sown = /^(\d{4})-(\d{2})/.exec(String(cycle?.planting_date ?? ''));
+  if (sown) {
+    const year = Number(sown[1]);
+    const month = Number(sown[2]);
+    if (month >= 5 && month <= 10) return `Wet ${year}`;
+    const start = month >= 11 ? year : year - 1;
+    return `Dry ${start}-${String(start + 1).slice(-2)}`;
+  }
   const season = String(cycle?.season ?? '').replace(/^./, c => c.toUpperCase());
   return `${season} ${cycle?.year ?? ''}`.trim();
+}
+
+/** 'Dry Season 2026-27' in the app's language; the server and seasonLabel give it in English. */
+export function seasonInLanguage(label: string, tr: { recCondDry: string; recCondWet: string }): string {
+  return label.replace('Dry Season', tr.recCondDry).replace('Wet Season', tr.recCondWet);
 }
 
 export const formatters = {

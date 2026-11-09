@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAppStore } from '@/store/appStore';
+import { cropIsOver } from '@/utils/nextCrop';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useAccessibility } from '@/context/AccessibilityContext';
@@ -29,11 +30,12 @@ export const SowingQuestion: React.FC = () => {
   const T = useAccessibility().isLargeText;
   const language  = useLanguageStore(s => s.language);
   const guide     = useAppStore(s => s.latestGuide) as any;
+  const cropOver  = cropIsOver(useAppStore(s => s.activeCycle));
   const completed = useAppStore(s => s.completedGuideSteps);
   const [busy, setBusy]       = useState(false);
   const [earlier, setEarlier] = useState(false);
 
-  if (!sowingQuestionDue(guide, completed)) return null;
+  if (cropOver || !sowingQuestionDue(guide, completed)) return null;
 
   const send = async (sown: boolean, date?: string) => {
     setBusy(true);

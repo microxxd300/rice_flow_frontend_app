@@ -6,7 +6,8 @@ import { LOOK } from '@/theme/look';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useLanguageStore } from '@/store/languageStore';
 import { apiAdvice, apiProgress, type AdviceExplanation, type ProblemCard } from '@/services/apiService';
-import { fetchActiveCycleLogs } from '@/utils/progressLogs';
+import { fetchActiveCycleLogs, hasFarmerDescription } from '@/utils/progressLogs';
+import { useAppStore } from '@/store/appStore';
 import { AdviceRow, AiBadge, SourceChips } from './AdviceParts';
 
 // One problem at a time: the most severe first, then the newest
@@ -57,7 +58,8 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
     log.advice_tip?.problem === log.problem_key && log.advice_tip?.language === lang ? log.advice_tip : null);
   const [guess, setGuess] = useState<{ key: string; name: string } | null>(null);
   // "Not sure" with a description: no tip until GeoRice AI's guess is answered (one AI request less)
-  const [waitForGuess, setWaitForGuess] = useState(log.problem_key === 'unknown' && !!log.observation?.trim());
+  const askAiToGuess = log.problem_key === 'unknown' && hasFarmerDescription(log.observation);
+  const [waitForGuess, setWaitForGuess] = useState(askAiToGuess);
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);   // "Show all": every step, don't and tip point
   const [open, setOpen] = useState(false);   // the GeoRice AI explanation is showing
@@ -78,7 +80,7 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
 
   // "Not sure": GeoRice AI reads what the farmer wrote and guesses which problem it is
   useEffect(() => {
-    if (log.problem_key !== 'unknown' || !log.observation?.trim()) return;
+    if (!askAiToGuess) return;
     apiAdvice.match(log.observation, lang)
       .then(r => {
         const m = r.data.matches[0];
@@ -86,12 +88,14 @@ const ProblemCardView: React.FC<{ log: OpenLog; farmId?: number; waiting: number
         else setWaitForGuess(false);
       })
       .catch(() => setWaitForGuess(false));
-  }, [log.problem_key, log.observation, lang]);
+  }, [askAiToGuess, log.observation, lang]);
 
   const patch = async (data: any) => {
     setBusy(true);
     try {
       await apiProgress.updateLog(log.id, data);
+      // Plant health on the Progress tab follows at once
+      if (data.resolved_at) useAppStore.getState().markProgressLogFixed(String(log.id), data.resolved_at);
       onChanged();
     } catch {
       setBusy(false);

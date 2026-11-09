@@ -39,7 +39,9 @@ export const FarmDetailsFormScreen: React.FC = () => {
   const province     = userProfile?.province    || '';
   const accountLoc   = [barangay, municipality, province].filter(Boolean).join(', ');
 
-  const isValid = Boolean(farmName.trim() && ecosystem);
+  // Size is optional, but one that is entered has to be a real size
+  const areaBad = area.trim() !== '' && !(Number(area) > 0);
+  const isValid = Boolean(farmName.trim() && ecosystem && !areaBad);
 
   const handleContinue = () => {
     navigation.navigateDeprecated('LocationPermission', {
@@ -79,6 +81,7 @@ export const FarmDetailsFormScreen: React.FC = () => {
             placeholder="e.g. 2.5"
             keyboardType="decimal-pad"
             unit="ha"
+            error={areaBad ? 'Enter a size bigger than 0.' : undefined}
           />
           {/* Clarify that size is self-reported and only for yield estimates —
               the variety recommendation is derived from GPS location, not area. */}
@@ -149,10 +152,11 @@ interface FieldProps {
   autoCapitalize?: 'none' | 'words' | 'sentences';
   unit?: string;
   required?: boolean;
+  error?: string;
 }
 
 const Field: React.FC<FieldProps> = ({
-  label, value, onChangeText, placeholder, keyboardType, autoCapitalize, unit, required,
+  label, value, onChangeText, placeholder, keyboardType, autoCapitalize, unit, required, error,
 }) => {
   const [focused, setFocused] = useState(false);
   return (
@@ -160,7 +164,7 @@ const Field: React.FC<FieldProps> = ({
       <Text style={f.label}>
         {label}{required && <Text style={f.req}> *</Text>}
       </Text>
-      <View style={[f.box, focused && f.boxFocused]}>
+      <View style={[f.box, focused && f.boxFocused, !!error && f.boxError]}>
         <RNTextInput
           style={f.input}
           placeholder={placeholder}
@@ -175,6 +179,7 @@ const Field: React.FC<FieldProps> = ({
         />
         {unit ? <Text style={f.unit}>{unit}</Text> : null}
       </View>
+      {!!error && <Text style={f.error}>{error}</Text>}
     </View>
   );
 };
@@ -185,6 +190,8 @@ const f = StyleSheet.create({
   req:   { color: '#DC2626' },
   box: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: 'transparent', borderRadius: 18, paddingHorizontal: 16, minHeight: 56, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   boxFocused: { borderColor: '#111827' },
+  boxError: { borderColor: '#DC2626' },
+  error: { fontSize: 12, color: '#DC2626', marginTop: 6, fontFamily: 'Inter_500Medium' },
   input: { flex: 1, fontSize: 16, color: '#111827', paddingVertical: 12, fontFamily: 'Inter_500Medium' },
   unit: { fontSize: 14, color: '#6B7280', fontFamily: 'Inter_600SemiBold' },
 });

@@ -55,6 +55,7 @@ export function normalizeServerLogs(rows: any[], stages: any[]): any[] {
       severity:      String(l.severity ?? '').replace(/^./, (ch: string) => ch.toUpperCase()),
       actionTaken:   l.action_taken,
       notes:         l.observation,
+      resolvedAt:    l.resolved_at ?? null,
     };
   });
 }
@@ -62,12 +63,21 @@ export function normalizeServerLogs(rows: any[], stages: any[]): any[] {
 /**
  * Server logs first, then local-only ones. The local copy wins for a log the server
  * also has, so Drought vs Flood (both "weather" on the server) is kept on this phone.
+ * Local-only logs from another crop cycle are dropped: they belong to a different farm.
  */
-export function mergeLogs(server: any[], existing: any[]): any[] {
+/** A problem log with no note is saved as "Tillering · Insect": that is not the farmer's description. */
+export function hasFarmerDescription(observation?: string | null): boolean {
+  const text = String(observation ?? '').trim();
+  return !!text && !/(^|· )(Insect|Disease|Flood|Drought|Nutrient|Other)$/.test(text);
+}
+
+export function mergeLogs(server: any[], existing: any[], cycleId: number | string | null | undefined): any[] {
   const local = existing.filter(isAppLog);
+  const inThisCycle = (l: any) => l.cycleId == null || (cycleId != null && String(l.cycleId) === String(cycleId));
   return [
-    ...server.map(n => ({ ...n, ...local.find(e => e.id === n.id) })),
-    ...local.filter(e => !server.some(n => n.id === e.id)),
+    // The server decides whether a problem is fixed: it can be marked on another phone
+    ...server.map(n => ({ ...n, ...local.find(e => e.id === n.id), resolvedAt: n.resolvedAt })),
+    ...local.filter(e => inThisCycle(e) && !server.some(n => n.id === e.id)),
   ];
 }
 
