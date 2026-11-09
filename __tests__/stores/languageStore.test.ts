@@ -21,9 +21,17 @@ describe('loadLanguage', () => {
     expect(storage.setItem).toHaveBeenCalledWith('app_language:7', 'ceb');
   });
 
-  it("an account's saved language wins over the welcome screen's", async () => {
-    signedIn('fil');
+  it('a language picked on the welcome screen wins at login, and is saved', async () => {
+    getItem.mockResolvedValue(null);                         // signed out
     await useLanguageStore.getState().setLanguage('ceb');
+    signedIn('fil');
+    await useLanguageStore.getState().loadLanguage();
+    expect(useLanguageStore.getState().language).toBe('ceb');
+    expect(storage.setItem).toHaveBeenCalledWith('app_language:7', 'ceb');
+  });
+
+  it("with no pick on the welcome screen, the account's saved language is used", async () => {
+    signedIn('fil');
     await useLanguageStore.getState().loadLanguage();
     expect(useLanguageStore.getState().language).toBe('fil');
   });

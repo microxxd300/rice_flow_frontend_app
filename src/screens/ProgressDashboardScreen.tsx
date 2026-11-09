@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, TextInput, KeyboardAvoidingView, Platform, Dimensions, Animated, Easing, Alert, ActivityIndicator, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { NotificationBell } from '@/components/NotificationBell';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -50,10 +50,6 @@ const CROP_STAGES = [
   { stage: 'Harvest Ready',         date: 'Oct 9',   done: false },
 ];
 
-const GROWTH_STAGES = [
-  'Land Prep & Planting', 'Early Growth', 'Tillering', 'Stem Elongation',
-  'Panicle Initiation', 'Heading', 'Grain Filling', 'Ripening', 'Harvesting', 'Post-Harvest',
-];
 
 // The log form: what the farmer logs decides which fields show
 type LogKind = '' | 'step' | 'problem' | 'note';
@@ -255,7 +251,6 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const cached = cachedActiveCycleLogs(selectedFarmId);
   // Real active cycle only (null until loaded or when there is none) — never a sample cycle
   const [loadedCycle,  setCurrentCycle] = useState<any>(cached?.cycle ?? null);
-  const [logStage,     setLogStage]     = useState('');
   const [logDate,      setLogDate]      = useState(daysAgoISO(0));   // the phone's day, not UTC's
   const [pickDate,     setPickDate]     = useState(false);
   const [logIssue,     setLogIssue]     = useState('');
@@ -264,7 +259,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const [logSeverity,  setLogSeverity]  = useState<'' | 'Low' | 'Medium' | 'High'>('');
   const [logAction,    setLogAction]    = useState('');
   const [logNotes,     setLogNotes]     = useState('');
-  const [openStage,    setOpenStage]    = useState(false);
+  const insets = useSafeAreaInsets();
   const [growthStages, setGrowthStages] = useState<any[]>(cached?.stages ?? []);
   const [savingLog,    setSavingLog]    = useState(false);
   // The guide step this log finishes: opened from "Log this step", or the current step
@@ -526,10 +521,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // The stage by the crop's age or steps logged, from the server; the guide's own stage comes first
   const serverStageNo: number | null = dateNotSown ? null : (currentCycle as any)?.stage?.stage_no ?? null;
   // The log's growth stage fills in from the crop's stage, counting the step it finishes;
-  // the farmer only picks one to correct it. Before sowing there is none to file it under.
+  // the farmer never has to pick one. Before sowing there is none to file it under.
   const logDone    = finishesStep && logStepTarget ? [...completedSteps, logStepTarget.id] : completedSteps;
   const autoStage  = notSownWith(logDone) ? '' : stageLabel(guideStageNo(guideList, logDone, serverStageNo) ?? serverStageNo);
-  const shownStage = logStage || autoStage;
+  const shownStage = autoStage;
 
   const formLang = useLanguageStore(st => st.language);
   useEffect(() => {
@@ -695,7 +690,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       }
     }
     setLogIssue(''); setLogProblem(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
-    setLogStage(''); closeLog();
+    closeLog();
     afterGuideLog(doneStep?.key, saved?.sowing_estimate);
     // A booklet problem: its advice and GeoRice AI tip wait under the planting guide
     if (problemKey) navigation.navigateDeprecated('PlantingTab');
@@ -848,7 +843,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           // The card follows the Planting tab: its stage and picture come from the steps logged there
           const stageNo   = finished ? STAGE_COUNT : notSown ? null : guideStageNo(guideList, completedSteps, serverStageNo) ?? serverStageNo;
           const stageName = stageLabel(stageNo) ? logWord(stageLabel(stageNo)) : activeStage;
-          const nextStage = !finished && stageNo != null && stageNo < STAGE_COUNT ? logWord(stageLabel(stageNo + 1)) : '';
+          const nextStage = notSown ? logWord(stageLabel(1))
+            : !finished && stageNo != null && stageNo < STAGE_COUNT ? logWord(stageLabel(stageNo + 1)) : '';
+          const stagePicture = notSown ? empty.no_farm : stageImage(stageNo);   // before sowing: the field being prepared
           // Same as the Planting tab: a harvested crop has finished its guide
           const stepsDone = finished ? guideList.length : guideList.filter(st => completedSteps.includes(st.id)).length;
           const problems  = storeLogs.filter((l: any) => {
@@ -881,13 +878,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   <View style={{ flex: 1 }}>
                     {cycleLoading
                       ? <SkelBar w={190} h={26} br={6} />
-                      : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{!currentCycle ? tr.plogNoCycle : finished ? tr.ovHarvested : notSown ? tr.ovNotSown : stageName}</Text>}
+                      : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{!currentCycle ? tr.plogNoCycle : finished ? tr.ovHarvested : notSown ? tr.stagePrep : stageName}</Text>}
                     {!!nextStage && !cycleLoading && (
                       <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.ovNext.replace('{stage}', nextStage)}</Text>
                     )}
                   </View>
-                  {!cycleLoading && !!stageImage(stageNo) && (
-                    <Image source={stageImage(stageNo)!} style={s.ovStagePic} resizeMode="contain" />
+                  {!cycleLoading && !!stagePicture && (
+                    <Image source={stagePicture!} style={s.ovStagePic} resizeMode="contain" />
                   )}
                 </View>
                 <View style={s.stageTrack}>
@@ -1387,7 +1384,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       <Modal visible={showAddLog} transparent animationType="slide" onRequestClose={askCloseLog}>
         <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={askCloseLog} />
-          <View style={s.modalSheet}>
+          <View style={[s.modalSheet, { paddingBottom: Math.max(32, 20 + insets.bottom) }]}>
             <View style={s.modalHandle} />
             <View style={s.modalHeader}>
               <View style={{ flex: 1 }}>
@@ -1412,7 +1409,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               ))}
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 12 }}>
 
               {/* What is this log? Only that kind's fields follow */}
               <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogWhat}</Text>
@@ -1604,27 +1601,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                     )}
                   </View>
 
-                  {/* The stage fills in from the crop; one line, changed only if wrong */}
-                  <TouchableOpacity style={s.stageLine} onPress={() => setOpenStage(v => !v)} activeOpacity={0.75}>
-                    <Ionicons name="leaf-outline" size={14} color="#6B7280" />
-                    <Text style={[s.stageLineText, T && { fontSize: 13 }]} numberOfLines={1}>
-                      {tr.plogStageLine.replace('{stage}', shownStage ? logWord(shownStage) : '—')}
-                    </Text>
-                    <Text style={[s.stageLineChange, T && { fontSize: 13 }]}>{tr.plogChange}</Text>
-                  </TouchableOpacity>
-                  {openStage && (
-                    <View style={s.mDropMenu}>
-                      {GROWTH_STAGES.map((opt, i) => (
-                        <TouchableOpacity
-                          key={opt}
-                          style={[s.mDropItem, i < GROWTH_STAGES.length - 1 && s.mDropItemBorder]}
-                          onPress={() => { setLogStage(opt); setOpenStage(false); }}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[s.mDropItemText, shownStage === opt && s.mDropItemActive, T && { fontSize: 15 }]}>{logWord(opt)}</Text>
-                          {shownStage === opt && <Ionicons name="checkmark" size={16} color="#059669" />}
-                        </TouchableOpacity>
-                      ))}
+                  {/* The stage comes from the crop and its guide; the farmer never has to pick it */}
+                  {!!shownStage && (
+                    <View style={s.stageLine}>
+                      <Ionicons name="leaf-outline" size={14} color="#6B7280" />
+                      <Text style={[s.stageLineText, T && { fontSize: 13 }]} numberOfLines={1}>
+                        {tr.plogStageLine.replace('{stage}', logWord(shownStage))}
+                      </Text>
                     </View>
                   )}
                 </>
