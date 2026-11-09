@@ -25,7 +25,7 @@ import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { loadFarmData } from '@/services/farmData';
 import { cropDays } from '@/utils/cropDays';
 import { empty, farmPhoto, panaboHour, stageImage, stepIcon, weatherIcon } from '@/assets/illustrations';
-import { loadGuide, refreshCycle } from '@/services/guideLoader';
+import { loadGuide, refreshCycle, restoreGuide } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 
 type Nav = StackNavigationProp<any>;
@@ -96,6 +96,11 @@ export const HomeDashboardScreen: React.FC = () => {
   // ── My crop ──
   // Only a growing crop: a finished season leaves the card asking for the next one
   const cycle    = activeCycle?.status === 'active' && (farmId == null || activeCycle.farm === farmId) ? activeCycle : null;
+  // A growing crop with no guide on the phone (just logged in): bring it back
+  const needsGuide = !!cycle && farmId != null && !latestGuide;
+  useEffect(() => {
+    if (needsGuide) restoreGuide(farmId as number, lang).catch(() => {});
+  }, [needsGuide, farmId, lang]);
   const days     = cropDays(cycle?.planting_date, cycle?.expected_harvest_date);
   const serverStageNo = cycle?.stage?.stage_no ?? null;
   const guideList = guideSteps(latestGuide);
@@ -157,7 +162,7 @@ export const HomeDashboardScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={s.root} edges={['top']}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
 
         {/* Greeting */}
         <View style={s.header}>

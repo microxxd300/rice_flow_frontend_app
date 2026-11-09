@@ -939,7 +939,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               <View style={s.tiles}>
                 {[
                   { lbl: tr.cycHealth,     val: healthScore != null ? String(healthScore) : null, unit: healthScore != null ? '/100' : '', none: tr.ovNoLogs },
-                  { lbl: tr.ovStepsDone,   val: guideList.length ? String(stepsDone) : null,      unit: guideList.length ? `/${guideList.length}` : '', none: tr.ovNoGuide },
+                  { lbl: tr.ovStepsDone,   val: guideList.length ? String(stepsDone) : null,      unit: guideList.length ? `/${guideList.length}` : '', none: finished ? tr.adhAllDone : tr.ovNoGuide },
                   { lbl: tr.ovProblems,    val: String(problems),                                  unit: '', none: '' },
                 ].map(m => (
                   <View key={m.lbl} style={s.tile}>

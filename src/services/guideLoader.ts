@@ -1,4 +1,4 @@
-import { apiGuides } from '@/services/apiService';
+import { apiGuides, apiRecommendations } from '@/services/apiService';
 import { useAppStore, guideVarietyId } from '@/store/appStore';
 import type { Language } from '@/i18n/translations';
 import { fetchActiveCycleLogs } from '@/utils/progressLogs';
@@ -12,7 +12,7 @@ const inflight = new Map<string, Promise<any>>();
  * Load the PalayCheck planting guide for a recommendation in a language and put it in the
  * store. The steps are saved on the server; the language only changes their wording.
  */
-export function loadGuide(recId: number, language: Language): Promise<any> {
+export function loadGuide(recId: number, language: Language, stillWanted?: () => boolean): Promise<any> {
   const key = `${recId}:${language}`;
   const running = inflight.get(key);
   if (running) return running;
@@ -22,6 +22,7 @@ export function loadGuide(recId: number, language: Language): Promise<any> {
     language,
   })
     .then(res => {
+      if (stillWanted && !stillWanted()) return res.data;
       const store = useAppStore.getState();
       store.setLatestGuide(res.data);
       // Restore check-offs from the server rows (survives reinstall / other devices).
@@ -43,6 +44,23 @@ export function loadGuide(recId: number, language: Language): Promise<any> {
 
   inflight.set(key, request);
   return request;
+}
+
+/**
+ * After a login or reinstall only the farm comes back. Load its latest recommendation and
+ * guide, so tasks, the sowing question, reminders and Progress work before Guide is opened.
+ */
+export async function restoreGuide(farmId: number, language: Language): Promise<void> {
+  const stillWanted = () => useAppStore.getState().selectedFarmId === farmId;
+  let recId = useAppStore.getState().latestRecommendation?.id;
+  if (!recId) {
+    const recs: any[] = (await apiRecommendations.history(farmId)).data ?? [];
+    if (!recs.length || !stillWanted()) return;
+    const latest = recs.reduce((max, r) => ((r.id ?? 0) > (max.id ?? 0) ? r : max), recs[0]);
+    useAppStore.getState().setLatestRecommendation(latest);
+    recId = latest.id;
+  }
+  await loadGuide(recId as number, language, stillWanted);
 }
 
 /** Reload the farm's crop cycle into the store: its stage and dates follow the guide. */
