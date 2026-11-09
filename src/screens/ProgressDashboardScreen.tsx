@@ -20,6 +20,7 @@ import { useStepAdvice } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
+import { DatePickerField } from '@/components/DatePickerField';
 import { HARVEST_KEYS, SOWING_KEYS, daysAgoISO, sowingQuestionDue } from '@/utils/sowing';
 import { cropIsOver } from '@/utils/nextCrop';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
@@ -864,7 +865,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           const showYield  = shownTons != null;
           const sacks      = showYield ? Math.round((shownTons! * 1000) / CAVAN_KG) : null;
           // By the crop's age too, so a farmer who stopped logging is still asked about the harvest
-          const harvestDue = Math.max(stageNo ?? 0, serverStageNo ?? 0) >= HARVEST_STAGE_NO && (currentCycle as any)?.yield_per_ha == null;
+          const harvestDue = Math.max(stageNo ?? 0, (currentCycle as any)?.age_stage_no ?? serverStageNo ?? 0) >= HARVEST_STAGE_NO && (currentCycle as any)?.yield_per_ha == null;
           const guidePct   = guideList.length ? Math.round((stepsDone / guideList.length) * 100) : null;
           return (
             <>
@@ -1561,7 +1562,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                     </View>
                   </View>
 
-                  {/* The day: one tap for today or yesterday, typing only for another day */}
+                  {/* The day: one tap for today or yesterday, the date wheels for another day */}
                   <View style={s.mFieldWrap}>
                     <Text style={[s.mLabel, T && { fontSize: 14 }]}>{tr.plogDate}</Text>
                     <View style={s.dateRow}>
@@ -1587,18 +1588,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         <Text style={[s.dateChipText, pickDate && s.dateChipTextOn, T && { fontSize: 14 }]}>{tr.plogPickDate}</Text>
                       </TouchableOpacity>
                     </View>
-                    {pickDate && (
-                      <View style={[s.mInputBox, { marginTop: 8 }]}>
-                        <Ionicons name="calendar-outline" size={16} color="#9CA3AF" />
-                        <TextInput
-                          style={[s.mInput, T && { fontSize: 16 }]}
-                          placeholder="YYYY-MM-DD"
-                          placeholderTextColor="#9CA3AF"
-                          value={logDate}
-                          onChangeText={setLogDate}
-                        />
-                      </View>
-                    )}
+                    {pickDate && <DatePickerField value={logDate} onChange={setLogDate} autoOpen style={{ marginTop: 8 }} />}
                   </View>
 
                   {/* The stage comes from the crop and its guide; the farmer never has to pick it */}

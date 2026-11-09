@@ -111,7 +111,7 @@ export const HomeDashboardScreen: React.FC = () => {
   const stageKey = LOG_WORD_KEYS[stageLabel(stageNo)];
   const stageTxt = notSown ? tr.stagePrep : stageKey ? (tr as any)[stageKey] : (cycle?.stage?.name ?? '');
   const stagePicture = notSown ? empty.no_farm : stageImage(stageNo);   // before sowing: the field being prepared
-  const harvestDue = !!cycle && Math.max(stageNo ?? 0, serverStageNo ?? 0) >= HARVEST_STAGE_NO && cycle.yield_per_ha == null;
+  const harvestDue = !!cycle && Math.max(stageNo ?? 0, (cycle as any).age_stage_no ?? serverStageNo ?? 0) >= HARVEST_STAGE_NO && cycle.yield_per_ha == null;
 
   const topResult = latestRecommendation?.results?.[0];
   const topScore  = topResult ? Math.round(topResult.rsi_score) : null;

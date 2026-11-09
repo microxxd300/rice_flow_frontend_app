@@ -23,7 +23,7 @@ export function sowingQuestionDue(guide: any, completedIds: string[], today: Dat
 }
 
 // The same limit as the server (OLDEST_SOWING_DAYS in guides/sowing.py)
-const OLDEST_SOWING_DAYS = 150;
+export const OLDEST_SOWING_DAYS = 150;
 
 /** True for a real YYYY-MM-DD date, not in the future, that the server will accept. */
 export function validSowingDate(text: string, today: Date = new Date()): boolean {
@@ -34,6 +34,26 @@ export function validSowingDate(text: string, today: Date = new Date()): boolean
   if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return false;
   const iso = text.trim();
   return iso <= daysAgoISO(0, today) && iso >= daysAgoISO(OLDEST_SOWING_DAYS, today);
+}
+
+/** YYYY-MM-DD from a date, in the phone's time. */
+export function isoFromDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** The date of a YYYY-MM-DD text, in the phone's time. */
+export function dateFromISO(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** "Nov 14" from YYYY-MM-DD, in the app language's month names. */
+export function shortDate(iso: string | null | undefined, tr: any): string {
+  const [y, m, d] = String(iso ?? '').split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const months = [tr.monShortJan, tr.monShortFeb, tr.monShortMar, tr.monShortApr, tr.monShortMay, tr.monShortJun,
+                  tr.monShortJul, tr.monShortAug, tr.monShortSep, tr.monShortOct, tr.monShortNov, tr.monShortDec];
+  return `${months[m - 1]} ${d}`;
 }
 
 /** YYYY-MM-DD for a day `daysAgo` before today, in the phone's time. */

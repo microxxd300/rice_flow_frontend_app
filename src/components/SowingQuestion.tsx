@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAppStore } from '@/store/appStore';
 import { cropIsOver } from '@/utils/nextCrop';
@@ -7,16 +7,10 @@ import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useAccessibility } from '@/context/AccessibilityContext';
 import { answerSowing } from '@/services/guideLoader';
-import { daysAgoISO, sowingQuestionDue, validSowingDate } from '@/utils/sowing';
+import { DatePickerField } from '@/components/DatePickerField';
+import { OLDEST_SOWING_DAYS, dateFromISO, daysAgoISO, shortDate, sowingQuestionDue, validSowingDate } from '@/utils/sowing';
 
-/** "Nov 14" from YYYY-MM-DD, in the app language's month names. */
-export function shortDate(iso: string | null | undefined, tr: any): string {
-  const [y, m, d] = String(iso ?? '').split('-').map(Number);
-  if (!y || !m || !d) return '';
-  const months = [tr.monShortJan, tr.monShortFeb, tr.monShortMar, tr.monShortApr, tr.monShortMay, tr.monShortJun,
-                  tr.monShortJul, tr.monShortAug, tr.monShortSep, tr.monShortOct, tr.monShortNov, tr.monShortDec];
-  return `${months[m - 1]} ${d}`;
-}
+export { shortDate };
 
 const EARLIER_DAYS = [1, 2, 3, 5, 7];
 
@@ -89,13 +83,12 @@ export const SowingQuestion: React.FC = () => {
           </View>
           {typing && (
             <View style={s.dateRow}>
-              <TextInput
-                style={[s.dateInput, T && { fontSize: 16 }]}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#9CA3AF"
+              <DatePickerField
                 value={typed}
-                onChangeText={setTyped}
-                autoFocus
+                onChange={setTyped}
+                minimumDate={dateFromISO(daysAgoISO(OLDEST_SOWING_DAYS))}
+                autoOpen
+                style={s.dateInput}
               />
               <TouchableOpacity style={s.dateBtn} onPress={sendTyped} activeOpacity={0.85}>
                 <Text style={[s.btnMainText, T && { fontSize: 15 }]}>{tr.sowUseDate}</Text>
@@ -144,9 +137,6 @@ const s = StyleSheet.create({
   },
   chipText: { fontSize: 13, fontWeight: '600', color: '#065F46' },
   dateRow:  { flexDirection: 'row', gap: 8, marginTop: 10 },
-  dateInput: {
-    flex: 1, height: 42, borderRadius: 10, borderWidth: 1, borderColor: '#A7F3D0',
-    backgroundColor: '#FFFFFF', paddingHorizontal: 12, fontSize: 14, color: '#111827',
-  },
+  dateInput: { flex: 1, minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: '#A7F3D0', backgroundColor: '#FFFFFF', paddingHorizontal: 10 },
   dateBtn: { height: 42, borderRadius: 10, backgroundColor: '#059669', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
 });
