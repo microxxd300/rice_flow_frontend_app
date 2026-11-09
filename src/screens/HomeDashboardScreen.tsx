@@ -109,7 +109,8 @@ export const HomeDashboardScreen: React.FC = () => {
     || (sowingQuestionDue(latestGuide, completedGuideSteps) && guideStageNo(guideList, completedGuideSteps) === 1);
   const stageNo  = notSown ? null : guideStageNo(guideList, completedGuideSteps, serverStageNo) ?? serverStageNo;   // same as the Progress card
   const stageKey = LOG_WORD_KEYS[stageLabel(stageNo)];
-  const stageTxt = notSown ? '' : stageKey ? (tr as any)[stageKey] : (cycle?.stage?.name ?? '');
+  const stageTxt = notSown ? tr.stagePrep : stageKey ? (tr as any)[stageKey] : (cycle?.stage?.name ?? '');
+  const stagePicture = notSown ? empty.no_farm : stageImage(stageNo);   // before sowing: the field being prepared
   const harvestDue = !!cycle && Math.max(stageNo ?? 0, serverStageNo ?? 0) >= HARVEST_STAGE_NO && cycle.yield_per_ha == null;
 
   const topResult = latestRecommendation?.results?.[0];
@@ -193,7 +194,7 @@ export const HomeDashboardScreen: React.FC = () => {
                 {!!stageTxt && <Text style={[s.cropStage, T && { fontSize: 16 }]}>{stageTxt}</Text>}
               </View>
               {/* The rice plant at today's stage */}
-              {!!stageImage(stageNo) && <Image source={stageImage(stageNo)!} style={s.stagePic} resizeMode="contain" />}
+              {!!stagePicture && <Image source={stagePicture} style={s.stagePic} resizeMode="contain" />}
             </View>
 
             {days && !notSown ? (

@@ -13,8 +13,10 @@ import { apiProgress, apiPredictions, apiScan } from '@/services/apiService';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
-import { daysAgoISO } from '@/utils/sowing';
-import { firstError } from '@/utils/passwordReset';
+import { daysAgoISO, validSowingDate } from '@/utils/sowing';
+import { answerSowing } from '@/services/guideLoader';
+import { shortDate } from '@/components/SowingQuestion';
+import { useLanguageStore } from '@/store/languageStore';
 import { CAVAN_KG, DRY_MOISTURE, FRESH_MOISTURE, harvestFigures } from '@/utils/harvest';
 
 interface YieldRecordScreenProps {
@@ -84,6 +86,10 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
   const [moisture,       setMoisture]       = useState(DRY_MOISTURE);
   const [grainQuality,   setGrainQuality]   = useState('');
   const [harvestMethod,  setHarvestMethod]  = useState('');
+  const [askSowing,      setAskSowing]      = useState(false);   // the harvest came before the saved sowing day
+  const [sowingText,     setSowingText]     = useState('');
+  const [fixingSowing,   setFixingSowing]   = useState(false);
+  const language = useLanguageStore(st => st.language);
 
   const figures = harvestFigures(parseFloat(sacks), parseFloat(kgPerSack), parseFloat(areaHarvested), moisture);
 
@@ -98,6 +104,34 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
     ]);
   }), [navigation, unsaved, tr]);
 
+  // Only a growing crop's sowing day can still be moved
+  const explainSowing = () => {
+    const cycle = useAppStore.getState().activeCycle as any;
+    const buttons: any[] = cycle?.status === 'active'
+      ? [{ text: tr.cancel, style: 'cancel' }, { text: tr.yhFixSowing, onPress: () => setAskSowing(true) }]
+      : [{ text: 'OK' }];
+    Alert.alert(tr.yhNotSavedT, tr.yhBeforeSowing.replace('{date}', shortDate(cycle?.planting_date, tr)), buttons);
+  };
+
+  const fixSowing = async () => {
+    const date = sowingText.trim();
+    if (!validSowingDate(date) || date >= harvestDate) {
+      Alert.alert(tr.yhFixSowing, tr.sowBadDate);
+      return;
+    }
+    setFixingSowing(true);
+    try {
+      await answerSowing(true, date, language);
+      setAskSowing(false);
+      setSowingText('');
+      await handleSave();
+    } catch {
+      Alert.alert(tr.yhFixSowing, tr.sowFailed);
+    } finally {
+      setFixingSowing(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!figures || figures.impossible) {
       Alert.alert(tr.yieldRecordHeader, figures ? tr.yhImpossible : tr.yhNeed);
@@ -105,6 +139,11 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
     }
     if (!cycleId) {   // nothing to attach it to: never report a harvest that was not saved
       Alert.alert(tr.yhNotSavedT, tr.plogNotSavedB);
+      return;
+    }
+    const cycleNow = useAppStore.getState().activeCycle as any;
+    if (cycleNow?.id === cycleId && cycleNow?.planting_date && harvestDate <= cycleNow.planting_date) {
+      explainSowing();
       return;
     }
     setLoading(true);
@@ -129,8 +168,9 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
       }));
       setRecordSaved(true);
       // The server ends the season with the harvest: Home and Progress follow at once
-      if (activeCycle?.id === cycleId) {
-        useAppStore.getState().setActiveCycle({ ...activeCycle, status: 'completed', yield_per_ha: figures.tHa });
+      const latestCycle = useAppStore.getState().activeCycle as any;
+      if (latestCycle?.id === cycleId) {
+        useAppStore.getState().setActiveCycle({ ...latestCycle, status: 'completed', yield_per_ha: figures.tHa });
       }
       try {
         // Predict from the farm's own conditions (latest scan + variety), never from the
@@ -159,7 +199,8 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
       setSaved(true);
     } catch (err: any) {
       const data = err?.response?.data;
-      Alert.alert(tr.yhNotSavedT, firstError(data?.harvest_date) ?? firstError(data?.net_yield_kg) ?? tr.plogNotSavedB);
+      if (data?.harvest_date) explainSowing();
+      else Alert.alert(tr.yhNotSavedT, data?.net_yield_kg ? tr.yhImpossible : tr.plogNotSavedB);
     } finally {
       setLoading(false);
     }
@@ -398,6 +439,27 @@ export const YieldRecordScreen: React.FC<YieldRecordScreenProps> = ({ onSaveYiel
 
           </View>
         </View>
+
+        {/* The harvest came before the saved sowing day: correct the sowing day here */}
+        {askSowing && (
+          <View style={[s.section, { marginTop: 20 }]}>
+            <View style={s.card}>
+              <Text style={[s.label, T && { fontSize: 14 }]}>{tr.yhSowQuestion}</Text>
+              <View style={s.inputBox}>
+                <RNTextInput
+                  style={[s.input, T && { fontSize: 16 }]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#9CA3AF"
+                  value={sowingText}
+                  onChangeText={setSowingText}
+                />
+              </View>
+              <TouchableOpacity style={[s.saveBtn, { flex: 0, marginTop: 12 }]} onPress={fixSowing} disabled={fixingSowing} activeOpacity={0.85}>
+                <Text style={[s.saveBtnText, T && { fontSize: 15 }]}>{fixingSowing ? tr.yhSaving : tr.yhFixSowing}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Save button row — primary/secondary */}
         <View style={[s.section, { flexDirection: 'row', gap: 10, marginTop: 20 }]}>

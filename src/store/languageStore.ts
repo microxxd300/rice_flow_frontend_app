@@ -32,6 +32,7 @@ async function currentUserId(): Promise<string | null> {
 
 interface LanguageState {
   language: Language;
+  pickedSignedOut: boolean;   // chosen on the welcome screen, before this login
   setLanguage:   (lang: Language) => Promise<void>;
   loadLanguage:  () => Promise<void>;
   resetLanguage: () => void;
@@ -39,6 +40,7 @@ interface LanguageState {
 
 export const useLanguageStore = create<LanguageState>((set, get) => ({
   language: DEFAULT_LANGUAGE,
+  pickedSignedOut: false,
 
   setLanguage: async (lang) => {
     set({ language: lang });
@@ -46,6 +48,7 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
     // Signed out (e.g. picking a language on the auth screens): keep the choice
     // in memory only, so it can't bleed into the next account on this device.
     if (userId) await storage.setItem(keyFor(userId), lang);
+    else set({ pickedSignedOut: true });
   },
 
   /** Load the signed-in user's saved language. Call after login so the new
@@ -60,6 +63,12 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
       set({ language: DEFAULT_LANGUAGE });
       return;
     }
+    // Picked on the welcome screen just now: that choice is the newest one
+    if (get().pickedSignedOut) {
+      set({ pickedSignedOut: false });
+      await storage.setItem(keyFor(userId), get().language);
+      return;
+    }
     const saved = await storage.getItem<Language>(keyFor(userId));
     if (isValid(saved)) { set({ language: saved }); return; }
     // No saved value = new account: it keeps the language picked on the welcome
@@ -70,5 +79,5 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
 
   /** Logout: drop back to the default in memory. The user's own key stays on
    *  disk, so their language is restored when they log back in. */
-  resetLanguage: () => set({ language: DEFAULT_LANGUAGE }),
+  resetLanguage: () => set({ language: DEFAULT_LANGUAGE, pickedSignedOut: false }),
 }));
