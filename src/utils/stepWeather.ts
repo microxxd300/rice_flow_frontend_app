@@ -17,16 +17,23 @@ export const WEATHER_LIMITS = {
   harvestRain48h:   10,   // enough rain in 2 days to wet cut or drying palay
   harvestChance24h: 70,
   sprayWind:        15,   // spray drifts off the field in stronger wind
+  strongWind:       40,   // field work is unsafe, young plants can lodge
+  heatC:            35,   // heat stress for people and for flowering rice
+  dryRain48h:       1,    // less than this in 2 days, with a low chance, counts as no rain coming
+  dryChance48h:     30,
 };
 // Only steps due within this many days get weather advice (the forecast looks 2 days ahead)
 export const WEATHER_DUE_WITHIN_DAYS = 2;
+// The step the farmer should do next can be started early, so it is warned about sooner
+export const WEATHER_CURRENT_WITHIN_DAYS = 7;
 // An older forecast (phone offline) is not used for advice
 export const FORECAST_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
 export type WeatherAdviceCode =
   | 'fertilizerHeavyRain' | 'fertilizerRainSoon' | 'noSpray' | 'herbicideWait'
   | 'sowHeavyRain' | 'fieldHeavyRain' | 'waterHeavyRain' | 'drainRain'
-  | 'harvestRain' | 'dryRain';
+  | 'harvestRain' | 'dryRain'
+  | 'fieldRainSoon' | 'sowRainSoon' | 'floodWatch' | 'strongWind' | 'heat' | 'dryAhead';
 
 export interface StepWeather {
   level: 'stop' | 'caution';   // stop = do not do the step now; caution = do it with care
@@ -42,9 +49,10 @@ export function stepWeather(
   step: Pick<GuideStep, 'key' | 'daysAfterPlanting'> | null | undefined,
   outlook: WeatherOutlook | null | undefined,
   guideToday: number,
+  isCurrent = false,
 ): StepWeather | null {
   if (!step || !outlook) return null;
-  if (step.daysAfterPlanting > guideToday + WEATHER_DUE_WITHIN_DAYS) return null;
+  if (step.daysAfterPlanting > guideToday + (isCurrent ? WEATHER_CURRENT_WITHIN_DAYS : WEATHER_DUE_WITHIN_DAYS)) return null;
   const L = WEATHER_LIMITS;
   const rainSoon = outlook.rain_prob_6h >= L.rainSoonChance || outlook.rain_mm_6h >= L.rainSoonMm;
   const key = step.key;
@@ -60,8 +68,12 @@ export function stepWeather(
   if (SOWING.includes(key) && outlook.rain_mm_24h >= L.veryHeavyRain24h) {
     return { level: 'caution', code: 'sowHeavyRain' };
   }
+  if (SOWING.includes(key) && rainSoon) return { level: 'caution', code: 'sowRainSoon' };
   if (FIELD_WORK.includes(key) && outlook.rain_mm_24h >= L.veryHeavyRain24h) {
     return { level: 'caution', code: 'fieldHeavyRain' };
+  }
+  if (FIELD_WORK.includes(key) && (rainSoon || outlook.rain_mm_24h >= L.heavyRain24h)) {
+    return { level: 'caution', code: 'fieldRainSoon' };
   }
   if (WATER.includes(key) && outlook.rain_mm_24h >= L.heavyRain24h) {
     return { level: 'caution', code: 'waterHeavyRain' };
@@ -71,6 +83,13 @@ export function stepWeather(
     return { level: 'stop', code: 'harvestRain' };
   }
   if (key === 'drystore' && rainSoon) return { level: 'stop', code: 'dryRain' };
+  // Any other step: weather that makes work in the field risky
+  if (outlook.rain_mm_24h >= L.veryHeavyRain24h) return { level: 'caution', code: 'floodWatch' };
+  if (outlook.wind_kph_max_12h >= L.strongWind) return { level: 'caution', code: 'strongWind' };
+  if ((outlook.temp_c_max_24h ?? 0) >= L.heatC) return { level: 'caution', code: 'heat' };
+  if (WATER.includes(key) && outlook.rain_mm_48h < L.dryRain48h && outlook.rain_prob_48h < L.dryChance48h) {
+    return { level: 'caution', code: 'dryAhead' };
+  }
   return null;
 }
 
@@ -96,4 +115,18 @@ export const ADVICE_TEXT: Record<WeatherAdviceCode, string> = {
   drainRain:           'wxAdviceDrain',
   harvestRain:         'wxAdviceHarvest',
   dryRain:             'wxAdviceDry',
+  fieldRainSoon:       'wxAdviceFieldSoon',
+  sowRainSoon:         'wxAdviceSowSoon',
+  floodWatch:          'wxAdviceFlood',
+  strongWind:          'wxAdviceWind',
+  heat:                'wxAdviceHeat',
+  dryAhead:            'wxAdviceDryAhead',
 };
+
+/** The icon for a warning. */
+export const adviceIcon = (code: string): 'moon-outline' | 'sunny-outline' | 'flag-outline' | 'water-outline' | 'rainy-outline' =>
+  code === 'nightWork' ? 'moon-outline'
+    : code === 'heat' ? 'sunny-outline'
+    : code === 'strongWind' ? 'flag-outline'
+    : code === 'dryAhead' ? 'water-outline'
+    : 'rainy-outline';

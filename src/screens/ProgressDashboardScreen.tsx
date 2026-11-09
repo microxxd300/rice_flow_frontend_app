@@ -20,15 +20,16 @@ import { useStepAdvice } from '@/hooks/useFarmForecast';
 import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
-import { HARVEST_KEYS, SOWING_KEYS, daysAgoISO } from '@/utils/sowing';
+import { HARVEST_KEYS, SOWING_KEYS, daysAgoISO, sowingQuestionDue } from '@/utils/sowing';
+import { cropIsOver } from '@/utils/nextCrop';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
-import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
+import { guideSteps, guideProgress, guideDay, guideStageNo } from '@/utils/guideSteps';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { cropDays } from '@/utils/cropDays';
 import { CAVAN_KG } from '@/utils/harvest';
 import { empty, stageImage } from '@/assets/illustrations';
-import { seasonLabel } from '@/utils/formatting';
+import { seasonInLanguage, seasonLabel } from '@/utils/formatting';
 import { ISSUE_TO_API, LOG_WORD_KEYS, STAGE_NO, cachedActiveCycleLogs, fetchActiveCycleLogs, mergeLogs, stageLabel } from '@/utils/progressLogs';
 
 interface ProgressDashboardScreenProps {
@@ -87,9 +88,10 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 const STAGE_COUNT      = 10;
 // Tallest bar in the Trends yield chart
 const BAR_MAX_H        = 120;
+const BAR_SLOTS        = 6;     // five past seasons and this one
 const HARVEST_STAGE_NO = 9;
 
-const EmptyYieldChart: React.FC<{ width: number; onRecord: () => void }> = ({
+const EmptyYieldChart: React.FC<{ width: number; onRecord?: () => void }> = ({
   width, onRecord,
 }) => {
   const svgH    = 90;
@@ -154,7 +156,7 @@ const EmptyYieldChart: React.FC<{ width: number; onRecord: () => void }> = ({
       <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 4, textAlign: 'center' }}>
         No harvest recorded yet. Record your first harvest to see your yield history.
       </Text>
-      <TouchableOpacity
+      {onRecord && <TouchableOpacity
         onPress={onRecord}
         activeOpacity={0.85}
         style={{
@@ -166,7 +168,7 @@ const EmptyYieldChart: React.FC<{ width: number; onRecord: () => void }> = ({
       >
         <Ionicons name="add" size={16} color="#111827" />
         <Text style={{ fontSize: 13, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Record Harvest</Text>
-      </TouchableOpacity>
+      </TouchableOpacity>}
     </View>
   );
 };
@@ -223,7 +225,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   onViewHistory,
 }) => {
   const navigation = useNavigation<StackNavigationProp<any>>();
-  const route      = useRoute<RouteProp<{ params: { tab?: string; highlight?: string } }, 'params'>>();
+  const route      = useRoute<RouteProp<{ params: { tab?: string; highlight?: string; at?: number } }, 'params'>>();
   const { isLargeText } = useAccessibility();
   const T = isLargeText;
   const tr = useTranslation();
@@ -238,6 +240,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const initialTab     = (route.params?.tab as 'overview' | 'logs' | 'trends') ?? 'overview';
   const yieldJustSaved = route.params?.highlight === 'yield';
   const [selectedTab,  setSelectedTab]  = useState<'overview' | 'logs' | 'trends'>(initialTab);
+  // This screen stays open behind others: coming back with a tab (and a new `at`) opens that tab
+  useEffect(() => {
+    if (route.params?.tab) setSelectedTab(route.params.tab as 'overview' | 'logs' | 'trends');
+  }, [route.params?.tab, route.params?.at]);
   const [showAddLog,   setShowAddLog]   = useState(false);
   // Source of truth = persisted store.progressLogs; backend logs merged on mount. Mock only as fallback.
   const storeLogs = useAppStore(s => s.progressLogs);
@@ -270,36 +276,32 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // A newer copy of this cycle in the store (refreshCycle, after a log or a sowing answer)
   // wins, so its stage and dates change at once
   const currentCycle = activeCycle && loadedCycle && activeCycle.id === loadedCycle.id ? activeCycle : loadedCycle;
-  // The log's growth stage fills in from the crop's stage (the cycle follows the guide);
-  // the farmer only picks one to correct it
-  const autoStage  = stageLabel((currentCycle as any)?.stage?.stage_no);
-  const shownStage = logStage || autoStage;
   // Skeletons only when there is nothing to show yet
   const [cycleLoading, setCycleLoading] = useState(!cached);
 
   // Load real cycles and logs on mount AND whenever the selected farm changes
   useEffect(() => {
+    // A slower answer for the farm the farmer just left must not land on the new farm
+    let stale = false;
     const load = async () => {
       try {
         const { cycle, stages, logs } = await fetchActiveCycleLogs(selectedFarmId);
+        if (stale) return;
         setGrowthStages(stages);
-        if (cycle) {
-          setCurrentCycle(cycle);
-          useAppStore.getState().setActiveCycle(cycle);
-          if (logs.length > 0) {
-            useAppStore.getState().setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs));
-          }
-        }
+        setCurrentCycle(cycle);
+        const store = useAppStore.getState();
+        store.setActiveCycle(cycle);
+        store.setProgressLogs(mergeLogs(logs, store.progressLogs, cycle?.id));
       } catch {}
-      finally { setCycleLoading(false); }
+      finally { if (!stale) setCycleLoading(false); }
     };
     const known = cachedActiveCycleLogs(selectedFarmId);
-    if (known) {
-      setCurrentCycle(known.cycle);
-      setGrowthStages(known.stages);
-    }
+    // Never keep the last farm's cycle: a log saved now would be filed under that farm
+    setCurrentCycle(known?.cycle ?? null);
+    if (known) setGrowthStages(known.stages);
     setCycleLoading(!known);
     load();
+    return () => { stale = true; };
   }, [selectedFarmId]);
 
   // Shimmer sweep — gradient highlight moves left→right across all skeletons
@@ -385,6 +387,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     return d;
   })();
   const hasRealCycle    = cycleStart !== null;
+  // A crop whose sowing day is still ahead: no growth stage, day count or harvest yet
+  const dateNotSown     = !!currentCycle && (cropDays(plantingDateStr)?.day ?? 1) < 1;
   // Sowing still ahead: the cycle follows the guide's sowing day, which is set
   // after seed and land preparation. Days until then, else null.
   const daysToSowing    = (() => {
@@ -396,10 +400,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   })();
   const sowingLabel     = daysToSowing ? tr.cycSowIn.replace('{n}', String(daysToSowing)) : null;
   const CURRENT_DAY     = cycleStart
-    ? Math.min(cycleDays, Math.max(1, Math.floor((today.getTime() - cycleStart.getTime()) / 86400000) + 1))
-    : 1;
+    ? Math.min(cycleDays, Math.max(0, cropDays(plantingDateStr)?.daysAfterSowing ?? 0))   // 0 on the sowing day, as on the guide
+    : 0;
   const cyclePct        = hasRealCycle
-    ? Math.min(100, Math.round(((CURRENT_DAY - 1) / cycleDays) * 100))
+    ? Math.min(100, Math.round((CURRENT_DAY / cycleDays) * 100))
     : 0;
 
   // Animate the loaded progress fill (0% → cyclePct%) + continuous shimmer sweep on it
@@ -446,7 +450,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     let penalty = 0;
     for (const l of recentLogs as any[]) {
       const issue = String(l.observedIssue ?? l.observed_issue ?? '').trim();
-      if (!issue || issue === 'None' || issue === 'Wala') continue;
+      if (!issue || issue === 'None' || issue === 'Wala' || l.resolvedAt) continue;   // a fixed problem no longer counts
       const sev = String(l.severity ?? '').trim();
       penalty += SEV_PENALTY[sev] ?? 5;
     }
@@ -457,7 +461,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   // Falls back to variety_avg × area only if the model call fails (no scan/network).
   const farmArea       = (selectedFarm as any)?.area_hectares ?? 2.5;
   const yieldPerHa     = variety?.avg_yield_t_ha ?? 6.5;
-  const [predictedYield, setPredictedYield] = useState<number | null>(null);
+  const [predictedYield, setPredictedYield] = useState<number | null>(null);   // tons for the whole farm
+  const [predictedPerHa, setPredictedPerHa] = useState<number | null>(null);
   const [predModel,      setPredModel]      = useState<string | null>(null);
   const [predR2,         setPredR2]         = useState<number | null>(null);
   // expectedYield = variety_avg × area fallback for charts; metric card uses
@@ -466,7 +471,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   useEffect(() => {
     const farmId = selectedFarmId;
-    if (!farmId) return;
+    if (!farmId) return undefined;
+    // Never leave the last farm's number on screen, or let a slower answer replace this farm's
+    let stale = false;
+    setPredictedYield(null);
+    setPredictedPerHa(null);
     (async () => {
       try {
         // Pull the most recent environmental scan to feed all 11 model features
@@ -492,12 +501,15 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           variety_id:        currentCycle?.variety ?? variety?.id,
           season:            currentCycle?.season,
         });
+        if (stale) return;
         const tons = +(res.data.predicted_yield_t_ha * farmArea).toFixed(1);
         setPredictedYield(tons);
+        setPredictedPerHa(res.data.predicted_yield_t_ha);
         setPredModel(res.data.model_used);
         setPredR2(res.data.r2_score);
       } catch {}
     })();
+    return () => { stale = true; };
   }, [selectedFarmId, variety, farmArea, currentCycle?.id]);
 
   // The PalayCheck guide, one step at a time (same rule as the Planting tab and Home)
@@ -507,6 +519,17 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   const logStepTarget  = guideList.find(st => st.id === (logStep ?? guideNow.current?.id));
   // Today's day of the guide (0 = sowing); a step before it is overdue
   const guideToday     = guideDay(latestGuide);
+  // Not sown: the sowing day is ahead, or "Did you sow already?" is still open with no later step logged
+  const notSownWith = (done: string[]) => dateNotSown
+    || (!cropIsOver(currentCycle) && sowingQuestionDue(latestGuide, done) && guideStageNo(guideList, done) === 1);
+  const notSown = notSownWith(completedSteps);
+  // The stage by the crop's age or steps logged, from the server; the guide's own stage comes first
+  const serverStageNo: number | null = dateNotSown ? null : (currentCycle as any)?.stage?.stage_no ?? null;
+  // The log's growth stage fills in from the crop's stage, counting the step it finishes;
+  // the farmer only picks one to correct it. Before sowing there is none to file it under.
+  const logDone    = finishesStep && logStepTarget ? [...completedSteps, logStepTarget.id] : completedSteps;
+  const autoStage  = notSownWith(logDone) ? '' : stageLabel(guideStageNo(guideList, logDone, serverStageNo) ?? serverStageNo);
+  const shownStage = logStage || autoStage;
 
   const formLang = useLanguageStore(st => st.language);
   useEffect(() => {
@@ -527,6 +550,24 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     setLogDate(daysAgoISO(0));
     setPickDate(false);
   };
+  // A fixed problem stops lowering plant health, here and on the guide's problem card
+  const markLogFixed = async (log: any) => {
+    const at = new Date().toISOString();
+    try {
+      await apiProgress.updateLog(Number(log.id), { resolved_at: at });
+      useAppStore.getState().markProgressLogFixed(String(log.id), at);
+    } catch {
+      Alert.alert(tr.plogNotSavedT, tr.plogNotSavedB);
+    }
+  };
+  // Android Back or a tap outside the sheet: ask first if something has been filled in
+  const askCloseLog = () => {
+    if (!logKind && !logNotes.trim() && !logAction.trim()) { closeLog(); return; }
+    Alert.alert(tr.leaveFormTitle, tr.leaveFormBody, [
+      { text: tr.leaveFormStay, style: 'cancel' },
+      { text: tr.leaveFormLeave, style: 'destructive', onPress: closeLog },
+    ]);
+  };
   // Sent from the Planting tab or Home's Upcoming Tasks
   const pendingLogStep = useAppStore(s => s.pendingLogStep);
   useEffect(() => {
@@ -542,7 +583,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   // Real seasonal yields — one record per cycle that has a saved yield
   const [realYields, setRealYields] = useState<{ season: string; yieldTons: number; tHa: number | null }[]>([]);
+  const harvestStamp = `${activeCycle?.id}-${activeCycle?.status}-${activeCycle?.yield_per_ha}`;   // changes when a harvest is saved
   useEffect(() => {
+    let stale = false;
     const load = async () => {
       try {
         const farmId    = selectedFarmId;
@@ -559,11 +602,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             }
           } catch {}
         }
-        setRealYields(out.reverse());   // the server lists the newest first
+        if (!stale) setRealYields(out.reverse());   // the server lists the newest first
       } catch {}
     };
     load();
-  }, [selectedFarmId]);
+    return () => { stale = true; };
+  }, [selectedFarmId, harvestStamp]);
 
   const handleSaveLog = async () => {
     if (savingLog) return;
@@ -627,28 +671,28 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     // The server marked the step done with the log; the guide moves on to the next step
     if (doneStep) useAppStore.getState().markGuideStepDone(doneStep.id);
 
-    // In-app notification (always fires) with deep-link to the relevant guide category
+    // A log about a problem points to the guide section that helps; other logs stay out of the bell
     {
       const text = `${logIssue} ${logNotes}`.toLowerCase();
       let category: string | undefined;
       let label    = '';
       let icon     = 'document-text-outline';
-      if (/peste|insekto|pesticide|brown ?spot|blast|sheath|disease|sakit/i.test(text)) {
-        category = 'pest_prevention'; label = 'Pest Prevention'; icon = 'shield-checkmark-outline';
+      if (/peste|insect|insekto|pesticide|brown ?spot|blast|sheath|disease|sakit/i.test(text)) {
+        category = 'pest_prevention'; label = tr.catPest; icon = 'shield-checkmark-outline';
       } else if (/dilaw|yellow|nutrient|nitrogen|potassium|pataba|fertilizer/i.test(text)) {
-        category = 'fertilizer';      label = 'Fertilizer';          icon = 'flask-outline';
+        category = 'fertilizer';      label = tr.catFertilizer; icon = 'flask-outline';
       } else if (/water|flood|baha|tubig|drain|patubig|tagtuyot|\btuyot\b|drought/i.test(text)) {
-        category = 'irrigation';      label = 'Irrigation';          icon = 'water-outline';
+        category = 'irrigation';      label = tr.catIrrigation; icon = 'water-outline';
       } else if (/harvest|anihan|panicle|grain|\bani\b/i.test(text)) {
-        category = 'harvesting';      label = 'Harvesting';          icon = 'basket-outline';
+        category = 'harvesting';      label = tr.catHarvesting; icon = 'basket-outline';
       }
-      useAppStore.getState().addNotification({
-        title: label ? `Check the ${label} guide` : 'Field log saved',
-        body:  label
-          ? `Based on your log, check the ${label} guide.`
-          : 'Your field observation was recorded.',
-        category, icon,
-      });
+      if (category) {
+        useAppStore.getState().addNotification({
+          title: tr.logBellTitle.replace('{guide}', label),
+          body:  tr.logBellBody.replace('{guide}', label),
+          category, icon,
+        });
+      }
     }
     setLogIssue(''); setLogProblem(''); setLogSeverity(''); setLogAction(''); setLogNotes('');
     setLogStage(''); closeLog();
@@ -735,8 +779,18 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             <Text style={[s.logRowNote, T && { fontSize: 13 }]} numberOfLines={2}>{log.notes}</Text>
           ) : null}
         </View>
-        {hasIssue && sev ? (
-          <Text style={[s.logRowSev, { color: sevColor }]}>{sev}</Text>
+        {hasIssue && log.resolvedAt ? (
+          <Text style={[s.logRowSev, { color: '#059669' }]}>{tr.logFixedTag}</Text>
+        ) : hasIssue ? (
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            {sev ? <Text style={[s.logRowSev, { color: sevColor }]}>{sev}</Text> : null}
+            {/^\d+$/.test(String(log.id)) && (
+              <TouchableOpacity onPress={() => markLogFixed(log)} hitSlop={8} activeOpacity={0.7}
+                accessibilityRole="button" accessibilityLabel={tr.logMarkFixed}>
+                <Text style={{ fontSize: 13, color: '#059669', fontFamily: 'Inter_700Bold' }}>{tr.logMarkFixed}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : null}
       </View>
     );
@@ -752,7 +806,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.progressHeader}</Text>
             <Text style={s.headerSub}>
               {currentCycle
-                ? seasonLabel(currentCycle).replace(' ', ' Season ')
+                ? seasonInLanguage(seasonLabel(currentCycle).replace(' ', ' Season '), tr)
                 : tr.plogNoCycle}
             </Text>
           </View>
@@ -790,16 +844,31 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
         {selectedTab === 'overview' && (() => {
           const cW2 = Dimensions.get('window').width - 80;
           const days      = cropDays(plantingDateStr, (currentCycle as any)?.expected_harvest_date);
-          const stageNo   = (currentCycle as any)?.stage?.stage_no ?? null;
-          const nextStage = stageNo != null && stageNo < STAGE_COUNT ? logWord(stageLabel(stageNo + 1)) : '';
-          const stepsDone = guideList.filter(st => completedSteps.includes(st.id)).length;
+          const finished  = (currentCycle as any)?.status === 'completed';
+          // The card follows the Planting tab: its stage and picture come from the steps logged there
+          const stageNo   = finished ? STAGE_COUNT : notSown ? null : guideStageNo(guideList, completedSteps, serverStageNo) ?? serverStageNo;
+          const stageName = stageLabel(stageNo) ? logWord(stageLabel(stageNo)) : activeStage;
+          const nextStage = !finished && stageNo != null && stageNo < STAGE_COUNT ? logWord(stageLabel(stageNo + 1)) : '';
+          // Same as the Planting tab: a harvested crop has finished its guide
+          const stepsDone = finished ? guideList.length : guideList.filter(st => completedSteps.includes(st.id)).length;
           const problems  = storeLogs.filter((l: any) => {
             const issue = String(l.observedIssue ?? l.observed_issue ?? '').trim();
             return !!issue && issue !== 'None' && issue !== 'Wala';
           }).length;
-          const showYield  = hasRealCycle && predictedYield != null;
-          const sacks      = showYield ? Math.round((predictedYield! * 1000) / CAVAN_KG) : null;
-          const harvestDue = stageNo != null && stageNo >= HARVEST_STAGE_NO && (currentCycle as any)?.yield_per_ha == null;
+          // Once harvested, the real harvest replaces the forecast and the day count stops
+          const actualDate = finished ? (currentCycle as any)?.actual_harvest_date as string | null : null;
+          const shownDays  = actualDate
+            ? cropDays(plantingDateStr, (currentCycle as any)?.expected_harvest_date, new Date(`${actualDate}T12:00:00`))
+            : days;
+          const realTHa    = finished && (currentCycle as any)?.yield_per_ha != null ? Number((currentCycle as any).yield_per_ha) : null;
+          const realTons   = realTHa != null ? (realYields[realYields.length - 1]?.yieldTons ?? +(realTHa * farmArea).toFixed(1)) : null;
+          const shownTons  = realTons ?? (hasRealCycle && !notSown ? predictedYield : null);
+          const shownPerHa = realTHa ?? predictedPerHa;
+          const showYield  = shownTons != null;
+          const sacks      = showYield ? Math.round((shownTons! * 1000) / CAVAN_KG) : null;
+          // By the crop's age too, so a farmer who stopped logging is still asked about the harvest
+          const harvestDue = Math.max(stageNo ?? 0, serverStageNo ?? 0) >= HARVEST_STAGE_NO && (currentCycle as any)?.yield_per_ha == null;
+          const guidePct   = guideList.length ? Math.round((stepsDone / guideList.length) * 100) : null;
           return (
             <>
               {/* The season: today's stage on the 10-stage track, the day and the harvest date */}
@@ -812,7 +881,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   <View style={{ flex: 1 }}>
                     {cycleLoading
                       ? <SkelBar w={190} h={26} br={6} />
-                      : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{currentCycle ? activeStage : tr.plogNoCycle}</Text>}
+                      : <Text style={[s.ovStage, T && { fontSize: 24 }]}>{!currentCycle ? tr.plogNoCycle : finished ? tr.ovHarvested : notSown ? tr.ovNotSown : stageName}</Text>}
                     {!!nextStage && !cycleLoading && (
                       <Text style={[s.ovSub, T && { fontSize: 14 }]}>{tr.ovNext.replace('{stage}', nextStage)}</Text>
                     )}
@@ -825,15 +894,15 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   {Array.from({ length: STAGE_COUNT }, (_, i) => i + 1).map(no => (
                     <View
                       key={no}
-                      style={[s.stageSeg, stageNo != null && no < stageNo && s.stageSegDone, no === stageNo && s.stageSegNow]}
+                      style={[s.stageSeg, (finished || (stageNo != null && no < stageNo)) && s.stageSegDone, !finished && no === stageNo && s.stageSegNow]}
                     />
                   ))}
                 </View>
                 <View style={s.ovStats}>
                   {[
-                    { lbl: tr.cycCurrent,       val: days && days.day >= 1 ? `${tr.cycDayPrefix} ${days.day}` : (sowingLabel ?? tr.ovNotSown) },
-                    { lbl: tr.cycDone,          val: days && days.total && days.day >= 1 ? `${Math.round(days.share * 100)}%` : tr.ovNotStarted },
-                    { lbl: tr.progressExpected, val: harvestDate ? harvestLabel : tr.ovNotSet },
+                    { lbl: tr.cycCurrent,       val: !notSown && shownDays && shownDays.day >= 1 ? `${tr.cycDayPrefix} ${shownDays.daysAfterSowing}` : (sowingLabel ?? tr.ovNotSown) },
+                    { lbl: tr.cycDone,          val: finished ? '100%' : guidePct ? `${guidePct}%` : guidePct == null && days && days.total && days.day >= 1 ? `${Math.round(days.share * 100)}%` : tr.ovNotStarted },
+                    { lbl: finished ? tr.ovHarvested : tr.progressExpected, val: actualDate ? shortDate(actualDate, tr) : harvestDate ? harvestLabel : tr.ovNotSet },
                   ].map(c => (
                     <View key={c.lbl} style={{ flex: 1 }}>
                       <Text style={[s.ovStatLbl, T && { fontSize: 13 }]} numberOfLines={1}>{c.lbl}</Text>
@@ -847,15 +916,15 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
               {/* Expected harvest from the yield model, in tons and sacks */}
               <View style={[s.card, s.ovCard]}>
-                <Text style={s.ovLabel}>{tr.cycExpectedYield}</Text>
+                <Text style={s.ovLabel}>{realTons != null ? tr.trLastHarvest : tr.cycExpectedYield}</Text>
                 <View style={s.ovBigRow}>
                   {showYield
-                    ? <><Text style={s.ovBig}>{predictedYield!.toFixed(1)}</Text><Text style={s.ovBigUnit}>{tr.ovTons}</Text></>
+                    ? <><Text style={s.ovBig}>{shownTons!.toFixed(1)}</Text><Text style={s.ovBigUnit}>{tr.ovTons}</Text></>
                     : <View style={s.pendingPill}><Ionicons name="time-outline" size={15} color="#6B7280" /><Text style={s.pendingText}>{tr.ovNotYet}</Text></View>}
                 </View>
                 <Text style={[s.ovSub, T && { fontSize: 14 }]}>
                   {sacks != null
-                    ? tr.ovSacks.replace('{n}', String(sacks)).replace('{ha}', String(farmArea))
+                    ? `${tr.ovSacks.replace('{n}', String(sacks)).replace('{ha}', String(farmArea))}${shownPerHa != null ? ` · ${shownPerHa.toFixed(2)} t/ha` : ''}`
                     : tr.ovYieldLater}
                 </Text>
                 {harvestDue && (
@@ -888,7 +957,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {realYields.length === 0 ? (
                 <EmptyYieldChart
                   width={cW2}
-                  onRecord={() => navigation.navigateDeprecated('YieldRecord')}
+                  onRecord={notSown || (currentCycle as any)?.status === 'completed' ? undefined : () => navigation.navigateDeprecated('YieldRecord')}
                 />
               ) : (() => {
                 const data  = realYields;
@@ -898,7 +967,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 );
                 const avg   = parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1));
 
-                const pad  = { t: 12, b: 30, l: 32, r: 12 };
+                const pad  = { t: 12, b: 30, l: 32, r: 26 };   // right side leaves room for the "avg" label
                 const svgH = 150;
                 const cW   = cW2 - pad.l - pad.r;
                 const cH   = svgH - pad.t - pad.b;
@@ -906,9 +975,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 const maxV = Math.max(...vals) + 1.5;
                 const minV = Math.min(...vals) - 1;
                 const toY  = (v: number) => pad.t + (1 - (v - minV) / (maxV - minV)) * cH;
-                // For a single point, center it on the chart; otherwise distribute evenly
+                // The first season sits at the left edge; the line grows to the right from there
                 const toX  = (i: number) =>
-                  data.length === 1 ? pad.l + cW / 2 : pad.l + (i / (data.length - 1)) * cW;
+                  data.length === 1 ? pad.l : pad.l + (i / (data.length - 1)) * cW;
                 const pts  = vals.map((v, i) => ({ x: toX(i), y: toY(v) }));
 
                 const mkLine = (p: { x: number; y: number }[]) => {
@@ -933,10 +1002,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   <View style={[s.card, { padding: 14, marginBottom: 10 }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>{tr.progressYieldHistory}</Text>
-                      <View style={s.predBadge}>
-                        <Ionicons name="trending-up" size={11} color="#D97706" />
-                        <Text style={s.predBadgeText}>{expectedYield}t expected</Text>
-                      </View>
+                      {!finished && (
+                        <View style={s.predBadge}>
+                          <Ionicons name="trending-up" size={11} color="#D97706" />
+                          <Text style={s.predBadgeText}>{expectedYield}t expected</Text>
+                        </View>
+                      )}
                     </View>
 
                     <Svg width={cW2} height={svgH}>
@@ -950,7 +1021,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       {yTicks.map(tick => (
                         <React.Fragment key={tick.v}>
                           <Line x1={pad.l} y1={tick.y} x2={pad.l + cW} y2={tick.y} stroke="#F3F4F6" strokeWidth={1} />
-                          <SvgText x={pad.l - 4} y={tick.y + 3.5} textAnchor="end" fontSize={8} fill="#9CA3AF">{tick.v}t</SvgText>
+                          <SvgText x={pad.l - 4} y={tick.y + 3.5} textAnchor="end" fontSize={8} fill="#9CA3AF">{`${tick.v}t`}</SvgText>
                         </React.Fragment>
                       ))}
 
@@ -1016,14 +1087,16 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 <Ionicons name="create-outline" size={16} color="#FFFFFF" />
                 <Text style={[s.logActionBtnPrimaryText, T && { fontSize: 15 }]}>{tr.homeAddLog}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.logActionBtn, s.logActionBtnGhost]}
-                onPress={() => navigation.navigateDeprecated('YieldRecord')}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="basket-outline" size={16} color="#6B7280" />
-                <Text style={[s.logActionBtnGhostText, T && { fontSize: 15 }]}>{tr.progressRecordYieldShort}</Text>
-              </TouchableOpacity>
+              {!notSown && (currentCycle as any)?.status !== 'completed' && (
+                <TouchableOpacity
+                  style={[s.logActionBtn, s.logActionBtnGhost]}
+                  onPress={() => navigation.navigateDeprecated('YieldRecord')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="basket-outline" size={16} color="#6B7280" />
+                  <Text style={[s.logActionBtnGhostText, T && { fontSize: 15 }]}>{tr.progressRecordYieldShort}</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {localLogs.length > 0 ? (
@@ -1048,8 +1121,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
             season.replace('Dry ', 'D').replace('Wet ', 'W').replace('20', "'");
           // Past harvests (t/ha, oldest first), then this season's expected yield
           const past     = realYields.filter(y => y.tHa != null).slice(-5);
-          const thisTHa  = hasRealCycle && predictedYield != null && (currentCycle as any)?.yield_per_ha == null
-            ? +(predictedYield / Math.max(farmArea, 0.1)).toFixed(1) : null;
+          const thisTHa  = hasRealCycle && !notSown && predictedYield != null && (currentCycle as any)?.yield_per_ha == null
+            ? predictedPerHa : null;
           const bars = [
             ...past.map((y, i) => ({ key: `p${i}`, label: shortLabel(y.season), value: y.tHa as number, now: false })),
             ...(thisTHa != null ? [{ key: 'now', label: tr.trThisSeason, value: thisTHa, now: true }] : []),
@@ -1057,7 +1130,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
           const maxV     = Math.max(1, ...bars.map(b => b.value));
           const headline = thisTHa ?? (past.length ? past[past.length - 1].tHa as number : null);
           const prev     = thisTHa != null ? past[past.length - 1]?.tHa : past[past.length - 2]?.tHa;
-          const delta    = headline != null && prev ? Math.round(((headline - prev) / prev) * 100) : null;
+          const delta    = headline != null && prev ? Math.round(((headline - prev) / prev) * 100) || null : null;   // no change: no badge
 
           return (
             <>
@@ -1067,7 +1140,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 {bars.length === 0 ? (
                   <View style={{ alignItems: 'center', paddingVertical: 6 }}>
                     <Image source={empty.no_harvest} style={{ width: 110, height: 110, marginBottom: 6 }} resizeMode="contain" />
-                    <Text style={[s.ovSub, { marginTop: 0, textAlign: 'center' }]}>{tr.yieldNeedCycle}</Text>
+                    <Text style={[s.ovSub, { marginTop: 0, textAlign: 'center' }]}>{notSown ? tr.ovYieldLater : tr.yieldNeedCycle}</Text>
                   </View>
                 ) : (
                   <>
@@ -1097,6 +1170,13 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                           <Text style={[s.barLbl, b.now && { color: '#059669' }]} numberOfLines={1}>{b.label}</Text>
                         </View>
                       ))}
+                      {/* Hollow bars: seasons with no harvest yet (no number, no season name) */}
+                      {Array.from({ length: Math.max(0, BAR_SLOTS - bars.length) }, (_, i) => (
+                        <View key={`empty${i}`} style={s.barCol}>
+                          <View style={s.barEmpty} />
+                          <Text style={s.barLbl}> </Text>
+                        </View>
+                      ))}
                     </View>
                     {past.length === 0 && <Text style={[s.ovSub, { marginTop: 12 }]}>{tr.trRecordToCompare}</Text>}
                   </>
@@ -1124,7 +1204,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                   let worstSev = 0; let worstName = tr.healthNone;
                   for (const l of recentLogs as any[]) {
                     const text = `${l.observedIssue ?? l.observed_issue ?? ''} ${l.notes ?? ''}`;
-                    if (!re.test(text)) continue;
+                    if (l.resolvedAt || !re.test(text)) continue;
                     const sev = String(l.severity ?? '').trim();
                     const rank = SEV_RANK[sev] ?? 1;
                     if (rank > worstSev) { worstSev = rank; worstName = sev || 'Low'; }
@@ -1147,10 +1227,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
                 const hs = healthScore;
                 const overallLabel = hs == null ? '—'
-                  : hs >= 90 ? 'Excellent'
-                  : hs >= 75 ? 'Healthy'
-                  : hs >= 60 ? 'Monitor'
-                  :            'Warning';
+                  : hs >= 90 ? tr.reportsBadgeExcellent
+                  : hs >= 75 ? tr.healthHealthy
+                  : hs >= 60 ? tr.healthMonitor
+                  :            tr.healthWarning;
                 const overallColor = hs == null ? '#9CA3AF'
                   : hs >= 90 ? '#059669'
                   : hs >= 75 ? '#059669'
@@ -1189,7 +1269,8 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               {/* ── Guide on time: steps checked so far, by kind ── */}
               {(() => {
                 const steps: any[] = Array.isArray((latestGuide as any)?.steps) ? (latestGuide as any).steps : [];
-                const checkedIds = new Set(completedSteps);
+                // A harvested crop has no steps left, so none can be late
+                const checkedIds = new Set((currentCycle as any)?.status === 'completed' ? steps.map(st => String(st.id)) : completedSteps);
                 const CAT_LABELS: Record<string, string> = {
                   planting:        tr.catPlanting,
                   fertilizer:      tr.catFertilizer,
@@ -1213,7 +1294,11 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         : overdue > 0
                           ? tr.adhUnchecked.replace('{n}', String(overdue))
                           : next
-                            ? tr.adhNext.replace('{d}', String(next.daysAfterPlanting))
+                            ? (next.daysAfterPlanting ?? 0) < 0
+                              ? tr.guideDayBeforePlant.replace('{n}', String(-(next.daysAfterPlanting ?? 0)))
+                              : next.daysAfterPlanting === 0
+                                ? tr.guideDayPlanting
+                                : tr.adhNext.replace('{d}', String(next.daysAfterPlanting))
                             : tr.adhNothingPending,
                     status: inCat.length === 0
                       ? '—'
@@ -1262,7 +1347,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                       <Text style={s.ovBigUnit}>%</Text>
                     </View>
                     <Text style={[s.ovSub, T && { fontSize: 14 }]}>
-                      {tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}
+                      {notSown
+                        ? (sowingLabel ?? tr.ovNotSown)
+                        : tr.adhDayOf.replace('{d}', String(CURRENT_DAY)).replace('{total}', String(cycleDays))}
                     </Text>
                     <View style={{ marginTop: 14, gap: 14 }}>
                       {buckets.map(item => (
@@ -1297,9 +1384,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
       </ScrollView>
 
       {/* ADD LOG MODAL */}
-      <Modal visible={showAddLog} transparent animationType="slide" onRequestClose={closeLog}>
+      <Modal visible={showAddLog} transparent animationType="slide" onRequestClose={askCloseLog}>
         <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={closeLog} />
+          <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={askCloseLog} />
           <View style={s.modalSheet}>
             <View style={s.modalHandle} />
             <View style={s.modalHeader}>
@@ -1659,11 +1746,12 @@ const s = StyleSheet.create({
   innerTileVal:{ fontSize: 15, marginTop: 2, fontFamily: 'Inter_700Bold' },
   deltaPill:   { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 10, paddingVertical: 5, paddingHorizontal: 9, marginLeft: 4, marginBottom: 9 },
   deltaText:   { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  bars:        { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', marginTop: 18, minHeight: BAR_MAX_H + 44 },
-  barCol:      { alignItems: 'center', flex: 1, maxWidth: 64 },
-  barVal:      { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold' },
+  bars:        { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start', marginTop: 18, minHeight: BAR_MAX_H + 44 },
+  barCol:      { alignItems: 'flex-start', flex: 1, maxWidth: 64 },
+  barVal:      { fontSize: 12, color: '#111827', marginBottom: 6, fontFamily: 'Inter_700Bold', minWidth: 28, textAlign: 'center' },
   bar:         { width: 28, borderRadius: 14 },
-  barLbl:      { fontSize: 11, color: '#6B7280', marginTop: 8, fontFamily: 'Inter_500Medium' },
+  barEmpty:    { width: 28, height: BAR_MAX_H, borderRadius: 14, borderWidth: 1.5, borderColor: '#E5E7EB' },
+  barLbl:      { fontSize: 11, color: '#6B7280', marginTop: 8, fontFamily: 'Inter_500Medium', minWidth: 28, textAlign: 'center' },
   tile:        {
     flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 14, minHeight: 112, justifyContent: 'space-between',
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2,

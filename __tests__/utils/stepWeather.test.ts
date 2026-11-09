@@ -55,3 +55,32 @@ describe('usableOutlook', () => {
     expect(usableOutlook(forecast, '7.3,125.6', 1_000_000 + FORECAST_MAX_AGE_MS + 1)).toBeNull();
   });
 });
+
+describe('weather warnings for every kind of weather', () => {
+  it('says not to plow while it rains, even if the rain is light', () => {
+    expect(stepWeather(step('plow'), { ...DRY, rain_prob_6h: 80 }, 0)?.code).toBe('fieldRainSoon');
+  });
+
+  it('warns about the next step sooner than about later ones', () => {
+    const raining = { ...DRY, rain_prob_6h: 80 };
+    expect(stepWeather(step('plow', 3), raining, 0, true)?.code).toBe('fieldRainSoon');
+    expect(stepWeather(step('plow', 3), raining, 0, false)).toBeNull();
+    expect(stepWeather(step('plow', 8), raining, 0, true)).toBeNull();
+  });
+
+  it('warns about flood risk, strong wind and heat', () => {
+    expect(stepWeather(step('lcc'), { ...DRY, rain_mm_24h: 45 }, 0)?.code).toBe('floodWatch');
+    expect(stepWeather(step('lcc'), { ...DRY, wind_kph_max_12h: 45 }, 0)?.code).toBe('strongWind');
+    expect(stepWeather(step('lcc'), { ...DRY, temp_c_max_24h: 36 }, 0)?.code).toBe('heat');
+  });
+
+  it('warns when a watering step has no rain coming', () => {
+    expect(stepWeather(step('water'), DRY, 0)?.code).toBe('dryAhead');
+  });
+
+  it('has text for every warning in every language', () => {
+    for (const language of Object.values(translations) as any[]) {
+      for (const key of Object.values(ADVICE_TEXT)) expect(language[key]).toBeTruthy();
+    }
+  });
+});

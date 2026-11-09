@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store/appStore';
-import { apiRecommendations, apiProgress, type Farm } from '@/services/apiService';
+import { apiRecommendations, type Farm } from '@/services/apiService';
+import { fetchActiveCycleLogs, mergeLogs } from '@/utils/progressLogs';
 
 /**
  * Load the global per-farm data (recommendation, active cycle, progress logs)
@@ -14,6 +15,8 @@ import { apiRecommendations, apiProgress, type Farm } from '@/services/apiServic
 export async function loadFarmData(farm: Farm): Promise<void> {
   const store  = useAppStore.getState();
   const farmId = farm.id;
+  // A slower answer must not land on a farm the farmer has switched to since
+  const stillSelected = () => useAppStore.getState().selectedFarmId === farmId;
 
   // ── Latest recommendation for this farm ──────────────────────────────────
   try {
@@ -22,30 +25,20 @@ export async function loadFarmData(farm: Farm): Promise<void> {
     const latest = recs.length
       ? recs.reduce((max, r) => (((r as any).id ?? 0) > ((max as any).id ?? 0) ? r : max), recs[0])
       : null;
-    store.setLatestRecommendation(latest);
+    if (stillSelected()) store.setLatestRecommendation(latest);
   } catch {
-    store.setLatestRecommendation(null);
+    if (stillSelected()) store.setLatestRecommendation(null);
   }
 
   // ── Active cycle + its progress logs ─────────────────────────────────────
+  // Through the Progress screen's loader: the store only accepts logs in the app's shape,
+  // so raw server rows would empty the list
   try {
-    const res    = await apiProgress.listCycles(farmId);
-    const cycles = (res.data ?? []) as any[];
-    const active = cycles.find(c => c.status === 'active') ?? cycles[0] ?? null;
-    store.setActiveCycle(active);
-
-    if (active?.id) {
-      try {
-        const logsRes = await apiProgress.listLogs(active.id);
-        store.setProgressLogs((logsRes.data ?? []) as any[]);
-      } catch {
-        store.setProgressLogs([]);
-      }
-    } else {
-      store.setProgressLogs([]);
-    }
+    const { cycle, logs } = await fetchActiveCycleLogs(farmId);
+    if (!stillSelected()) return;
+    store.setActiveCycle(cycle);
+    store.setProgressLogs(mergeLogs(logs, useAppStore.getState().progressLogs, cycle?.id));
   } catch {
-    store.setActiveCycle(null);
-    store.setProgressLogs([]);
+    // Offline: the farm stays empty until the Progress screen loads it
   }
 }

@@ -1,3 +1,4 @@
+import { cropIsOver } from '@/utils/nextCrop';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { apiWeather } from '@/services/apiService';
@@ -51,8 +52,11 @@ export function useStepWeather() {
   const guide    = useAppStore(s => s.latestGuide);
   const outlook  = usableOutlook(forecast, farmKey(farm));
   const today    = guideDay(guide);
+  const completed = useAppStore(s => s.completedGuideSteps);
+  const current  = guideProgress(guideSteps(guide), completed).current;
   return {
-    adviceFor: (step: GuideStep | null | undefined): StepWeather | null => stepWeather(step, outlook, today),
+    adviceFor: (step: GuideStep | null | undefined): StepWeather | null =>
+      stepWeather(step, outlook, today, !!step && step.id === current?.id),
     updatedAt: outlook && forecast ? forecast.at : null,
   };
 }
@@ -79,7 +83,8 @@ export function useStepWeatherAlert(): void {
   const guide     = useAppStore(s => s.latestGuide);
   const completed = useAppStore(s => s.completedGuideSteps);
   const { adviceFor } = useStepWeather();
-  const current = guideProgress(guideSteps(guide), completed).current;
+  const cropOver = cropIsOver(useAppStore(s => s.activeCycle));   // no warnings for a harvested crop
+  const current = cropOver ? null : guideProgress(guideSteps(guide), completed).current;
   const advice  = adviceFor(current);
   const body    = advice?.level === 'stop' && current
     ? `${current.title}: ${(tr as any)[ADVICE_TEXT[advice.code]]}` : null;

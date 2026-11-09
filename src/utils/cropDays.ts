@@ -1,10 +1,11 @@
 /**
- * "Day 34 of 115" on Home: the crop's age from its planting (sowing) day, counting that
- * day as day 1, and the season's length up to the expected harvest. Dates are the
+ * "Day 34 of 115" on Home: the crop's age from its planting (sowing) day and the season's
+ * length up to the expected harvest. Dates are the
  * server's YYYY-MM-DD, read in the phone's time. Pure, so it can be tested.
  */
 export interface CropDays {
   day:   number;          // 1 on the sowing day; 0 or less before it
+  daysAfterSowing: number;   // what the farmer sees: 0 on the sowing day, as on the guide
   total: number | null;   // sowing to expected harvest, when the harvest date is known
   share: number;          // 0..1 of the season gone, for the progress bar
 }
@@ -25,5 +26,5 @@ export function cropDays(plantingDate?: string | null, harvestDate?: string | nu
   const end   = localDay(harvestDate);
   const total = end != null && end > start ? Math.round((end - start) / DAY_MS) : null;
   const share = total ? Math.min(1, Math.max(0, day / total)) : 0;
-  return { day, total, share };
+  return { day, daysAfterSowing: day - 1, total, share };
 }

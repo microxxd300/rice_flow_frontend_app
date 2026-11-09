@@ -10,8 +10,10 @@ import { sowingQuestionDue } from '@/utils/sowing';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore } from '@/store/appStore';
-import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
+import { guideSteps, guideProgress, guideDay, guideStageNo } from '@/utils/guideSteps';
 import { farmKey, useStepAdvice } from '@/hooks/useFarmForecast';
+import { adviceIcon } from '@/utils/stepWeather';
+import { cropIsOver, nextCropParams } from '@/utils/nextCrop';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { LOG_WORD_KEYS, stageLabel } from '@/utils/progressLogs';
 import { useAuthStore } from '@/features/auth/store';
@@ -95,16 +97,23 @@ export const HomeDashboardScreen: React.FC = () => {
   // Only a growing crop: a finished season leaves the card asking for the next one
   const cycle    = activeCycle?.status === 'active' && (farmId == null || activeCycle.farm === farmId) ? activeCycle : null;
   const days     = cropDays(cycle?.planting_date, cycle?.expected_harvest_date);
-  const stageNo  = cycle?.stage?.stage_no ?? null;
+  const serverStageNo = cycle?.stage?.stage_no ?? null;
+  const guideList = guideSteps(latestGuide);
+  // No growth stage before the crop is sown or while "Did you sow already?" is still open
+  const notSown  = (!!days && days.day < 1)
+    || (sowingQuestionDue(latestGuide, completedGuideSteps) && guideStageNo(guideList, completedGuideSteps) === 1);
+  const stageNo  = notSown ? null : guideStageNo(guideList, completedGuideSteps, serverStageNo) ?? serverStageNo;   // same as the Progress card
   const stageKey = LOG_WORD_KEYS[stageLabel(stageNo)];
-  const stageTxt = stageKey ? (tr as any)[stageKey] : (cycle?.stage?.name ?? '');
-  const harvestDue = !!cycle && stageNo != null && stageNo >= HARVEST_STAGE_NO && cycle.yield_per_ha == null;
+  const stageTxt = notSown ? '' : stageKey ? (tr as any)[stageKey] : (cycle?.stage?.name ?? '');
+  const harvestDue = !!cycle && Math.max(stageNo ?? 0, serverStageNo ?? 0) >= HARVEST_STAGE_NO && cycle.yield_per_ha == null;
 
   const topResult = latestRecommendation?.results?.[0];
   const topScore  = topResult ? Math.round(topResult.rsi_score) : null;
 
   // ── To do: the current PalayCheck step and the two after it (same rule as the Planting tab) ──
+  const cropOver = cropIsOver(activeCycle);
   const tasks = (() => {
+    if (cropOver) return [];
     const { current, next } = guideProgress(guideSteps(latestGuide), completedGuideSteps);
     const today = guideDay(latestGuide);
     return [current, ...next].filter(st => !!st).slice(0, 3).map(st => ({
@@ -127,7 +136,7 @@ export const HomeDashboardScreen: React.FC = () => {
     navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
   };
 
-  const sowingDue = sowingQuestionDue(latestGuide, completedGuideSteps);
+  const sowingDue = !cropOver && sowingQuestionDue(latestGuide, completedGuideSteps);
 
   // A farm tile shows that farm on every tab; its arrow opens the farm's pin
   const [switching, setSwitching] = useState<number | null>(null);
@@ -182,10 +191,10 @@ export const HomeDashboardScreen: React.FC = () => {
               {!!stageImage(stageNo) && <Image source={stageImage(stageNo)!} style={s.stagePic} resizeMode="contain" />}
             </View>
 
-            {days && days.day >= 1 ? (
+            {days && !notSown ? (
               <>
                 <View style={s.dayRow}>
-                  <Text style={s.dayBig}>{days.day}</Text>
+                  <Text style={s.dayBig}>{days.daysAfterSowing}</Text>
                   {days.total != null && <Text style={s.daySmall}>/ {days.total} {tr.homeDaysUnit}</Text>}
                 </View>
                 {days.total != null && (
@@ -231,7 +240,8 @@ export const HomeDashboardScreen: React.FC = () => {
               </View>
               <Image source={empty.no_farm} style={s.stagePic} resizeMode="contain" />
             </View>
-            {topResult && (
+            {/* After a harvest this list is last season's; the button scans for a new one */}
+            {topResult && !cropOver && (
               <View style={s.recRow}>
                 <View style={[s.taskIcon, { backgroundColor: '#E8F5EF' }]}>
                   <Ionicons name="leaf-outline" size={18} color="#059669" />
@@ -243,9 +253,15 @@ export const HomeDashboardScreen: React.FC = () => {
                 {topScore != null && <Text style={s.recScore}>{topScore}%</Text>}
               </View>
             )}
-            <View style={[s.darkBtn, { marginTop: 16 }]}>
-              <Text style={s.darkBtnText}>{tr.homeSeeVarieties}</Text>
-            </View>
+            <TouchableOpacity
+              style={[s.darkBtn, { marginTop: 16 }]}
+              onPress={() => selectedFarm
+                ? navigation.navigateDeprecated('AnalysisLoading', nextCropParams(selectedFarm))
+                : navigation.navigateDeprecated('FarmDetailsForm')}
+              activeOpacity={0.85}
+            >
+              <Text style={s.darkBtnText}>{tr.nextCropBtn}</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
 
@@ -273,7 +289,7 @@ export const HomeDashboardScreen: React.FC = () => {
                     <Text style={[s.rowTitle, i === 0 && s.rowTitleNow, T && { fontSize: 16 }]} numberOfLines={2}>{t.title}</Text>
                     {t.advice && (
                       <View style={[s.advice, { backgroundColor: stop ? '#FDECEC' : '#FEF3DC' }]}>
-                        <Ionicons name={t.advice.code === 'nightWork' ? 'moon-outline' : 'rainy-outline'} size={14} color={stop ? '#DC2626' : '#B45309'} />
+                        <Ionicons name={adviceIcon(t.advice.code)} size={14} color={stop ? '#DC2626' : '#B45309'} />
                         <Text style={[s.adviceText, { color: stop ? '#B91C1C' : '#92400E' }, T && { fontSize: 13 }]} numberOfLines={2}>
                           {(tr as any)[STEP_ADVICE_TEXT[t.advice.code]]}
                         </Text>

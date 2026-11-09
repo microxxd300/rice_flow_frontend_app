@@ -28,7 +28,6 @@ export { ProgressLogScreen } from './ProgressLogScreen';
 
 // Yield & Harvest
 export { YieldRecordScreen }   from './YieldRecordScreen';
-export { YieldProgressScreen } from './YieldProgressScreen';
 
 // Settings & Profile
 export { ProfileScreen } from './ProfileScreen';

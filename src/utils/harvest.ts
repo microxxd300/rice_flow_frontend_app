@@ -9,6 +9,8 @@ export const FRESH_MOISTURE = 22;   // % for palay straight from the field (20-2
 export const CAVAN_KG       = 50;
 // Most farms in Davao del Norte get 3-7 t/ha; outside this a number is likely mistyped
 export const USUAL_YIELD    = { low: 1, high: 12 };
+// Above this no rice field can yield: refused, so a typo never trains the yield model
+export const MAX_YIELD      = 20;
 
 export interface HarvestFigures {
   totalKg:   number;   // as weighed
@@ -16,6 +18,7 @@ export interface HarvestFigures {
   tHa:       number;   // dry t/ha over the area harvested
   cavansHa:  number;   // dry 50-kg cavans per hectare
   unusual:   boolean;  // outside the usual range: ask the farmer to check
+  impossible: boolean; // above MAX_YIELD: cannot be saved
 }
 
 export function harvestFigures(sacks: number, kgPerSack: number, areaHa: number, moisture: number): HarvestFigures | null {
@@ -29,5 +32,6 @@ export function harvestFigures(sacks: number, kgPerSack: number, areaHa: number,
     tHa:      Math.round(tHa * 100) / 100,
     cavansHa: Math.round(dryKg / CAVAN_KG / areaHa),
     unusual:  tHa < USUAL_YIELD.low || tHa > USUAL_YIELD.high,
+    impossible: tHa > MAX_YIELD,
   };
 }

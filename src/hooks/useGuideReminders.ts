@@ -8,6 +8,7 @@ import { useStepWeather } from '@/hooks/useFarmForecast';
 import { guideSteps } from '@/utils/guideSteps';
 import { ADVICE_TEXT } from '@/utils/stepWeather';
 import { sowingStep } from '@/utils/sowing';
+import { cropIsOver } from '@/utils/nextCrop';
 
 /**
  * Keeps the phone's 7 AM planting-guide reminders in step with the guide: rebuilt when
@@ -19,12 +20,13 @@ export function useGuideReminders(): void {
   const guide     = useAppStore(s => s.latestGuide);
   const completed = useAppStore(s => s.completedGuideSteps);
   const enabled   = useAppStore(s => s.notificationsEnabled);
+  const cropOver  = cropIsOver(useAppStore(s => s.activeCycle));
   const tr        = useTranslation();
   const { adviceFor } = useStepWeather();
 
   const byId = new Map(guideSteps(guide).map(st => [st.id, st]));
   const sowId = sowingStep(guide)?.id;
-  const reminders = (enabled ? planGuideReminders(guide, completed) : []).map(r => {
+  const reminders = (enabled && !cropOver ? planGuideReminders(guide, completed) : []).map(r => {
     const notes: string[] = [];
     // The sowing day's reminder asks "Did you sow already?", so the plan follows the real day
     if (sowId && r.stepIds.includes(sowId)) notes.push(tr.sowAskReminder);

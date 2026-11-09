@@ -16,8 +16,11 @@ import { guideSteps, guideProgress, guideDay } from '@/utils/guideSteps';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { rainfedWaitAdvice } from '@/utils/seasonAdvice';
 import { useStepAdvice } from '@/hooks/useFarmForecast';
+import { adviceIcon } from '@/utils/stepWeather';
+import { nextCropParams } from '@/utils/nextCrop';
 import { useLanguageStore } from '@/store/languageStore';
 import { useTranslation } from '@/i18n/useTranslation';
+import { seasonInLanguage } from '@/utils/formatting';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { NotificationBell } from '@/components/NotificationBell';
 import { SowingQuestion } from '@/components/SowingQuestion';
@@ -140,9 +143,12 @@ export const PlantingGuideScreen: React.FC = () => {
   // (the same rule as Home's Upcoming Tasks and Progress' Next Tasks)
   const steps    = useMemo(() => guideSteps(latestGuide), [latestGuide]);
   const progress = useMemo(() => guideProgress(steps, completedIds), [steps, completedIds]);
-  const current  = progress.current;
+  const activeCycle = useAppStore(s => s.activeCycle) as any;
+  const cropFinished = activeCycle?.status === 'completed';   // harvested: nothing left to do on this guide
+  const current  = cropFinished ? null : progress.current;
   const today    = guideDay(latestGuide);
-  const pct      = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+  // A harvested crop has finished its guide, whichever steps were logged
+  const pct      = cropFinished ? 100 : progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
   const explainOpen = !!current && explainedId === current.id;
   // Live weather and time-of-day advice for the current step
   const { adviceFor, updatedAt } = useStepAdvice();
@@ -329,7 +335,7 @@ export const PlantingGuideScreen: React.FC = () => {
         <View style={{ flex: 1 }}>
           <Text style={[s.headerTitle, T && { fontSize: 24 }]}>{tr.guideScreenTitle}</Text>
           <Text style={s.headerSub} numberOfLines={1}>
-            {[(latestGuide as any).season ?? 'Wet Season', guideVarietyName].filter(Boolean).join(' · ')}
+            {[seasonInLanguage((latestGuide as any).season ?? 'Wet Season', tr), guideVarietyName].filter(Boolean).join(' · ')}
           </Text>
         </View>
         <View style={s.headerBtn}><NotificationBell color="#111827" size={20} /></View>
@@ -356,7 +362,7 @@ export const PlantingGuideScreen: React.FC = () => {
             <Text style={s.bigUnit}>%</Text>
           </View>
           <Text style={[s.sub, T && { fontSize: 14 }]}>
-            {tr.guideStepOf
+            {cropFinished ? tr.guideCropDone : tr.guideStepOf
               .replace('{n}', String(Math.min(progress.done + 1, progress.total)))
               .replace('{total}', String(progress.total))}
           </Text>
@@ -396,7 +402,7 @@ export const PlantingGuideScreen: React.FC = () => {
               {/* What the weather or time of day means for this step */}
               {weather && (
                 <View style={[s.softBox, { backgroundColor: WX_TONE[weather.level].bg }]}>
-                  <Ionicons name={weather.level === 'stop' ? 'warning' : weather.code === 'nightWork' ? 'moon-outline' : 'rainy-outline'} size={18} color={WX_TONE[weather.level].fg} />
+                  <Ionicons name={weather.level === 'stop' ? 'warning' : adviceIcon(weather.code)} size={18} color={WX_TONE[weather.level].fg} />
                   <View style={{ flex: 1 }}>
                     <Text style={[s.softBoxText, { color: WX_TONE[weather.level].fg, fontFamily: 'Inter_600SemiBold' }, T && { fontSize: 15, lineHeight: 22 }]}>
                       {(tr as any)[STEP_ADVICE_TEXT[weather.code]]}
@@ -459,8 +465,17 @@ export const PlantingGuideScreen: React.FC = () => {
             <View style={[s.catTile, { backgroundColor: '#E8F5EF' }]}>
               <Ionicons name="trophy-outline" size={24} color="#059669" />
             </View>
-            <Text style={[s.stepTitle, { textAlign: 'center', marginTop: 12 }, T && { fontSize: 23 }]}>{tr.guideAllDone}</Text>
-            <Text style={[s.logHint, { textAlign: 'center' }, T && { fontSize: 13 }]}>{tr.guideAllDoneBody}</Text>
+            <Text style={[s.stepTitle, { textAlign: 'center', marginTop: 12 }, T && { fontSize: 23 }]}>{cropFinished ? tr.guideCropDone : tr.guideAllDone}</Text>
+            <Text style={[s.logHint, { textAlign: 'center' }, T && { fontSize: 13 }]}>{cropFinished ? tr.guideCropDoneBody : tr.guideAllDoneBody}</Text>
+            {cropFinished && !!calendarFarm && (
+              <TouchableOpacity
+                style={{ height: 54, borderRadius: 18, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center', marginTop: 16, alignSelf: 'stretch' }}
+                onPress={() => navigation.navigateDeprecated('AnalysisLoading', nextCropParams(calendarFarm))}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontSize: 16, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>{tr.nextCropBtn}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -468,7 +483,7 @@ export const PlantingGuideScreen: React.FC = () => {
         <ProblemGuideCards farmId={selectedFarmId} />
 
         {/* ── Up next ── */}
-        {progress.next.length > 0 && (
+        {!cropFinished && progress.next.length > 0 && (
           <View style={s.card}>
             <Text style={[s.cardLabel, { marginBottom: 4 }]}>{tr.guideUpNext}</Text>
             {progress.next.slice(0, 2).map(st => {
@@ -481,6 +496,14 @@ export const PlantingGuideScreen: React.FC = () => {
                   <View style={{ flex: 1 }}>
                     <Text style={[s.nextTitle, T && { fontSize: 16 }]} numberOfLines={2}>{st.title}</Text>
                     <Text style={[s.nextDay, T && { fontSize: 13 }]}>{dayLabel(st.daysAfterPlanting)}</Text>
+                    {(() => {
+                      const warn = adviceFor(st);
+                      return warn ? (
+                        <Text style={[s.nextDay, { color: WX_TONE[warn.level].fg }, T && { fontSize: 13 }]}>
+                          {(tr as any)[STEP_ADVICE_TEXT[warn.code]]}
+                        </Text>
+                      ) : null;
+                    })()}
                   </View>
                 </View>
               );

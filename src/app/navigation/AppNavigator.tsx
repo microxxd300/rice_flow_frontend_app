@@ -23,7 +23,6 @@ import {
   ProgressDashboardScreen,
   ProgressLogScreen,
   YieldRecordScreen,
-  YieldProgressScreen,
   ProfileScreen,
   ReportsScreen,
   AIChatScreen,
@@ -68,7 +67,6 @@ const ProgressStack: React.FC = () => (
     <Stack.Screen name="ProgressDashboardHome" component={ProgressDashboardScreen} />
     <Stack.Screen name="ProgressLog"           component={ProgressLogScreen} />
     <Stack.Screen name="YieldRecord"           component={YieldRecordScreen} />
-    <Stack.Screen name="YieldProgress"         component={YieldProgressScreen} />
     <Stack.Screen name="ReportsHome"           component={ReportsScreen} />
   </Stack.Navigator>
 );
