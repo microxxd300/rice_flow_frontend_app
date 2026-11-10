@@ -245,7 +245,8 @@ export const AIChatScreen: React.FC = () => {
 
   // The tab bar hides while typing, so its clearance collapses then
   const keyboardOpen = useKeyboardOpen();
-  const inputPaddingBottom = keyboardOpen ? 10 : tabClearance;
+  // Just above the tab bar (2 px, not 12): the box sat too high
+  const inputPaddingBottom = keyboardOpen ? 10 : tabClearance - 10;
 
   const drawerX   = useRef(new Animated.Value(-300)).current;
   const backdropO = useRef(new Animated.Value(0)).current;

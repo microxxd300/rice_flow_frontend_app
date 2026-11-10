@@ -1,4 +1,4 @@
-import { adviceDay, stepWeather, usableOutlook, FORECAST_MAX_AGE_MS, ADVICE_TEXT } from '@/utils/stepWeather';
+import { adviceDay, stepWeather, usableOutlook, warnAsToday, FORECAST_MAX_AGE_MS, ADVICE_TEXT } from '@/utils/stepWeather';
 import { translations } from '@/i18n/translations';
 
 const DRY = {
@@ -134,5 +134,21 @@ describe('a step the farmer is logging as done', () => {
   it('keeps today for a step that is already due', () => {
     expect(adviceDay(step('rf_seeds', -10), 0, true)).toBe(0);
     expect(adviceDay(null, 4, true)).toBe(4);
+  });
+});
+
+describe('warnAsToday', () => {
+  const next = { id: '7', daysAfterPlanting: -7 };   // land preparation, 7 days before sowing
+
+  it("warns about the farmer's next step when it is within a week", () => {
+    expect(warnAsToday(next, '7', -9)).toBe(true);     // 2 days away
+    expect(warnAsToday(next, '7', -14)).toBe(true);    // 7 days away
+    expect(warnAsToday(next, '7', -15)).toBe(false);   // 8 days away
+  });
+
+  it('leaves the later steps alone', () => {
+    expect(warnAsToday(next, '6', -9)).toBe(false);
+    expect(warnAsToday(next, null, -9)).toBe(false);
+    expect(warnAsToday(null, '7', -9)).toBe(false);
   });
 });

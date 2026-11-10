@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useTranslation } from '@/i18n/useTranslation';
 import { guideDay, guideProgress, guideSteps, type GuideStep } from '@/utils/guideSteps';
-import { ADVICE_TEXT, adviceDay, stepWeather, usableOutlook, type StepWeather } from '@/utils/stepWeather';
+import { ADVICE_TEXT, adviceDay, stepWeather, usableOutlook, warnAsToday, type StepWeather } from '@/utils/stepWeather';
 import { stepTimeAdvice, type StepAdvice } from '@/utils/stepTime';
 
 // The server keeps a forecast for 10 minutes, so asking more often brings nothing new
@@ -64,12 +64,17 @@ export function useStepWeather() {
 
 /** Live advice shown on screens: weather first, then a nighttime safety reminder. */
 export function useStepAdvice() {
-  const weather = useStepWeather();
-  const guide   = useAppStore(s => s.latestGuide);
-  const today   = guideDay(guide);
+  const weather   = useStepWeather();
+  const guide     = useAppStore(s => s.latestGuide);
+  const completed = useAppStore(s => s.completedGuideSteps);
+  const today     = guideDay(guide);
+  const current   = guideProgress(guideSteps(guide), completed).current;
   return {
-    adviceFor: (step: GuideStep | null | undefined, doingNow = false): StepAdvice | null =>
-      weather.adviceFor(step, doingNow) ?? stepTimeAdvice(step, adviceDay(step, today, doingNow)),
+    // The next step, when near, is warned about as if done today (Upcoming Tasks, the guide)
+    adviceFor: (step: GuideStep | null | undefined, doingNow = false): StepAdvice | null => {
+      const now = doingNow || warnAsToday(step, current?.id, today);
+      return weather.adviceFor(step, now) ?? stepTimeAdvice(step, adviceDay(step, today, now));
+    },
     updatedAt: weather.updatedAt,
   };
 }

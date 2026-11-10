@@ -22,6 +22,7 @@ import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
 import { DatePickerField } from '@/components/DatePickerField';
 import { HARVEST_KEYS, SOWING_KEYS, dateFromISO, daysAgoISO, earliestLogDate, sowingQuestionDue } from '@/utils/sowing';
+import { earlyLogCheck } from '@/utils/earlyLog';
 import { cropIsOver } from '@/utils/nextCrop';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
@@ -616,7 +617,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     return () => { stale = true; };
   }, [selectedFarmId, harvestStamp]);
 
-  const handleSaveLog = async () => {
+  const handleSaveLog = () => { void saveLog(); };
+  // earlyOk: the farmer confirmed they did a step earlier than planned
+  const saveLog = async (earlyOk = false) => {
     if (savingLog) return;
     if (!currentCycle?.id) {
       Alert.alert(tr.plogNoSeasonT, tr.plogNoSeasonB);
@@ -632,6 +635,22 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     if (logEarliest && logDate < logEarliest) {
       Alert.alert(tr.plogDateEarlyT, tr.plogDateEarlyB.replace(/\{date\}/g, shortDate(logEarliest, tr)));
+      return;
+    }
+    // Earlier than planned: close is fine, earlier asks, much earlier is refused (utils/earlyLog)
+    const early = finishesStep && logStepTarget
+      ? earlyLogCheck(latestGuide, logStepTarget, completedSteps, logDate) : null;
+    if (early?.level === 'block') {
+      Alert.alert(tr.plogTooEarlyT, tr.plogTooEarlyB
+        .replace(/\{date\}/g, shortDate(early.planned, tr)).replace(/\{from\}/g, shortDate(early.earliest, tr)));
+      return;
+    }
+    if (early?.level === 'ask' && !earlyOk) {
+      Alert.alert(tr.plogEarlyAskT, tr.plogEarlyAskB
+        .replace(/\{date\}/g, shortDate(early.planned, tr)).replace(/\{n\}/g, String(early.days)), [
+        { text: tr.plogEarlyChange, style: 'cancel' },
+        { text: tr.plogEarlyYes, onPress: () => { void saveLog(true); } },
+      ]);
       return;
     }
     // Only a problem log has an issue
