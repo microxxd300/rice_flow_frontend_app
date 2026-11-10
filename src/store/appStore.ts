@@ -31,6 +31,7 @@ interface AppState {
   latestGuide: any | null;    // the PalayCheck planting guide (app-shaped steps)
   notifications: AppNotification[];
   pendingLogStep: string | null;   // guide step the Progress log form opens for ("Log this step")
+  pendingLogFrom: string | null;   // the tab that asked, so cancelling the form goes back to it
   entryTab: string | null;   // tab to open when setup finishes (kept here: the navigator remounts)
   pickedVariety: { recId: number; varietyId: number } | null;   // set the moment the farmer taps a variety
   progressLogs: any[];
@@ -58,7 +59,7 @@ interface AppState {
   markAllNotificationsRead: () => void;
   removeNotification:       (id: string) => void;
   hydrateNotifications:     (list: AppNotification[]) => void;
-  setPendingLogStep:        (stepId: string | null) => void;
+  setPendingLogStep:        (stepId: string | null, fromTab?: string | null) => void;
   setForecast:              (forecast: { key: string; data: WeatherResponse; at: number } | null) => void;
   setEntryTab:              (tab: string | null) => void;
   setPickedVariety:         (pick: { recId: number; varietyId: number } | null) => void;
@@ -88,6 +89,7 @@ export const useAppStore = create<AppState>((set) => ({
   latestGuide:          null,
   notifications:        [],
   pendingLogStep:       null,
+  pendingLogFrom:       null,
   entryTab:             null,
   pickedVariety:        null,
   progressLogs:         [],
@@ -221,7 +223,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   hydrateNotifications: (list) => set({ notifications: list.slice(0, NOTIFICATION_LIMIT) }),
 
-  setPendingLogStep: (stepId) => set({ pendingLogStep: stepId }),
+  // Clearing the step keeps where it came from: the form reads it as it opens
+  setPendingLogStep: (stepId, fromTab) => set(stepId ? { pendingLogStep: stepId, pendingLogFrom: fromTab ?? null } : { pendingLogStep: null }),
   setForecast: (forecast) => set({ forecast }),
   setEntryTab: (tab) => set({ entryTab: tab }),
   setPickedVariety: (pick) => set({ pickedVariety: pick }),
@@ -281,7 +284,7 @@ export const useAppStore = create<AppState>((set) => ({
     user: null, farms: [], farmsLoaded: false, selectedFarmId: null, setupComplete: false,
     setupStep: null, setupData: {},
     latestRecommendation: null, latestGuide: null,
-    notifications: [], pendingLogStep: null, entryTab: null, pickedVariety: null,
+    notifications: [], pendingLogStep: null, pendingLogFrom: null, entryTab: null, pickedVariety: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
     notificationsEnabled: true, weatherAlertsEnabled: true, forecast: null,
   }),

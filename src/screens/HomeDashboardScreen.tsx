@@ -138,7 +138,7 @@ export const HomeDashboardScreen: React.FC = () => {
     : tr.homeInDays.replace('{n}', String(offset));
   // Tapping a step opens the log form that finishes it
   const logStep = (stepId: string) => {
-    useAppStore.getState().setPendingLogStep(stepId);
+    useAppStore.getState().setPendingLogStep(stepId, 'HomeTab');
     navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
   };
 

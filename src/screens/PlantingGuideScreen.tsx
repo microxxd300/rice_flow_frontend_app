@@ -181,7 +181,7 @@ export const PlantingGuideScreen: React.FC = () => {
 
   // A step is finished by logging it: open the Progress log form for this step
   const logStep = (id: string) => {
-    useAppStore.getState().setPendingLogStep(id);
+    useAppStore.getState().setPendingLogStep(id, 'PlantingTab');
     navigation.navigateDeprecated('ProgressTab', { screen: 'ProgressDashboardHome' });
   };
 

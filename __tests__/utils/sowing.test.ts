@@ -1,4 +1,4 @@
-import { daysAgoISO, sowingQuestionDue, sowingStep, validSowingDate } from '@/utils/sowing';
+import { daysAgoISO, earliestLogDate, sowingQuestionDue, sowingStep, validSowingDate } from '@/utils/sowing';
 
 const guide = {
   start_date: '2026-11-14',           // the planned sowing day
@@ -47,5 +47,20 @@ describe('validSowingDate', () => {
     expect(validSowingDate('2026-02-30', today)).toBe(false);
     expect(validSowingDate('Nov 8', today)).toBe(false);
     expect(validSowingDate('', today)).toBe(false);
+  });
+});
+
+describe('earliestLogDate', () => {
+  const transplant = { key: 'transplant', daysAfterPlanting: 21 };
+
+  it('is the sowing day for a step that comes after sowing', () => {
+    expect(earliestLogDate(guide, transplant, ['1', '2'])).toBe('2026-11-14');
+  });
+
+  it('has no limit before sowing is logged, or for steps up to sowing', () => {
+    expect(earliestLogDate(guide, transplant, ['1'])).toBeNull();                               // not sown yet
+    expect(earliestLogDate(guide, { key: 'seeds', daysAfterPlanting: -10 }, ['2'])).toBeNull();
+    expect(earliestLogDate(guide, { key: 'seedbed', daysAfterPlanting: 0 }, ['2'])).toBeNull();
+    expect(earliestLogDate(null, transplant, ['2'])).toBeNull();
   });
 });
