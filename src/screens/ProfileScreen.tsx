@@ -268,7 +268,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onLogout }) => {
             {[
               { lbl: sentence(tr.profileFarms), val: String(farmList.length) },
               { lbl: tr.profileTotalArea, val: `${farmList.reduce((a: number, f: any) => a + (Number(f.area_hectares ?? f.areaHectares) || 0), 0).toFixed(1)} ha` },
-              { lbl: tr.profileEditBarangay, val: displayBaran || '—' },
             ].map(t => (
               <View key={t.lbl} style={s.tile}>
                 <Text style={s.tileLbl} numberOfLines={1}>{t.lbl}</Text>
