@@ -575,7 +575,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   // What the weather or time of day means for the step this log finishes
   const { adviceFor } = useStepAdvice();
-  const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
+  const logWeather = finishesStep ? adviceFor(logStepTarget, true) : null;
 
   // Real seasonal yields — one record per cycle that has a saved yield
   const [realYields, setRealYields] = useState<{ season: string; yieldTons: number; tHa: number | null }[]>([]);

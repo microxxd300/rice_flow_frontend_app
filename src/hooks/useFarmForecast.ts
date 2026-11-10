@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/appStore';
 import { useSelectedFarm } from '@/hooks/useSelectedFarm';
 import { useTranslation } from '@/i18n/useTranslation';
 import { guideDay, guideProgress, guideSteps, type GuideStep } from '@/utils/guideSteps';
-import { ADVICE_TEXT, stepWeather, usableOutlook, type StepWeather } from '@/utils/stepWeather';
+import { ADVICE_TEXT, adviceDay, stepWeather, usableOutlook, type StepWeather } from '@/utils/stepWeather';
 import { stepTimeAdvice, type StepAdvice } from '@/utils/stepTime';
 
 // The server keeps a forecast for 10 minutes, so asking more often brings nothing new
@@ -55,8 +55,9 @@ export function useStepWeather() {
   const completed = useAppStore(s => s.completedGuideSteps);
   const current  = guideProgress(guideSteps(guide), completed).current;
   return {
-    adviceFor: (step: GuideStep | null | undefined): StepWeather | null =>
-      stepWeather(step, outlook, today, !!step && step.id === current?.id),
+    // doingNow: the farmer is logging this step as done, so it is judged as due today
+    adviceFor: (step: GuideStep | null | undefined, doingNow = false): StepWeather | null =>
+      stepWeather(step, outlook, adviceDay(step, today, doingNow), !!step && step.id === current?.id),
     updatedAt: outlook && forecast ? forecast.at : null,
   };
 }
@@ -67,8 +68,8 @@ export function useStepAdvice() {
   const guide   = useAppStore(s => s.latestGuide);
   const today   = guideDay(guide);
   return {
-    adviceFor: (step: GuideStep | null | undefined): StepAdvice | null =>
-      weather.adviceFor(step) ?? stepTimeAdvice(step, today),
+    adviceFor: (step: GuideStep | null | undefined, doingNow = false): StepAdvice | null =>
+      weather.adviceFor(step, doingNow) ?? stepTimeAdvice(step, adviceDay(step, today, doingNow)),
     updatedAt: weather.updatedAt,
   };
 }

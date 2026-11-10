@@ -12,6 +12,11 @@ const OUTDOOR_FIELD_STEPS = new Set([
   'fertilizer1', 'lcc', 'water', 'weeds', 'pests',
   'fertilizer2', 'fertilizerpi', 'flowering', 'drain',
   'harvest', 'drystore',
+  // rainfed and upland guides (getting seeds and planning with neighbors are not field work)
+  'rf_land', 'rf_basal', 'rf_prep', 'rf_sow', 'rf_water', 'rf_weeds', 'rf_top', 'rf_pests', 'rf_lcc',
+  'rf_drain', 'rf_harvest',
+  'up_land', 'up_organic', 'up_sow', 'up_weed1', 'up_fert', 'up_stand', 'up_weed2', 'up_water', 'up_pests',
+  'up_fertpi', 'up_harvest', 'up_store',
 ]);
 
 export type TimeAdviceCode = 'nightWork';
