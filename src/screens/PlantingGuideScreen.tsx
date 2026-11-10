@@ -29,6 +29,9 @@ import { empty, stepIcon } from '@/assets/illustrations';
 // Open-Meteo 2023–2025 average rain per month (mm) in Panabo City. Used until the
 // farm's own monthly rainfall loads, or when the phone is offline.
 const PANABO_MONTHLY_RAIN = [332, 206, 197, 201, 361, 377, 249, 278, 262, 269, 243, 281];
+// The last flood risk read for each farm: a failed or slow reload keeps it, instead of
+// the calendar dropping it and showing every month green
+const lastFloodRisk = new Map<number, string>();
 
 // Colors for the current-month alert under the calendar (same as the month legend)
 const ALERT_TONE: Record<string, { bg: string; fg: string; icon: 'warning' | 'information-circle' | 'checkmark-circle' }> = {
@@ -159,8 +162,8 @@ export const PlantingGuideScreen: React.FC = () => {
   const calendarVariety = guideVariety ?? (useAppStore.getState().latestRecommendation as any)?.results?.[0]?.variety;
   // The farm's own monthly rainfall and flood risk (loaded below); Panabo averages until then
   const [monthlyRain, setMonthlyRain] = useState<number[] | null>(null);
-  const [floodRisk,   setFloodRisk]   = useState<string | undefined>(undefined);
   const calendarFarm = useSelectedFarm() as any;
+  const [floodRisk,   setFloodRisk]   = useState<string | undefined>(() => lastFloodRisk.get(calendarFarm?.id));
   const climate = useMemo(() => buildClimateCalendar(calendarVariety, tr, {
     monthlyRain, floodRisk, ecosystem: calendarFarm?.ecosystem,
   }), [calendarVariety?.season, calendarVariety?.common_name, calendarVariety?.maturity_days, tr,
@@ -173,9 +176,14 @@ export const PlantingGuideScreen: React.FC = () => {
     apiWeather.monthlyRainfall(Number(lat), Number(lng))
       .then(res => { if (!cancelled) setMonthlyRain(res.data.months); })
       .catch(() => {});   // keep the Panabo averages
+    setFloodRisk(lastFloodRisk.get(calendarFarm.id));
     apiScan.history(calendarFarm.id)
-      .then(res => { if (!cancelled) setFloodRisk((res.data ?? [])[0]?.flood_risk); })
-      .catch(() => {});
+      .then(res => {
+        const risk = (res.data ?? [])[0]?.flood_risk;   // the newest scan
+        if (risk) lastFloodRisk.set(calendarFarm.id, risk);
+        if (!cancelled) setFloodRisk(risk ?? lastFloodRisk.get(calendarFarm.id));
+      })
+      .catch(() => {});   // keep the last flood risk read for this farm
     return () => { cancelled = true; };
   }, [calendarFarm?.id, calendarFarm?.latitude, calendarFarm?.longitude]);
 

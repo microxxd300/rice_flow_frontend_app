@@ -7,6 +7,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { apiFarms, apiScan, apiRecommendations } from '@/services/apiService';
 import { fetchActiveCycleLogs } from '@/utils/progressLogs';
 import { useAppStore } from '@/store/appStore';
+import { useLanguageStore } from '@/store/languageStore';
+import { translations } from '@/i18n/translations';
 
 type Nav = StackNavigationProp<any>;
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -141,9 +143,10 @@ export const AnalysisLoadingScreen: React.FC = () => {
           scanRef.current = scan;
 
           if (scan.flood_risk === 'High') {
+            const words = translations[useLanguageStore.getState().language];
             useAppStore.getState().addNotification({
-              title:    'Warning: High flood risk',
-              body:     'Your farm has high flood risk. Check the Irrigation guide.',
+              title:    words.floodHighTitle,
+              body:     words.floodHighBody,
               category: 'irrigation',
               icon:     'warning-outline',
             });

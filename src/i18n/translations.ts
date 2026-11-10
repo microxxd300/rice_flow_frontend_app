@@ -694,6 +694,8 @@ const t = {
     wxAdviceNightWork: 'Gabi na. Para ligtas, gawin ang gawaing ito sa bukid kapag maliwanag na.',
     wxUpdatedAt:       'Panahon, na-update {time}',
     wxStepAlertTitle:  'Panahon: silipin ang step mo ngayon',
+    floodHighTitle:    'Mataas ang panganib ng baha',
+    floodHighBody:     'Mataas ang panganib ng baha sa bukid mo. Ayusin ang pilapil at kanal, at basahin ang babala sa panahon sa mga step ng Gabay.',
     plogFinishesStep:  'Tapos na ang step na ito pag na-save:',
 
     // Reports screen
@@ -1567,6 +1569,8 @@ const t = {
     wxAdviceNightWork: 'It is nighttime. For safety, do this field work when it is light outside.',
     wxUpdatedAt:       'Weather updated {time}',
     wxStepAlertTitle:  'Weather: check your step today',
+    floodHighTitle:    'High flood risk',
+    floodHighBody:     'Your farm has a high flood risk. Keep the dikes and drains in good shape, and read the weather warnings on your Guide steps.',
     plogFinishesStep:  'This log finishes the guide step:',
 
     reportsTitle:         'Reports',
@@ -2439,6 +2443,8 @@ const t = {
     wxAdviceNightWork: 'Gabii na. Para luwas, buhata kini sa uma kung hayag na.',
     wxUpdatedAt:       'Panahon, na-update {time}',
     wxStepAlertTitle:  'Panahon: tan-awa ang imong step karon',
+    floodHighTitle:    'Taas ang peligro sa baha',
+    floodHighBody:     'Taas ang peligro sa baha sa imong uma. Ayuha ang pilapil ug kanal, ug basaha ang pahimangno sa panahon sa mga step sa Giya.',
     plogFinishesStep:  'Mahuman ni nga step kung i-save:',
 
     reportsTitle:         'Mga Report',
