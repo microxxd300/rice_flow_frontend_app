@@ -13,6 +13,10 @@ import { useLanguageStore } from '@/store/languageStore';
 import { useAppStore } from '@/store/appStore';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
+import { storage } from '@/services/storage';
+import { STORAGE_KEYS } from '@/constants/api';
+import { addToChat, readChats, saveChat, type SavedChat } from '@/utils/chatHistory';
+import { relTime } from '@/utils/relativeTime';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -24,12 +28,6 @@ interface Message {
   sources?: AdviceSource[];   // the booklet pages the answer came from
 }
 
-interface HistoryItem {
-  id: string;
-  title: string;
-  preview: string;
-}
-
 // Icon + translation key per suggestion; labels resolved from `tr` at render.
 const SUGGESTION_META: { key: 'aiSuggFertilizer' | 'aiSuggHarvest' | 'aiSuggPest' | 'aiSuggWater' | 'aiSuggRain'; icon: IoniconsName }[] = [
   { key: 'aiSuggFertilizer', icon: 'flask-outline' },
@@ -38,6 +36,9 @@ const SUGGESTION_META: { key: 'aiSuggFertilizer' | 'aiSuggHarvest' | 'aiSuggPest
   { key: 'aiSuggWater',      icon: 'water-outline' },
   { key: 'aiSuggRain',       icon: 'rainy-outline' },
 ];
+
+// Ids for chats (c), questions (u) and answers (a)
+const newId = (kind: 'c' | 'u' | 'a') => `${kind}_${Date.now()}`;
 
 function nowTime() {
   const d = new Date();
@@ -213,6 +214,35 @@ export const AIChatScreen: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
+  // Chats are saved on this phone, so the farmer can open an earlier one again
+  const [chats, setChats] = useState<SavedChat[]>([]);
+  const [chatsLoaded, setChatsLoaded] = useState(false);
+  const [chatId, setChatId] = useState(() => newId('c'));
+  const chatsRef   = useRef<SavedChat[]>([]);
+  const chatIdRef  = useRef(chatId);
+  const waitingRef = useRef<string | null>(null);   // the chat still waiting for its answer
+  const putChats = (next: SavedChat[]) => {
+    if (next === chatsRef.current) return;
+    chatsRef.current = next;
+    setChats(next);
+    storage.setItem(STORAGE_KEYS.AI_CHATS, next).catch(() => {});
+  };
+  const switchChat = (id: string) => { chatIdRef.current = id; setChatId(id); };
+  useEffect(() => {
+    let gone = false;
+    storage.getItem<unknown>(STORAGE_KEYS.AI_CHATS).then(stored => {
+      if (gone) return;
+      chatsRef.current = readChats(stored);
+      setChats(chatsRef.current);
+      setChatsLoaded(true);
+    });
+    return () => { gone = true; };
+  }, []);
+  // Every question and answer is saved as it arrives
+  useEffect(() => {
+    if (chatsLoaded) putChats(saveChat(chatsRef.current, chatIdRef.current, messages));
+  }, [messages, chatsLoaded]);
+
   // The tab bar hides while typing, so its clearance collapses then
   const keyboardOpen = useKeyboardOpen();
   const inputPaddingBottom = keyboardOpen ? 10 : tabClearance;
@@ -243,11 +273,18 @@ export const AIChatScreen: React.FC = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    const userMsg: Message = { id: `u_${Date.now()}`, role: 'user', text: trimmed, time: nowTime() };
+    const userMsg: Message = { id: newId('u'), role: 'user', text: trimmed, time: nowTime() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsTyping(true);
     scrollToBottom();
+    // The farmer may open another chat while waiting: the answer goes to the chat that asked
+    const askedIn = chatIdRef.current;
+    waitingRef.current = askedIn;
+    const deliver = (msg: Message) => {
+      if (chatIdRef.current === askedIn) setMessages(prev => [...prev, msg]);
+      else putChats(addToChat(chatsRef.current, askedIn, msg));
+    };
 
     // Build history for context (last 6 messages)
     const history = messages.slice(-6).map(m => ({ role: m.role === 'user' ? 'user' : 'model', text: m.text }));
@@ -255,23 +292,36 @@ export const AIChatScreen: React.FC = () => {
     try {
       const res   = await apiAI.chat(trimmed, history, language, selectedFarmId);
       const reply = res.data.reply;
-      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text: reply, time: nowTime(),
-                                      sources: res.data.sources ?? [] }]);
+      deliver({ id: newId('a'), role: 'ai', text: reply, time: nowTime(), sources: res.data.sources ?? [] });
     } catch (err: any) {
       // Say so, never a canned answer: it would read as AI advice for a question nobody answered
       const text = err?.response?.status === 429 ? tr.aiDailyLimit : tr.aiUnavailable;
-      setMessages(prev => [...prev, { id: `a_${Date.now()}`, role: 'ai', text, time: nowTime() }]);
+      deliver({ id: newId('a'), role: 'ai', text, time: nowTime() });
     } finally {
-      setIsTyping(false);
-      scrollToBottom();
+      if (waitingRef.current === askedIn) waitingRef.current = null;
+      if (chatIdRef.current === askedIn) {
+        setIsTyping(false);
+        scrollToBottom();
+      }
     }
   };
 
+  // The chat on screen is already saved, so it stays in History
   const startNewChat = () => {
+    switchChat(newId('c'));
     setMessages([]);
     setInput('');
     setIsTyping(false);
     closeDrawer();
+  };
+
+  const openChat = (chat: SavedChat) => {
+    switchChat(chat.id);
+    setMessages(chat.messages as Message[]);
+    setInput('');
+    setIsTyping(waitingRef.current === chat.id);
+    closeDrawer();
+    scrollToBottom();
   };
 
   const isEmpty = messages.length === 0;
@@ -414,11 +464,31 @@ export const AIChatScreen: React.FC = () => {
             <Text style={s.newChatText}>{tr.aiNewChat}</Text>
           </TouchableOpacity>
 
-          {/* Chats are not saved yet: say so instead of listing past chats */}
-          <View style={s.historyEmpty}>
-            <View style={s.historyEmptyIcon}><Ionicons name="chatbubbles-outline" size={22} color="#111827" /></View>
-            <Text style={s.historyItemPreview}>{tr.aiNoHistory}</Text>
-          </View>
+          {/* Saved chats, newest first; tap one to open it again */}
+          {chats.length === 0 ? (
+            <View style={s.historyEmpty}>
+              <View style={s.historyEmptyIcon}><Ionicons name="chatbubbles-outline" size={22} color="#111827" /></View>
+              <Text style={s.historyItemPreview}>{tr.aiNoHistory}</Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={s.historyList}
+              contentContainerStyle={s.historyListContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {chats.map(chat => (
+                <TouchableOpacity
+                  key={chat.id}
+                  style={[s.historyItem, chat.id === chatId && s.historyItemOn]}
+                  onPress={() => openChat(chat)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.historyItemTitle} numberOfLines={1}>{chat.title}</Text>
+                  <Text style={s.historyItemTime}>{relTime(chat.updatedAt, tr)}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </SafeAreaView>
       </Animated.View>
     </View>
@@ -501,5 +571,11 @@ const s = StyleSheet.create({
   historyEmptyIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#F1F2F1', justifyContent: 'center', alignItems: 'center' },
 
   /* History list — sentence-case heading, no decorative icon boxes */
+  historyList:        { flex: 1, marginTop: 12 },
+  historyListContent: { paddingHorizontal: 12, paddingBottom: 24, gap: 2 },
+  historyItem:        { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, gap: 3 },
+  historyItemOn:      { backgroundColor: '#F1F2F1' },
+  historyItemTitle:   { fontSize: 14.5, color: '#111827', fontFamily: 'Inter_600SemiBold' },
+  historyItemTime:    { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
   historyItemPreview: { fontSize: 13, color: '#6B7280', lineHeight: 19, textAlign: 'center' },
 });

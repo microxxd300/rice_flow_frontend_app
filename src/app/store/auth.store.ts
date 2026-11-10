@@ -142,6 +142,7 @@ async function clearUserData(): Promise<void> {
   await storage.removeItem(STORAGE_KEYS.WEATHER_ALERTS);
   await storage.removeItem(STORAGE_KEYS.PROFILE_OVERRIDES);
   await storage.removeItem(STORAGE_KEYS.SELECTED_FARM);
+  await storage.removeItem(STORAGE_KEYS.AI_CHATS);
   useAppStore.getState().reset();
 }
 
