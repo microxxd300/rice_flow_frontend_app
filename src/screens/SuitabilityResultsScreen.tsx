@@ -236,8 +236,8 @@ export const SuitabilityResultsScreen: React.FC = () => {
 
           <Text style={[s.fieldNote, T && { fontSize: 14, lineHeight: 20 }]}>
             {allTied
-              ? 'All three varieties below score equally on your field. Ranked by yield and days-to-harvest.'
-              : 'The RSI score rates the field, not the variety. Ranked by score, yield, and days-to-harvest.'}
+              ? 'All three varieties below score equally on your field. Ranked by harvest and days-to-harvest.'
+              : 'The RSI score rates the field, not the variety. Ranked by score, harvest, and days-to-harvest.'}
           </Text>
 
           {/* Soil read as estimates (no SoilGrids data), or soil that differs across the farm */}
@@ -282,7 +282,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
                 <View style={s.metricCol}>
                   <View style={s.metricHead}>
                     <Ionicons name="trending-up-outline" size={12} color="#9CA3AF" />
-                    <Text style={[s.metricLabel, T && { fontSize: 13 }]}>Expected yield</Text>
+                    <Text style={[s.metricLabel, T && { fontSize: 13 }]}>Expected harvest</Text>
                   </View>
                   <Text style={s.metricVal}>
                     {rec.variety.avgYield}<Text style={s.metricUnit}> t/ha</Text>
@@ -355,7 +355,7 @@ export const SuitabilityResultsScreen: React.FC = () => {
             // Just the code ("S1"): the full names did not fit; the key below the table names them
             { label: 'Class',       values: ranked.map(r => suitabilityCode(r.suitabilityClass) || '—') },
             { label: 'Days',        values: ranked.map(r => `${r.variety.maturityDays}`) },
-            { label: 'Yield (t/ha)',values: ranked.map(r => `${r.variety.avgYield}`) },
+            { label: 'Harvest (t/ha)',values: ranked.map(r => `${r.variety.avgYield}`) },
             { label: 'Flood tol.',  values: ranked.map(r => tolLabel(r.variety.floodTolerance)) },
             { label: 'Drought tol.',values: ranked.map(r => tolLabel(r.variety.droughtTolerance)) },
           ].map((row, i, arr) => (

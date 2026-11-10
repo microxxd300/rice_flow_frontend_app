@@ -125,7 +125,7 @@ export const YieldSummaryCard: React.FC<YieldSummaryCardProps> = ({
         </View>
         <View style={styles.metricDivider} />
         <View style={styles.metric}>
-          <Text style={styles.metricLabel}>Actual Yield</Text>
+          <Text style={styles.metricLabel}>Actual Harvest</Text>
           <Text style={styles.metricValue}>{actualYield}</Text>
           <Text style={styles.metricUnit}>kg</Text>
         </View>
