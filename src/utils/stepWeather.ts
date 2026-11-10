@@ -1,5 +1,6 @@
 import type { WeatherOutlook } from '@/services/apiService';
 import type { GuideStep } from '@/utils/guideSteps';
+import { HARVEST_KEYS } from '@/utils/sowing';
 
 /**
  * What the weather means for a PalayCheck step: hold the fertilizer before heavy rain,
@@ -33,17 +34,34 @@ export type WeatherAdviceCode =
   | 'fertilizerHeavyRain' | 'fertilizerRainSoon' | 'noSpray' | 'herbicideWait'
   | 'sowHeavyRain' | 'fieldHeavyRain' | 'waterHeavyRain' | 'drainRain'
   | 'harvestRain' | 'dryRain'
-  | 'fieldRainSoon' | 'sowRainSoon' | 'floodWatch' | 'strongWind' | 'heat' | 'dryAhead';
+  | 'fieldRainSoon' | 'sowRainSoon' | 'floodWatch' | 'strongWind' | 'rainSoon' | 'heat' | 'dryAhead';
 
 export interface StepWeather {
   level: 'stop' | 'caution';   // stop = do not do the step now; caution = do it with care
   code:  WeatherAdviceCode;
 }
 
-const FERTILIZER = ['fertilizer1', 'fertilizer2', 'fertilizerpi'];
+// Each list has the irrigated (PalayCheck) steps, then the rainfed (rf_) and upland (up_) ones
+const FERTILIZER = ['fertilizer1', 'fertilizer2', 'fertilizerpi', 'rf_basal', 'rf_top', 'up_organic', 'up_fert', 'up_fertpi'];
 const SOWING     = ['seedbed', 'transplant', 'replant'];
-const FIELD_WORK = ['plow', 'leveling'];
+// Direct-seeded farms want rain after sowing, so only very heavy rain holds it
+const DIRECT_SOWING = ['rf_sow', 'up_sow'];
+const FIELD_WORK = ['plow', 'leveling', 'rf_land', 'up_land'];
 const WATER      = ['water', 'flowering'];
+const PESTS      = ['pests', 'rf_pests', 'up_pests'];
+const WEEDS      = ['weeds', 'rf_weeds', 'up_weed1', 'up_weed2'];
+const DRAIN      = ['drain', 'rf_drain'];
+const DRYING     = ['drystore', 'up_store'];
+
+/**
+ * The guide day to judge a step by. A step the farmer is logging as done is being done
+ * today, whatever day the guide planned it for, so it counts as due today.
+ */
+export const adviceDay = (
+  step: Pick<GuideStep, 'daysAfterPlanting'> | null | undefined,
+  guideToday: number,
+  doingNow = false,
+): number => (doingNow && step ? Math.max(guideToday, step.daysAfterPlanting) : guideToday);
 
 export function stepWeather(
   step: Pick<GuideStep, 'key' | 'daysAfterPlanting'> | null | undefined,
@@ -61,11 +79,11 @@ export function stepWeather(
     if (outlook.rain_mm_24h >= L.heavyRain24h) return { level: 'stop', code: 'fertilizerHeavyRain' };
     if (rainSoon) return { level: 'caution', code: 'fertilizerRainSoon' };
   }
-  if (key === 'pests' && (rainSoon || outlook.wind_kph_max_12h > L.sprayWind)) {
+  if (PESTS.includes(key) && (rainSoon || outlook.wind_kph_max_12h > L.sprayWind)) {
     return { level: 'stop', code: 'noSpray' };
   }
-  if (key === 'weeds' && rainSoon) return { level: 'caution', code: 'herbicideWait' };
-  if (SOWING.includes(key) && outlook.rain_mm_24h >= L.veryHeavyRain24h) {
+  if (WEEDS.includes(key) && rainSoon) return { level: 'caution', code: 'herbicideWait' };
+  if ((SOWING.includes(key) || DIRECT_SOWING.includes(key)) && outlook.rain_mm_24h >= L.veryHeavyRain24h) {
     return { level: 'caution', code: 'sowHeavyRain' };
   }
   if (SOWING.includes(key) && rainSoon) return { level: 'caution', code: 'sowRainSoon' };
@@ -78,14 +96,15 @@ export function stepWeather(
   if (WATER.includes(key) && outlook.rain_mm_24h >= L.heavyRain24h) {
     return { level: 'caution', code: 'waterHeavyRain' };
   }
-  if (key === 'drain' && outlook.rain_mm_48h >= L.harvestRain48h) return { level: 'caution', code: 'drainRain' };
-  if (key === 'harvest' && (outlook.rain_mm_48h >= L.harvestRain48h || outlook.rain_prob_24h >= L.harvestChance24h)) {
+  if (DRAIN.includes(key) && outlook.rain_mm_48h >= L.harvestRain48h) return { level: 'caution', code: 'drainRain' };
+  if (HARVEST_KEYS.includes(key) && (outlook.rain_mm_48h >= L.harvestRain48h || outlook.rain_prob_24h >= L.harvestChance24h)) {
     return { level: 'stop', code: 'harvestRain' };
   }
-  if (key === 'drystore' && rainSoon) return { level: 'stop', code: 'dryRain' };
+  if (DRYING.includes(key) && rainSoon) return { level: 'stop', code: 'dryRain' };
   // Any other step: weather that makes work in the field risky
   if (outlook.rain_mm_24h >= L.veryHeavyRain24h) return { level: 'caution', code: 'floodWatch' };
   if (outlook.wind_kph_max_12h >= L.strongWind) return { level: 'caution', code: 'strongWind' };
+  if (rainSoon) return { level: 'caution', code: 'rainSoon' };
   if ((outlook.temp_c_max_24h ?? 0) >= L.heatC) return { level: 'caution', code: 'heat' };
   if (WATER.includes(key) && outlook.rain_mm_48h < L.dryRain48h && outlook.rain_prob_48h < L.dryChance48h) {
     return { level: 'caution', code: 'dryAhead' };
@@ -119,6 +138,7 @@ export const ADVICE_TEXT: Record<WeatherAdviceCode, string> = {
   sowRainSoon:         'wxAdviceSowSoon',
   floodWatch:          'wxAdviceFlood',
   strongWind:          'wxAdviceWind',
+  rainSoon:            'wxAdviceRainSoon',
   heat:                'wxAdviceHeat',
   dryAhead:            'wxAdviceDryAhead',
 };

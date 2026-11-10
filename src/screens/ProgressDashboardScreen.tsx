@@ -21,7 +21,7 @@ import { answerSowing, loadGuide, refreshCycle } from '@/services/guideLoader';
 import { useLanguageStore } from '@/store/languageStore';
 import { shortDate } from '@/components/SowingQuestion';
 import { DatePickerField } from '@/components/DatePickerField';
-import { HARVEST_KEYS, SOWING_KEYS, daysAgoISO, sowingQuestionDue } from '@/utils/sowing';
+import { HARVEST_KEYS, SOWING_KEYS, dateFromISO, daysAgoISO, earliestLogDate, sowingQuestionDue } from '@/utils/sowing';
 import { cropIsOver } from '@/utils/nextCrop';
 import { STEP_ADVICE_TEXT } from '@/utils/stepTime';
 import { useAppStore } from '@/store/appStore';
@@ -539,12 +539,20 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     setLogKind('step');
     setShowAddLog(true);
   };
+  // The tab that sent the farmer here to log a step (Home or the guide): cancel goes back to it
+  const logCameFrom = useRef<string | null>(null);
   const closeLog = () => {
+    logCameFrom.current = null;
     setShowAddLog(false);
     setLogStep(null);
     setLogKind('');
     setLogDate(daysAgoISO(0));
     setPickDate(false);
+  };
+  const cancelLog = () => {
+    const back = logCameFrom.current;
+    closeLog();
+    if (back) navigation.navigateDeprecated(back);
   };
   // A fixed problem stops lowering plant health, here and on the guide's problem card
   const markLogFixed = async (log: any) => {
@@ -558,16 +566,17 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
   };
   // Android Back or a tap outside the sheet: ask first if something has been filled in
   const askCloseLog = () => {
-    if (!logKind && !logNotes.trim() && !logAction.trim()) { closeLog(); return; }
+    if (!logKind && !logNotes.trim() && !logAction.trim()) { cancelLog(); return; }
     Alert.alert(tr.leaveFormTitle, tr.leaveFormBody, [
       { text: tr.leaveFormStay, style: 'cancel' },
-      { text: tr.leaveFormLeave, style: 'destructive', onPress: closeLog },
+      { text: tr.leaveFormLeave, style: 'destructive', onPress: cancelLog },
     ]);
   };
   // Sent from the Planting tab or Home's Upcoming Tasks
   const pendingLogStep = useAppStore(s => s.pendingLogStep);
   useEffect(() => {
     if (!pendingLogStep) return;
+    logCameFrom.current = useAppStore.getState().pendingLogFrom;
     setSelectedTab('logs');
     openLogFor(pendingLogStep);
     useAppStore.getState().setPendingLogStep(null);
@@ -575,7 +584,9 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
 
   // What the weather or time of day means for the step this log finishes
   const { adviceFor } = useStepAdvice();
-  const logWeather = finishesStep ? adviceFor(logStepTarget) : null;
+  const logWeather = finishesStep ? adviceFor(logStepTarget, true) : null;
+  // A step that comes after sowing cannot be dated before the sowing day
+  const logEarliest = finishesStep ? earliestLogDate(latestGuide, logStepTarget, completedSteps) : null;
 
   // Real seasonal yields — one record per cycle that has a saved yield
   const [realYields, setRealYields] = useState<{ season: string; yieldTons: number; tHa: number | null }[]>([]);
@@ -617,6 +628,10 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
     }
     if (logKind === 'note' && !logNotes.trim()) {
       Alert.alert(tr.plogKindNote, tr.plogNeedNote);
+      return;
+    }
+    if (logEarliest && logDate < logEarliest) {
+      Alert.alert(tr.plogDateEarlyT, tr.plogDateEarlyB.replace(/\{date\}/g, shortDate(logEarliest, tr)));
       return;
     }
     // Only a problem log has an issue
@@ -1392,7 +1407,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                 <Text style={[s.modalTitle, T && { fontSize: 19 }]}>{tr.plogModalTitle}</Text>
                 <Text style={[s.modalSub, T && { fontSize: 14 }]}>{tr.plogModalSub}</Text>
               </View>
-              <TouchableOpacity onPress={closeLog} style={s.modalCloseBtn} activeOpacity={0.75}>
+              <TouchableOpacity onPress={cancelLog} style={s.modalCloseBtn} activeOpacity={0.75}>
                 <Ionicons name="close" size={20} color="#111827" />
               </TouchableOpacity>
             </View>
@@ -1588,7 +1603,12 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
                         <Text style={[s.dateChipText, pickDate && s.dateChipTextOn, T && { fontSize: 14 }]}>{tr.plogPickDate}</Text>
                       </TouchableOpacity>
                     </View>
-                    {pickDate && <DatePickerField value={logDate} onChange={setLogDate} autoOpen style={{ marginTop: 8 }} />}
+                    {pickDate && (
+                      <DatePickerField
+                        value={logDate} onChange={setLogDate} autoOpen style={{ marginTop: 8 }}
+                        minimumDate={logEarliest ? dateFromISO(logEarliest) : undefined}
+                      />
+                    )}
                   </View>
 
                   {/* The stage comes from the crop and its guide; the farmer never has to pick it */}
@@ -1604,7 +1624,7 @@ export const ProgressDashboardScreen: React.FC<ProgressDashboardScreenProps> = (
               )}
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 8 }}>
-                <TouchableOpacity style={s.mCancelBtn} onPress={closeLog} activeOpacity={0.7}>
+                <TouchableOpacity style={s.mCancelBtn} onPress={cancelLog} activeOpacity={0.7}>
                   <Text style={[s.mCancelBtnText, T && { fontSize: 15 }]}>{tr.cancel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity

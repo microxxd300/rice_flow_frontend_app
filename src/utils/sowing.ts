@@ -22,6 +22,23 @@ export function sowingQuestionDue(guide: any, completedIds: string[], today: Dat
   return guideDay(guide, today) >= step.daysAfterPlanting;
 }
 
+/**
+ * The earliest day a step can be logged on, as YYYY-MM-DD: a step that comes after sowing
+ * cannot be done before the crop was sown (the server refuses it too, progress/serializers.py).
+ * Null when there is no limit: steps up to sowing, or a crop whose sowing is not logged yet.
+ */
+export function earliestLogDate(
+  guide: any,
+  step: { key: string; daysAfterPlanting: number } | null | undefined,
+  completedIds: string[],
+): string | null {
+  const sown = sowingStep(guide);
+  if (!step || !sown || !completedIds.includes(sown.id)) return null;
+  if (SOWING_KEYS.includes(step.key) || step.daysAfterPlanting <= 0) return null;
+  const start = String(guide?.start_date ?? '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : null;
+}
+
 // The same limit as the server (OLDEST_SOWING_DAYS in guides/sowing.py)
 export const OLDEST_SOWING_DAYS = 150;
 

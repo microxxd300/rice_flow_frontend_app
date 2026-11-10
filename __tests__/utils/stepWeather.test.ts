@@ -1,4 +1,4 @@
-import { stepWeather, usableOutlook, FORECAST_MAX_AGE_MS, ADVICE_TEXT } from '@/utils/stepWeather';
+import { adviceDay, stepWeather, usableOutlook, FORECAST_MAX_AGE_MS, ADVICE_TEXT } from '@/utils/stepWeather';
 import { translations } from '@/i18n/translations';
 
 const DRY = {
@@ -82,5 +82,57 @@ describe('weather warnings for every kind of weather', () => {
     for (const language of Object.values(translations) as any[]) {
       for (const key of Object.values(ADVICE_TEXT)) expect(language[key]).toBeTruthy();
     }
+  });
+});
+
+describe('rainfed and upland steps', () => {
+  const raining = { ...DRY, rain_prob_6h: 80 };
+
+  it('get the same advice as the irrigated step of their kind', () => {
+    expect(stepWeather(step('rf_top'), { ...DRY, rain_mm_24h: 25 }, 0))
+      .toEqual({ level: 'stop', code: 'fertilizerHeavyRain' });
+    expect(stepWeather(step('up_fert'), raining, 0)?.code).toBe('fertilizerRainSoon');
+    expect(stepWeather(step('rf_land'), raining, 0)?.code).toBe('fieldRainSoon');
+    expect(stepWeather(step('up_pests'), { ...DRY, wind_kph_max_12h: 20 }, 0)?.code).toBe('noSpray');
+    expect(stepWeather(step('rf_weeds'), raining, 0)?.code).toBe('herbicideWait');
+    expect(stepWeather(step('rf_drain'), { ...DRY, rain_mm_48h: 12 }, 0)?.code).toBe('drainRain');
+    expect(stepWeather(step('rf_harvest'), { ...DRY, rain_mm_48h: 12 }, 0)?.level).toBe('stop');
+    expect(stepWeather(step('up_store'), raining, 0)?.code).toBe('dryRain');
+  });
+
+  it('hold direct sowing only for very heavy rain', () => {
+    expect(stepWeather(step('rf_sow'), { ...DRY, rain_mm_24h: 45 }, 0)?.code).toBe('sowHeavyRain');
+    expect(stepWeather(step('up_sow'), raining, 0)?.code).toBe('rainSoon');
+  });
+});
+
+describe('rain on any step', () => {
+  const raining = { ...DRY, rain_prob_6h: 80 };
+
+  it('cautions every step when it is raining or about to', () => {
+    for (const key of ['seeds', 'lcc', 'water', 'rf_seeds', 'rf_prep', 'rf_water', 'rf_lcc', 'up_stand']) {
+      expect(stepWeather(step(key), raining, 0)).toEqual({ level: 'caution', code: 'rainSoon' });
+    }
+  });
+
+  it('comes after flood and strong wind, and before heat', () => {
+    expect(stepWeather(step('lcc'), { ...raining, rain_mm_24h: 45 }, 0)?.code).toBe('floodWatch');
+    expect(stepWeather(step('lcc'), { ...raining, wind_kph_max_12h: 45 }, 0)?.code).toBe('strongWind');
+    expect(stepWeather(step('lcc'), { ...raining, temp_c_max_24h: 36 }, 0)?.code).toBe('rainSoon');
+  });
+});
+
+describe('a step the farmer is logging as done', () => {
+  const raining = { ...DRY, rain_prob_6h: 80 };
+  const later = step('rf_top', 25);   // planned 25 days after sowing; today is day 0
+
+  it('is judged as due today, however far ahead the guide planned it', () => {
+    expect(stepWeather(later, raining, adviceDay(later, 0), true)).toBeNull();
+    expect(stepWeather(later, raining, adviceDay(later, 0, true), true)?.code).toBe('fertilizerRainSoon');
+  });
+
+  it('keeps today for a step that is already due', () => {
+    expect(adviceDay(step('rf_seeds', -10), 0, true)).toBe(0);
+    expect(adviceDay(null, 4, true)).toBe(4);
   });
 });

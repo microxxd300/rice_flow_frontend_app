@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   PROFILE_OVERRIDES:     '@rice_flow/profile_overrides',
   SELECTED_FARM:         '@rice_flow/selected_farm',
   LAST_NOTICE_ID:        '@rice_flow/last_notice_id',
+  AI_CHATS:              '@rice_flow/ai_chats',
 } as const;
 
 export const QUERY_KEYS = {

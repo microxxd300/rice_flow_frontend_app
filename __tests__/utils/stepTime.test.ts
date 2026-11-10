@@ -27,6 +27,13 @@ describe('stepTimeAdvice', () => {
     expect(stepTimeAdvice(step('seeds'), 0, atHour(0))).toBeNull();
   });
 
+  it('covers the outdoor steps of the rainfed and upland guides', () => {
+    expect(stepTimeAdvice(step('rf_sow'), 0, atHour(0))?.code).toBe('nightWork');
+    expect(stepTimeAdvice(step('up_weed1'), 0, atHour(0))?.code).toBe('nightWork');
+    expect(stepTimeAdvice(step('rf_seeds'), 0, atHour(0))).toBeNull();
+    expect(stepTimeAdvice(step('up_sync'), 0, atHour(0))).toBeNull();
+  });
+
   it('has nighttime advice in every language', () => {
     const key = STEP_ADVICE_TEXT.nightWork;
     for (const lang of ['en', 'fil', 'ceb'] as const) {
