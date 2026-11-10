@@ -63,6 +63,17 @@ export const adviceDay = (
   doingNow = false,
 ): number => (doingNow && step ? Math.max(guideToday, step.daysAfterPlanting) : guideToday);
 
+/**
+ * Home's Upcoming Tasks and the guide warn about the farmer's next step, when it is near,
+ * as if it were done today: rain or night now matters to the work they are about to do.
+ */
+export const warnAsToday = (
+  step: Pick<GuideStep, 'id' | 'daysAfterPlanting'> | null | undefined,
+  currentId: string | null | undefined,
+  guideToday: number,
+): boolean => !!step && !!currentId && step.id === currentId
+  && step.daysAfterPlanting <= guideToday + WEATHER_CURRENT_WITHIN_DAYS;
+
 export function stepWeather(
   step: Pick<GuideStep, 'key' | 'daysAfterPlanting'> | null | undefined,
   outlook: WeatherOutlook | null | undefined,
