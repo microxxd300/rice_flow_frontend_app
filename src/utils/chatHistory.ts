@@ -18,6 +18,9 @@ export interface SavedChat {
   messages:  ChatMessage[];
 }
 
+/** A new chat's id. */
+export const newChatId = () => `c_${Date.now()}`;
+
 // The newest chats are kept; an older one drops off the end of the list
 export const CHAT_LIMIT = 20;
 export const CHAT_TITLE_MAX = 60;

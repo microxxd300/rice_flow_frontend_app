@@ -17,6 +17,16 @@ export function suitabilityCode(cls?: string | null): string {
   return m ? m[1].toUpperCase() : '';
 }
 
+/** "Highly Suitable" for "S1", or '' for an unknown code. */
+export const suitabilityName = (code: string): string => CLASS_NAMES[code] ?? '';
+
+/** The key under a table that shows only codes: "S1 = Highly Suitable · S2 = Moderately Suitable" */
+export function suitabilityLegend(classes: (string | null | undefined)[]): string {
+  const codes = [...new Set(classes.map(c => suitabilityCode(c)).filter(Boolean))]
+    .sort((a, b) => Object.keys(CLASS_NAMES).indexOf(a) - Object.keys(CLASS_NAMES).indexOf(b));
+  return codes.map(code => `${code} = ${CLASS_NAMES[code]}`).join(' · ');
+}
+
 /** "Highly Suitable [S1]" */
 export function suitabilityText(cls?: string | null): string {
   const code = suitabilityCode(cls);

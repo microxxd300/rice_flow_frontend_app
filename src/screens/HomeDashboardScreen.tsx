@@ -32,6 +32,8 @@ type Nav = StackNavigationProp<any>;
 
 // The stages from Harvesting on: Home asks for the harvest until it is recorded
 const HARVEST_STAGE_NO = 9;
+// How many forecast hours the weather card shows: all of them fit across a phone
+const HOURS_SHOWN = 5;
 
 // The forecast's hours are Panabo time ("yyyy-MM-ddTHH:00"): read the hour as written,
 // so the label and the day/night picture don't shift on a phone set to another zone
@@ -335,15 +337,16 @@ export const HomeDashboardScreen: React.FC = () => {
           </View>
 
           {showHourly && hourly.length > 0 && (
-            <ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} contentContainerStyle={s.hours}>
-              {hourly.map((h, i) => (
+            // The next hours side by side, all fully shown: a card cut off at the edge looked draggable
+            <View style={s.hours}>
+              {hourly.slice(0, HOURS_SHOWN).map((h, i) => (
                 <View key={i} style={s.hour}>
                   <Text style={s.hourTime}>{h.time}</Text>
                   <Image source={h.img} style={{ width: 26, height: 26, marginVertical: 6 }} resizeMode="contain" />
                   <Text style={s.hourTemp}>{h.temp}°</Text>
                 </View>
               ))}
-            </ScrollView>
+            </View>
           )}
 
           <View style={s.divider} />
@@ -486,8 +489,8 @@ const s = StyleSheet.create({
   temp:      { fontSize: 52, lineHeight: 58, color: INK, fontFamily: 'Inter_700Bold', letterSpacing: -2 },
   tempUnit:  { fontSize: 22, fontFamily: 'Inter_600SemiBold', letterSpacing: 0 },
   wxImg:     { width: 60, height: 60 },
-  hours:     { gap: 8, paddingTop: 12 },
-  hour:      { alignItems: 'center', backgroundColor: BG, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12, minWidth: 60 },
+  hours:     { flexDirection: 'row', gap: 6, paddingTop: 12 },
+  hour:      { flex: 1, alignItems: 'center', backgroundColor: BG, borderRadius: 16, paddingVertical: 10 },
   hourTime:  { fontSize: 11, color: SOFT, fontFamily: 'Inter_600SemiBold' },
   hourTemp:  { fontSize: 13, color: INK, fontFamily: 'Inter_700Bold' },
   divider:   { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB', marginVertical: 14 },

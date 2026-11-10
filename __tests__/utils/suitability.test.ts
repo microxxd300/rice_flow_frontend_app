@@ -1,4 +1,4 @@
-import { suitabilityCode, suitabilityText } from '@/utils/suitability';
+import { suitabilityCode, suitabilityLegend, suitabilityName, suitabilityText } from '@/utils/suitability';
 
 describe('suitabilityText', () => {
   it('puts the name first and the code after', () => {
@@ -17,5 +17,14 @@ describe('suitabilityText', () => {
   it('copes with no class', () => {
     expect(suitabilityText(undefined)).toBe('—');
     expect(suitabilityCode('')).toBe('');
+  });
+});
+
+describe('suitabilityLegend', () => {
+  it('names each code in the table once, best class first', () => {
+    expect(suitabilityLegend(['S2 - Moderately Suitable', 'S1 - Highly Suitable', 'S1']))
+      .toBe('S1 = Highly Suitable · S2 = Moderately Suitable');
+    expect(suitabilityLegend([undefined, ''])).toBe('');
+    expect(suitabilityName('N1')).toBe('Currently Not Suitable');
   });
 });
