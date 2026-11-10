@@ -21,7 +21,7 @@ const SECTIONS: { title: string; items: string[] }[] = [
     title: 'Why we collect it',
     items: [
       'To recommend rice varieties that suit your farm.',
-      'To make your planting guide and estimate your yield.',
+      'To make your planting guide and estimate your harvest.',
       'To help agriculturists in Panabo City support farmers.',
     ],
   },
@@ -58,7 +58,7 @@ const SECTIONS: { title: string; items: string[] }[] = [
   {
     title: 'Terms of use',
     items: [
-      'Recommendations and yield estimates are guidance, not a guarantee. Check with your agriculturist before big decisions.',
+      'Recommendations and harvest estimates are guidance, not a guarantee. Check with your agriculturist before big decisions.',
       'Keep your password to yourself and enter true information about your farm.',
       'Do not use the app to harm others or to break the law.',
     ],

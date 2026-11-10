@@ -123,7 +123,7 @@ const EmptyYieldChart: React.FC<{ width: number; onRecord?: () => void }> = ({
     <View style={[s.card, { padding: 20 }]}>
       {/* The expected yield has its own card above, so no badge here */}
       <View style={{ marginBottom: 10 }}>
-        <Text style={{ fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Yield History</Text>
+        <Text style={{ fontSize: 14, color: '#111827', fontFamily: 'Inter_600SemiBold' }}>Harvest History</Text>
       </View>
 
       <Svg width={width} height={svgH}>
