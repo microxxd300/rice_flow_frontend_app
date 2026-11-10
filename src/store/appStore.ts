@@ -4,6 +4,7 @@ import type { UserProfile, Farm, Recommendation, WeatherResponse } from '@/servi
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
 import { isAppLog } from '@/utils/progressLogs';
+import { newChatId, type ChatMessage, type SavedChat } from '@/utils/chatHistory';
 
 /** How many notifications the bell keeps (newest first). */
 export const NOTIFICATION_LIMIT = 30;
@@ -42,6 +43,12 @@ interface AppState {
   // The selected farm's weather (key = "lat,lng", at = when the phone got it), shared by
   // Home, the Planting card, Progress and the reminders; kept fresh by useFarmForecast
   forecast: { key: string; data: WeatherResponse; at: number } | null;
+  // GeoRice AI: the chat on screen stays while the app is open (a new chat only when the
+  // farmer starts one); the saved chats (null until read from the phone); the chat waiting
+  // for an answer
+  aiChat:    { id: string; messages: ChatMessage[] };
+  aiChats:   SavedChat[] | null;
+  aiWaiting: string | null;
 
   setUser:                  (user: UserProfile | null) => void;
   setFarms:                 (farms: Farm[]) => void;
@@ -61,6 +68,9 @@ interface AppState {
   hydrateNotifications:     (list: AppNotification[]) => void;
   setPendingLogStep:        (stepId: string | null, fromTab?: string | null) => void;
   setForecast:              (forecast: { key: string; data: WeatherResponse; at: number } | null) => void;
+  setAiChat:                (chat: { id: string; messages: ChatMessage[] }) => void;
+  setAiChats:               (chats: SavedChat[]) => void;
+  setAiWaiting:             (chatId: string | null) => void;
   setEntryTab:              (tab: string | null) => void;
   setPickedVariety:         (pick: { recId: number; varietyId: number } | null) => void;
   setProgressLogs:          (logs: any[]) => void;
@@ -98,6 +108,9 @@ export const useAppStore = create<AppState>((set) => ({
   notificationsEnabled: true,
   weatherAlertsEnabled: true,
   forecast:             null,
+  aiChat:               { id: newChatId(), messages: [] },
+  aiChats:              null,
+  aiWaiting:            null,
 
   setUser:                 user    => set({ user }),
   setFarms:                farms   => {
@@ -226,6 +239,9 @@ export const useAppStore = create<AppState>((set) => ({
   // Clearing the step keeps where it came from: the form reads it as it opens
   setPendingLogStep: (stepId, fromTab) => set(stepId ? { pendingLogStep: stepId, pendingLogFrom: fromTab ?? null } : { pendingLogStep: null }),
   setForecast: (forecast) => set({ forecast }),
+  setAiChat:    (aiChat) => set({ aiChat }),
+  setAiChats:   (aiChats) => set({ aiChats }),
+  setAiWaiting: (aiWaiting) => set({ aiWaiting }),
   setEntryTab: (tab) => set({ entryTab: tab }),
   setPickedVariety: (pick) => set({ pickedVariety: pick }),
 
@@ -287,6 +303,7 @@ export const useAppStore = create<AppState>((set) => ({
     notifications: [], pendingLogStep: null, pendingLogFrom: null, entryTab: null, pickedVariety: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
     notificationsEnabled: true, weatherAlertsEnabled: true, forecast: null,
+    aiChat: { id: newChatId(), messages: [] }, aiChats: null, aiWaiting: null,
   }),
 }));
 

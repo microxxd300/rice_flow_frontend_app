@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Animated, Easing, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -286,7 +286,8 @@ export const AnalysisLoadingScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={s.root}>
-      <View style={s.body}>
+      {/* Compact so it fits above the phone's navigation buttons; scrolls on a short screen */}
+      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
 
         {/* Hero — single small leaf with subtle pulse, no nested rings */}
         <Animated.View style={[s.hero, !isDone && { transform: [{ scale: ringPulse }] }]}>
@@ -355,7 +356,7 @@ export const AnalysisLoadingScreen: React.FC = () => {
           })}
         </View>
 
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -363,17 +364,17 @@ export const AnalysisLoadingScreen: React.FC = () => {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F1F2F1' },
   body: {
-    flex: 1, paddingHorizontal: 28, paddingTop: 48, paddingBottom: 32,
+    flexGrow: 1, paddingHorizontal: 28, paddingTop: 24, paddingBottom: 24,
     alignItems: 'center',
   },
 
-  hero: { width: 76, height: 76, borderRadius: 26, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginBottom: 22, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  hero: { width: 60, height: 60, borderRadius: 22, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginBottom: 14, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
 
   title: { fontSize: 24, color: '#111827', letterSpacing: -0.5, textAlign: 'center', marginBottom: 8, fontFamily: 'Inter_700Bold' },
-  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20, marginBottom: 24, minHeight: 40, fontFamily: 'Inter_500Medium' },
+  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20, marginBottom: 16, minHeight: 40, fontFamily: 'Inter_500Medium' },
 
   /* Overall progress */
-  progressWrap: { width: '100%', marginBottom: 24 },
+  progressWrap: { width: '100%', marginBottom: 16 },
   progressTrack: { height: 10, borderRadius: 5, backgroundColor: '#E4E6E4', overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: '#059669', borderRadius: 5, overflow: 'hidden' },
   progressShine: { position: 'absolute', top: 0, bottom: 0, width: 80, backgroundColor: 'rgba(255,255,255,0.45)' },
@@ -387,7 +388,7 @@ const s = StyleSheet.create({
   steps: { width: '100%', backgroundColor: '#FFFFFF', borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2, paddingHorizontal: 16, paddingVertical: 4 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 14,
+    paddingVertical: 10,
   },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
   label: { flex: 1, fontSize: 14, color: '#9CA3AF', fontFamily: 'Inter_500Medium' },

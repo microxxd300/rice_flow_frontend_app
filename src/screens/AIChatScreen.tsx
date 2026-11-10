@@ -15,7 +15,7 @@ import { useTranslation } from '@/i18n/useTranslation';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
 import { storage } from '@/services/storage';
 import { STORAGE_KEYS } from '@/constants/api';
-import { addToChat, readChats, saveChat, type SavedChat } from '@/utils/chatHistory';
+import { addToChat, newChatId, readChats, saveChat, type SavedChat } from '@/utils/chatHistory';
 import { relTime } from '@/utils/relativeTime';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -37,8 +37,8 @@ const SUGGESTION_META: { key: 'aiSuggFertilizer' | 'aiSuggHarvest' | 'aiSuggPest
   { key: 'aiSuggRain',       icon: 'rainy-outline' },
 ];
 
-// Ids for chats (c), questions (u) and answers (a)
-const newId = (kind: 'c' | 'u' | 'a') => `${kind}_${Date.now()}`;
+// Ids for questions (u) and answers (a)
+const newId = (kind: 'u' | 'a') => `${kind}_${Date.now()}`;
 
 function nowTime() {
   const d = new Date();
@@ -209,39 +209,38 @@ export const AIChatScreen: React.FC = () => {
   // sent to the AI, which now replies in the user's language.
   const SUGGESTIONS = SUGGESTION_META.map(({ key, icon }) => ({ label: tr[key], icon }));
 
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput]       = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  // The chat on screen lives in the app store, so it is still here after the farmer
+  // visits another tab; a new chat only starts when they tap New chat (or reopen the app)
+  const chatId    = useAppStore(s => s.aiChat.id);
+  const messages  = useAppStore(s => s.aiChat.messages) as Message[];
+  const savedList = useAppStore(s => s.aiChats);
+  const chats     = savedList ?? [];
+  const isTyping  = useAppStore(s => s.aiWaiting) === chatId;
+  const [input, setInput] = useState('');
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
-  // Chats are saved on this phone, so the farmer can open an earlier one again
-  const [chats, setChats] = useState<SavedChat[]>([]);
-  const [chatsLoaded, setChatsLoaded] = useState(false);
-  const [chatId, setChatId] = useState(() => newId('c'));
-  const chatsRef   = useRef<SavedChat[]>([]);
-  const chatIdRef  = useRef(chatId);
-  const waitingRef = useRef<string | null>(null);   // the chat still waiting for its answer
+  // Saved chats are kept on this phone, so the farmer can open an earlier one again
   const putChats = (next: SavedChat[]) => {
-    if (next === chatsRef.current) return;
-    chatsRef.current = next;
-    setChats(next);
+    if (next === useAppStore.getState().aiChats) return;
+    useAppStore.getState().setAiChats(next);
     storage.setItem(STORAGE_KEYS.AI_CHATS, next).catch(() => {});
   };
-  const switchChat = (id: string) => { chatIdRef.current = id; setChatId(id); };
   useEffect(() => {
-    let gone = false;
+    if (useAppStore.getState().aiChats !== null) return;
     storage.getItem<unknown>(STORAGE_KEYS.AI_CHATS).then(stored => {
-      if (gone) return;
-      chatsRef.current = readChats(stored);
-      setChats(chatsRef.current);
-      setChatsLoaded(true);
+      if (useAppStore.getState().aiChats === null) useAppStore.getState().setAiChats(readChats(stored));
     });
-    return () => { gone = true; };
   }, []);
   // Every question and answer is saved as it arrives
   useEffect(() => {
-    if (chatsLoaded) putChats(saveChat(chatsRef.current, chatIdRef.current, messages));
-  }, [messages, chatsLoaded]);
+    if (savedList) putChats(saveChat(savedList, chatId, messages));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- save when the chat changes, not when the list does
+  }, [messages, chatId, savedList === null]);
+  // Back on this tab: show the end of the chat
+  useEffect(() => {
+    if (messages.length) setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 80);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the screen opens
+  }, []);
 
   // The tab bar hides while typing, so its clearance collapses then
   const keyboardOpen = useKeyboardOpen();
@@ -275,16 +274,18 @@ export const AIChatScreen: React.FC = () => {
     if (!trimmed) return;
 
     const userMsg: Message = { id: newId('u'), role: 'user', text: trimmed, time: nowTime() };
-    setMessages(prev => [...prev, userMsg]);
+    const store = useAppStore.getState();
+    const askedIn = store.aiChat.id;
+    store.setAiChat({ id: askedIn, messages: [...store.aiChat.messages, userMsg] });
+    store.setAiWaiting(askedIn);
     setInput('');
-    setIsTyping(true);
     scrollToBottom();
-    // The farmer may open another chat while waiting: the answer goes to the chat that asked
-    const askedIn = chatIdRef.current;
-    waitingRef.current = askedIn;
+    // The farmer may open another chat, or another tab, while waiting: the answer goes to
+    // the chat that asked, even when this screen is closed
     const deliver = (msg: Message) => {
-      if (chatIdRef.current === askedIn) setMessages(prev => [...prev, msg]);
-      else putChats(addToChat(chatsRef.current, askedIn, msg));
+      const st = useAppStore.getState();
+      if (st.aiChat.id === askedIn) st.setAiChat({ id: askedIn, messages: [...st.aiChat.messages, msg] });
+      else putChats(addToChat(st.aiChats ?? [], askedIn, msg));
     };
 
     // Build history for context (last 6 messages)
@@ -299,28 +300,22 @@ export const AIChatScreen: React.FC = () => {
       const text = err?.response?.status === 429 ? tr.aiDailyLimit : tr.aiUnavailable;
       deliver({ id: newId('a'), role: 'ai', text, time: nowTime() });
     } finally {
-      if (waitingRef.current === askedIn) waitingRef.current = null;
-      if (chatIdRef.current === askedIn) {
-        setIsTyping(false);
-        scrollToBottom();
-      }
+      const st = useAppStore.getState();
+      if (st.aiWaiting === askedIn) st.setAiWaiting(null);
+      if (st.aiChat.id === askedIn) scrollToBottom();
     }
   };
 
   // The chat on screen is already saved, so it stays in History
   const startNewChat = () => {
-    switchChat(newId('c'));
-    setMessages([]);
+    useAppStore.getState().setAiChat({ id: newChatId(), messages: [] });
     setInput('');
-    setIsTyping(false);
     closeDrawer();
   };
 
   const openChat = (chat: SavedChat) => {
-    switchChat(chat.id);
-    setMessages(chat.messages as Message[]);
+    useAppStore.getState().setAiChat({ id: chat.id, messages: chat.messages });
     setInput('');
-    setIsTyping(waitingRef.current === chat.id);
     closeDrawer();
     scrollToBottom();
   };

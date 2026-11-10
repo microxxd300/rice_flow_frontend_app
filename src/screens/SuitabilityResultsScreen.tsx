@@ -8,7 +8,7 @@ import { SetupHeader } from '@/components/SetupHeader';
 import { useTranslation } from '@/i18n/useTranslation';
 import type { Recommendation } from '@/services/apiService';
 import { useAppStore } from '@/store/appStore';
-import { suitabilityText } from '@/utils/suitability';
+import { suitabilityCode, suitabilityLegend, suitabilityText } from '@/utils/suitability';
 import { useAccessibility } from '@/context/AccessibilityContext';
 
 type Nav = StackNavigationProp<any>;
@@ -352,7 +352,8 @@ export const SuitabilityResultsScreen: React.FC = () => {
 
           {[
             { label: 'RSI score',   values: ranked.map(r => `${r.rsiScore}`) },
-            { label: 'Class',       values: ranked.map(r => suitabilityText(r.suitabilityClass)) },
+            // Just the code ("S1"): the full names did not fit; the key below the table names them
+            { label: 'Class',       values: ranked.map(r => suitabilityCode(r.suitabilityClass) || '—') },
             { label: 'Days',        values: ranked.map(r => `${r.variety.maturityDays}`) },
             { label: 'Yield (t/ha)',values: ranked.map(r => `${r.variety.avgYield}`) },
             { label: 'Flood tol.',  values: ranked.map(r => tolLabel(r.variety.floodTolerance)) },
@@ -370,6 +371,9 @@ export const SuitabilityResultsScreen: React.FC = () => {
             </View>
           ))}
         </View>
+        {!!suitabilityLegend(ranked.map(r => r.suitabilityClass)) && (
+          <Text style={s.tLegend}>{suitabilityLegend(ranked.map(r => r.suitabilityClass))}</Text>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -481,6 +485,7 @@ const s = StyleSheet.create({
   tHeadName: { fontSize: 12, color: '#111827', fontFamily: 'Inter_700Bold' },
 
   tRow: { flexDirection: 'row', paddingVertical: 12 },
+  tLegend: { fontSize: 12, color: '#6B7280', lineHeight: 17, marginTop: 8, paddingHorizontal: 6, fontFamily: 'Inter_500Medium' },
   tRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
   tLabel: { fontSize: 12, color: '#6B7280', fontFamily: 'Inter_500Medium' },
   tCell:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
