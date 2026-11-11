@@ -44,7 +44,7 @@ const SECTIONS: { title: string; items: string[] }[] = [
     items: [
       'Your password is stored in a scrambled (hashed) form that nobody can read.',
       'Data is sent over an encrypted connection.',
-      'Your data is stored on secure cloud servers (Supabase, in Tokyo, Japan).',
+      'Your data is stored on a secure cloud server (Microsoft Azure, in Malaysia), with a backup copy made every night.',
     ],
   },
   {
