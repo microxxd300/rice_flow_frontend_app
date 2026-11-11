@@ -35,6 +35,8 @@ export function loadGuide(recId: number, language: Language, stillWanted?: () =>
       // logged just before this response.
       if ((res.data as any)?.source !== 'SAVED') {
         store.hydrateGuideSteps(serverDone);
+        // A new guide moves the crop to its sowing day: reload it, or Home shows the old day
+        void refreshCycle();
       } else if (serverDone.length > 0) {
         store.hydrateGuideSteps(Array.from(new Set([...store.completedGuideSteps, ...serverDone])));
       }
