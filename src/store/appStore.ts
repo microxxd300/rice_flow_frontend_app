@@ -49,6 +49,7 @@ interface AppState {
   aiChat:    { id: string; messages: ChatMessage[] };
   aiChats:   SavedChat[] | null;
   aiWaiting: string | null;
+  hideTabBar: boolean;   // a panel that covers the screen (GeoRice's History) hides the bottom menu
 
   setUser:                  (user: UserProfile | null) => void;
   setFarms:                 (farms: Farm[]) => void;
@@ -71,6 +72,7 @@ interface AppState {
   setAiChat:                (chat: { id: string; messages: ChatMessage[] }) => void;
   setAiChats:               (chats: SavedChat[]) => void;
   setAiWaiting:             (chatId: string | null) => void;
+  setHideTabBar:            (hide: boolean) => void;
   setEntryTab:              (tab: string | null) => void;
   setPickedVariety:         (pick: { recId: number; varietyId: number } | null) => void;
   setProgressLogs:          (logs: any[]) => void;
@@ -111,6 +113,7 @@ export const useAppStore = create<AppState>((set) => ({
   aiChat:               { id: newChatId(), messages: [] },
   aiChats:              null,
   aiWaiting:            null,
+  hideTabBar:           false,
 
   setUser:                 user    => set({ user }),
   setFarms:                farms   => {
@@ -242,6 +245,7 @@ export const useAppStore = create<AppState>((set) => ({
   setAiChat:    (aiChat) => set({ aiChat }),
   setAiChats:   (aiChats) => set({ aiChats }),
   setAiWaiting: (aiWaiting) => set({ aiWaiting }),
+  setHideTabBar: (hideTabBar) => set({ hideTabBar }),
   setEntryTab: (tab) => set({ entryTab: tab }),
   setPickedVariety: (pick) => set({ pickedVariety: pick }),
 
@@ -303,7 +307,7 @@ export const useAppStore = create<AppState>((set) => ({
     notifications: [], pendingLogStep: null, pendingLogFrom: null, entryTab: null, pickedVariety: null,
     progressLogs: [], activeCycle: null, completedGuideSteps: [],
     notificationsEnabled: true, weatherAlertsEnabled: true, forecast: null,
-    aiChat: { id: newChatId(), messages: [] }, aiChats: null, aiWaiting: null,
+    aiChat: { id: newChatId(), messages: [] }, aiChats: null, aiWaiting: null, hideTabBar: false,
   }),
 }));
 

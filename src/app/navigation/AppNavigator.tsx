@@ -8,6 +8,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LOOK } from '@/theme/look';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useKeyboardOpen } from '@/hooks/useKeyboardOpen';
+import { useAppStore } from '@/store/appStore';
 import { useGuideReminders, useReminderTap } from '@/hooks/useGuideReminders';
 import { useFarmerNotices } from '@/hooks/useFarmerNotices';
 import { useFarmForecast, useStepWeatherAlert } from '@/hooks/useFarmForecast';
@@ -97,7 +98,9 @@ const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
   const tr = useTranslation();
   const keyboardOpen = useKeyboardOpen();
-  if (keyboardOpen) return null;   // otherwise it can cover the field being typed in
+  const panelOpen = useAppStore(s => s.hideTabBar);
+  // Hidden while typing (it can cover the field) and under a full-height panel
+  if (keyboardOpen || panelOpen) return null;
 
   const go = (route: (typeof state.routes)[number], isFocused: boolean) => {
     const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });

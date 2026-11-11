@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useAppStore, guideVarietyId } from '@/store/appStore';
+import { refreshCycle } from '@/services/guideLoader';
 import { apiGuides } from '@/services/apiService';
 import { useLanguageStore } from '@/store/languageStore';
 import { goBackFromStep } from '@/utils/navigation';
@@ -45,6 +46,8 @@ export const PlantingGuideHandoffScreen: React.FC<{ onEnterApp?: () => void; onG
     try {
       const res = await apiGuides.generate(recId, { variety: guideVarietyId(), language });
       setLatestGuide(res.data);
+      // The guide moved the new crop to its sowing day: reload it before Home shows it
+      await refreshCycle();
       useAppStore.getState().addNotification({
         title: 'Your planting guide is ready',
         body:  'Personalized for your farm and season.',

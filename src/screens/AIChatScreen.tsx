@@ -26,6 +26,7 @@ interface Message {
   text: string;
   time: string;
   sources?: AdviceSource[];   // the booklet pages the answer came from
+  general?: boolean;          // the server answered without the booklets
 }
 
 // Icon + translation key per suggestion; labels resolved from `tr` at render.
@@ -251,8 +252,11 @@ export const AIChatScreen: React.FC = () => {
   const backdropO = useRef(new Animated.Value(0)).current;
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // The bottom menu hides while History is open, so it does not cover the list
+  useEffect(() => () => useAppStore.getState().setHideTabBar(false), []);
   const openDrawer = () => {
     setDrawerOpen(true);
+    useAppStore.getState().setHideTabBar(true);
     Animated.parallel([
       Animated.timing(drawerX,   { toValue: 0, duration: 240, useNativeDriver: true }),
       Animated.timing(backdropO, { toValue: 1, duration: 240, useNativeDriver: true }),
@@ -264,6 +268,7 @@ export const AIChatScreen: React.FC = () => {
       Animated.timing(drawerX,   { toValue: -300, duration: 200, useNativeDriver: true }),
       Animated.timing(backdropO, { toValue: 0,    duration: 200, useNativeDriver: true }),
     ]).start(() => setDrawerOpen(false));
+    useAppStore.getState().setHideTabBar(false);
   };
 
   const scrollToBottom = () =>
@@ -294,7 +299,9 @@ export const AIChatScreen: React.FC = () => {
     try {
       const res   = await apiAI.chat(trimmed, history, language, selectedFarmId);
       const reply = res.data.reply;
-      deliver({ id: newId('a'), role: 'ai', text: reply, time: nowTime(), sources: res.data.sources ?? [] });
+      const sources = res.data.sources ?? [];
+      deliver({ id: newId('a'), role: 'ai', text: reply, time: nowTime(), sources,
+                general: res.data.grounded === false && sources.length === 0 });
     } catch (err: any) {
       // Say so, never a canned answer: it would read as AI advice for a question nobody answered
       const text = err?.response?.status === 429 ? tr.aiDailyLimit : tr.aiUnavailable;
@@ -398,6 +405,12 @@ export const AIChatScreen: React.FC = () => {
                   <View style={[s.aiContent, s.aiBubble]}>
                     <MarkdownMessage text={msg.text} />
                     {!!msg.sources?.length && <SourceChips sources={msg.sources} />}
+                    {msg.general && (
+                      <View style={s.generalNote}>
+                        <Ionicons name="information-circle-outline" size={13} color="#6B7280" />
+                        <Text style={s.generalNoteText}>{tr.aiGeneralAnswer}</Text>
+                      </View>
+                    )}
                     <Text style={s.aiTime}>{msg.time}</Text>
                   </View>
                 </View>
@@ -521,6 +534,8 @@ const s = StyleSheet.create({
   aiContent: { flex: 1, paddingTop: 2 },
   aiText: { fontSize: 14, color: '#1F2937', lineHeight: 21 },
   aiTime: { fontSize: 11, color: '#9CA3AF', marginTop: 8 },
+  generalNote:     { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  generalNoteText: { flex: 1, fontSize: 11.5, color: '#6B7280', fontFamily: 'Inter_500Medium' },
   typingDot: { width: 7, height: 7, borderRadius: 9999, backgroundColor: '#9CA3AF' },
 
   aiBubble:  { backgroundColor: '#FFFFFF', borderRadius: 20, borderTopLeftRadius: 6, paddingHorizontal: 16, paddingVertical: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
